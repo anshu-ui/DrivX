@@ -1,0 +1,44 @@
+{
+  "name": "drivx",
+  "version": "0.1.0",
+  "private": true,
+  "description": "DrivX \u2014 premium Indian mobility platform. Verified drivers for your own car.",
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "functions"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "mobile": "npm --workspace @drivx/mobile run start",
+    "mobile:web": "npm --workspace @drivx/mobile run web",
+    "mobile:dev-build": "npm --workspace @drivx/mobile run prebuild:dev",
+    "admin": "npm --workspace @drivx/admin run dev",
+    "emulators": "bash scripts/emulators.sh",
+    "seed": "node scripts/seed.mjs",
+    "seed:catalogue": "node scripts/seed.mjs --catalogue",
+    "wipe": "node scripts/wipe-emulator.mjs",
+    "verify:phone-otp": "node scripts/verify-phone-otp.mjs",
+    "verify:provision-self": "node scripts/verify-provision-self.mjs",
+    "verify:customer-paths": "node scripts/verify-customer-paths.mjs",
+    "verify:places": "node scripts/verify-places.mjs",
+    "verify:driver-onboarding": "node scripts/verify-driver-onboarding.mjs",
+    "verify:driver-dues": "node scripts/verify-driver-dues.mjs",
+    "verify:trip-loop": "node scripts/verify-trip-loop.mjs",
+    "verify:ratings": "node scripts/verify-ratings.mjs",
+    "verify:payments": "node scripts/verify-cashfree.mjs",
+    "verify:firebase-config": "node --disable-warning=ExperimentalWarning --experimental-strip-types scripts/verify-firebase-config.mjs",
+    "check:contrast": "node scripts/check-contrast.mjs",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "test:rules": "npm --workspace @drivx/rules-tests test",
+    "lint": "npm run lint --workspaces --if-present"
+  },
+  "devDependencies": {
+    "expo-router": "~58.0.25",
+    "firebase-tools": "^15.34.1",
+    "typescript": "^5.6.3"
+  }
+}

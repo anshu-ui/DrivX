@@ -1,0 +1,77 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "authz": {
+      "$bookingId": {
+        ".read": false,
+        ".write": false
+      }
+    },
+    "driverLocations": {
+      "$driverUid": {
+        "bookingId": {
+          ".write": "newData.isString() && newData.val().length <= 64"
+        },
+        "fixTimeMs": {
+          ".validate": "newData.isNumber() && newData.val() <= now + 30000 && newData.val() >= now - 300000"
+        },
+        "receivedAtMs": {
+          ".validate": "newData.isNumber() && newData.val() <= now + 30000"
+        },
+        "lat": {
+          ".validate": "newData.isNumber() && newData.val() >= -90 && newData.val() <= 90"
+        },
+        "lng": {
+          ".validate": "newData.isNumber() && newData.val() >= -180 && newData.val() <= 180"
+        },
+        "accuracyMeters": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 5000"
+        },
+        ".indexOn": [
+          "bookingId",
+          "receivedAtMs"
+        ],
+        ".write": "auth != null && auth.uid == $driverUid && newData.hasChild('bookingId') && newData.child('bookingId').val() != null && root.child('authz').child(newData.child('bookingId').val()).child('driverUid').val() == auth.uid && root.child('authz').child(newData.child('bookingId').val()).child('trackingEnabled').val() == true",
+        ".read": "auth != null && (\n          auth.uid == $driverUid ||\n          auth.token.admin == true ||\n          auth.token.ops == true ||\n          (\n            data.hasChild('bookingId') &&\n            root.child('authz').child(data.child('bookingId').val()).child('trackingEnabled').val() == true &&\n            (\n              root.child('authz').child(data.child('bookingId').val()).child('customerUid').val() == auth.uid ||\n              root.child('authz').child(data.child('bookingId').val()).child('sharedWith').child(auth.uid).exists()\n            )\n          )\n        )"
+      }
+    },
+    "activeBookings": {
+      "$bookingId": {
+        ".write": false,
+        ".read": "auth != null && (\n          auth.token.admin == true ||\n          auth.token.ops == true ||\n          (\n            root.child('authz').child($bookingId).child('trackingEnabled').val() == true &&\n            (\n              root.child('authz').child($bookingId).child('customerUid').val() == auth.uid ||\n              root.child('authz').child($bookingId).child('driverUid').val() == auth.uid ||\n              root.child('authz').child($bookingId).child('sharedWith').child(auth.uid).exists()\n            )\n          )\n        )",
+        ".indexOn": [
+          "expiresAtMs"
+        ]
+      }
+    },
+    "presence": {
+      "$driverUid": {
+        "state": {
+          ".validate": "newData.isString() && (newData.val() == 'offline' || newData.val() == 'online' || newData.val() == 'on_assignment' || newData.val() == 'on_trip' || newData.val() == 'break')"
+        },
+        "updatedAtMs": {
+          ".validate": "newData.isNumber() && newData.val() <= now + 30000"
+        },
+        ".write": "auth != null && auth.uid == $driverUid && newData.hasChild('state') && newData.hasChild('updatedAtMs')",
+        ".read": "auth != null && (auth.uid == $driverUid || auth.token.admin == true || auth.token.ops == true)",
+        ".indexOn": [
+          "updatedAtMs",
+          "state"
+        ]
+      }
+    },
+    "dispatchGrid": {
+      "$zoneId": {
+        ".read": "auth != null && (auth.token.admin == true || auth.token.ops == true)",
+        ".write": false
+      }
+    },
+    "connections": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid"
+      }
+    }
+  }
+}

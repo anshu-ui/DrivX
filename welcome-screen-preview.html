@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DrivX — Customer & Driver preview</title>
+  <style>
+    :root{--type:"Avenir Next",Avenir,"SF Pro Display","SF Pro Text",-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;--ink:#172435;--navy:#142d4d;--navy-2:#203e61;--muted:#78818a;--line:#e8e2d8;--paper:#fffefa;--canvas:#f6f2eb;--blue:#203f65;--blue-soft:#f0eee8;--green:#397b68;--shadow:0 30px 90px #30291f20}
+    *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:radial-gradient(ellipse at 52% -12%,#fffefa 0,#f6f2eb 52%,#eee8de 100%);color:var(--ink);font-family:var(--type);-webkit-font-smoothing:antialiased;position:relative}body:before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.21;background-image:radial-gradient(#b8a98f 0.55px,transparent .55px);background-size:24px 24px;mask-image:linear-gradient(to bottom,black,transparent 72%)}body:after{content:"";position:fixed;width:380px;height:380px;border:1px solid #d7cdbd;border-radius:50%;right:-210px;top:210px;box-shadow:0 0 0 28px #d7cdbd12,0 0 0 56px #d7cdbd0d;pointer-events:none;animation:ambientDrift 14s ease-in-out infinite alternate}@keyframes ambientDrift{to{transform:translate(-18px,24px) scale(1.04)}}
+    .shell{max-width:1380px;margin:auto;padding:28px 34px 56px;position:relative;z-index:1}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:30px}.brand{display:flex;align-items:center;gap:12px;font-size:16px;font-weight:750;letter-spacing:-.02em}.mark{width:42px;height:42px;border-radius:14px;display:grid;place-items:center;background:linear-gradient(145deg,#203e61,#102640);color:#fff;font:800 19px var(--type);box-shadow:0 10px 24px #142d4d30}.tag{font-size:10px;font-weight:600;letter-spacing:.11em;color:#85847f;text-transform:uppercase;margin-top:3px}.concept{border:1px solid #dfd8cd;border-radius:30px;padding:9px 14px;font-size:10px;letter-spacing:.1em;color:#77766f;background:#fffefaeb;box-shadow:0 4px 16px #342c1b08}
+    .intro{display:flex;align-items:flex-end;justify-content:space-between;gap:25px;margin:0 0 24px}.eyebrow{font-size:10px;letter-spacing:.19em;font-weight:700;color:var(--navy-2)}h1{font:620 clamp(30px,4vw,44px)/1.08 var(--type);letter-spacing:-.04em;margin:9px 0 7px}.intro p{margin:0;color:var(--muted);font-size:13px;line-height:1.65;max-width:720px}.switch{display:flex;padding:4px;border:1px solid #ded8cd;border-radius:30px;background:#fffefa;gap:3px;box-shadow:0 8px 24px #30291f0e}.switch button{border:0;border-radius:25px;background:transparent;padding:10px 17px;color:#747d86;font:600 12px var(--type);cursor:pointer;transition:transform .25s,background .25s,box-shadow .25s}.switch button:hover{transform:translateY(-2px)}.switch button:focus-visible{outline:2px solid #294766;outline-offset:2px}.switch button.active{background:linear-gradient(135deg,#294766,#122a47);color:white;box-shadow:0 5px 14px #142d4d32}
+    .stage{display:grid;grid-template-columns:minmax(220px,1fr) 390px minmax(220px,1fr);gap:38px;align-items:center}.side{padding:24px 23px;border:1px solid #e2dbd0;border-radius:20px;background:#fffefaeb;box-shadow:0 18px 42px #30291f0c;backdrop-filter:blur(12px);animation:sideRise .7s both}.side:last-child{animation-delay:.12s}@keyframes sideRise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}.num{font-size:10px;letter-spacing:.17em;color:#959087;font-weight:700}.side h2{font:650 22px/1.24 var(--type);letter-spacing:-.025em;margin:12px 0 9px}.side p{font-size:12px;line-height:1.7;color:var(--muted);margin:0}.side ul{list-style:none;padding:0;margin:17px 0 0;display:grid;gap:11px;font-size:12px;color:#59636e}.side li{display:flex;align-items:center;gap:8px}.tick{width:18px;height:18px;border-radius:50%;display:grid;place-items:center;background:#e9f1ed;color:var(--green);font-size:10px;font-weight:800;flex:none}
+    .phone{height:min(820px,calc(100vh - 90px));min-height:650px;position:relative;overflow:hidden;border:6px solid #1b2734;border-radius:40px;background:var(--paper);box-shadow:0 0 0 2px #fff,var(--shadow),0 42px 90px #30291f18;justify-self:center;width:390px;transform:perspective(1500px) rotateY(-1deg);transition:transform .5s,box-shadow .5s}.phone:hover{transform:perspective(1500px) rotateY(0) translateY(-4px);box-shadow:0 0 0 2px #fff,0 38px 100px #30291f24}.notch{position:absolute;z-index:5;left:50%;top:7px;transform:translateX(-50%);width:103px;height:25px;border-radius:20px;background:#0c1015}.status{height:36px;padding:10px 17px 0;display:flex;justify-content:space-between;position:relative;z-index:2;font-size:10px;font-weight:750;color:#182433}.screen{height:calc(100% - 36px);padding-bottom:80px;overflow:auto;scrollbar-width:none;background:linear-gradient(180deg,#fffefa 0%,#f9f7f2 100%);scroll-behavior:smooth}.screen::-webkit-scrollbar{display:none}.headrow{display:flex;align-items:center;justify-content:space-between;padding:12px 18px 14px}.welcome{font-size:10px;color:#89877f}.name{font-size:20px;font-weight:650;margin-top:2px;letter-spacing:-.025em}.avatar{width:37px;height:37px;border:2px solid #fff;border-radius:50%;display:grid;place-items:center;background:linear-gradient(145deg,#f0eee8,#ded9ce);box-shadow:0 3px 10px #342c1b14;color:#203e61;font-size:11px;font-weight:750}.hamb{font-size:21px;line-height:1;color:#203650}
+    .section{padding:3px 14px 12px}.sectionhead{display:flex;justify-content:space-between;align-items:center;margin:0 2px 9px}.sectionhead strong{font-size:12px}.tiny-link{font-size:9px;color:var(--navy-2);font-weight:700}.searchbox{background:#f3f0e9;border:1px solid #e8e1d6;border-radius:15px;padding:8px;display:grid;gap:6px}.routefield{height:39px;background:#fffefa;border:1px solid #e8e2d8;border-radius:10px;display:flex;align-items:center;gap:9px;padding:0 10px;color:#405064;font-size:10px;box-shadow:0 2px 7px #342c1b08}.pin{width:8px;height:8px;border-radius:50%;background:#284d72;box-shadow:0 0 0 3px #e7e9e7}.pin.end{background:#1a2939;box-shadow:0 0 0 3px #e9e7e1}.routefield span:last-child{margin-left:auto;color:#7d858b}.modes{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px}.mode{padding:8px 4px;border:1px solid #e4ded4;border-radius:10px;text-align:center;background:#fffefa;color:#817f79;font-size:8px;box-shadow:0 3px 8px #30291f06;transition:transform .22s,border-color .22s,box-shadow .22s}.mode:hover{transform:translateY(-2px)}.mode b{display:block;font-size:9px;color:#465362;margin-bottom:2px}.mode.on{border-color:#98a5ae;background:#edf0ee;box-shadow:inset 0 0 0 1px #d9dfde}.map{height:117px;border-radius:14px;overflow:hidden;position:relative;background:#e9e9e4;border:1px solid #dfded7;margin-top:9px;box-shadow:0 6px 16px #30291f0a}.map svg{display:block;width:100%;height:100%}.maplabel{position:absolute;left:9px;top:8px;background:#fffef4ed;border:1px solid #e7e2d8;border-radius:9px;padding:5px 7px;font-size:8px;color:#4c5a65}.sample-tag{position:absolute;right:8px;top:8px;background:#fffef4ed;border-radius:20px;padding:5px 7px;font-size:7px;color:#777970;letter-spacing:.06em}.map .pulse{transform-box:fill-box;transform-origin:center;animation:ping 2.4s ease-out infinite}@keyframes ping{0%{opacity:.58;transform:scale(.7)}75%,100%{opacity:0;transform:scale(2.5)}}
+    .carcard{margin:0 14px 11px;border:1px solid #e6dfd5;border-radius:16px;overflow:hidden;background:#fffefa;box-shadow:0 12px 26px #30291f0d;transition:transform .28s,box-shadow .28s}.carcard:hover{transform:translateY(-3px);box-shadow:0 18px 34px #30291f14}.carimage{height:126px;overflow:hidden;background:radial-gradient(ellipse at 50% 88%,#ddd9d0 0,#ece9e2 37%,#f8f6f0 80%);display:grid;place-items:center;position:relative}.carimage:before{content:"";position:absolute;left:9%;right:9%;height:1px;bottom:20px;background:linear-gradient(90deg,transparent,#c4bcae,transparent)}.carimage img{position:relative;width:97%;height:120px;object-fit:contain;filter:drop-shadow(0 12px 9px #1f293333);animation:carFloat 6s ease-in-out infinite;transform-origin:center}@keyframes carFloat{0%,100%{transform:translateY(1px)}50%{transform:translateY(-3px)}}.carcopy{padding:9px 11px;display:flex;justify-content:space-between;align-items:center;gap:10px}.carcopy strong{font-size:11px}.carcopy span{display:block;font-size:8px;color:#7e817f;margin-top:3px}.carlabel{font-size:8px!important;color:#334d65!important;background:#f0eee8;border-radius:20px;padding:6px 8px;white-space:nowrap}
+    .quote{margin:0 14px 10px;border-radius:14px;background:linear-gradient(120deg,#1d3857,#142a45);color:#fff;padding:11px 13px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 9px 20px #142d4d24}.quote small{display:block;color:#e1e7ec;font-size:8px;letter-spacing:.07em}.quote strong{font-size:17px;display:block;margin-top:3px}.quote button{border:0;border-radius:9px;background:#f8f6f0;color:#1b3857;padding:9px 11px;font:750 9px var(--type);box-shadow:0 4px 10px #0d1f3320}.detailcard{margin:0 14px 10px;border:1px solid #e7e0d6;border-radius:13px;background:#fffefa;padding:11px;box-shadow:0 5px 14px #30291f06;transition:transform .25s,box-shadow .25s}.detailcard:hover{transform:translateY(-2px);box-shadow:0 10px 20px #30291f0b}.detailcard h3{font-size:10px;margin:0 0 7px;color:#20354a}.detailcard p{font-size:8px;line-height:1.55;color:#7d817e;margin:5px 0}.detailrow{display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid #efebe4;padding:6px 0;font-size:8px;color:#737d85}.detailrow b{color:#304a63;text-align:right}.detailrow:last-child{border:0}.couponline{display:flex;gap:5px;margin-top:8px}.couponline input{min-width:0;flex:1;border:1px solid #e5ded4;border-radius:8px;padding:8px;font:9px var(--type);background:#fffefa}.couponline button{border:0;border-radius:8px;background:#1d3857;color:#fff;padding:0 10px;font:700 8px var(--type)}.bottom{position:absolute;z-index:4;bottom:0;left:0;right:0;height:68px;background:#fffef4ed;backdrop-filter:blur(16px);border-top:1px solid #e7e0d6;display:flex;justify-content:space-around;align-items:center}.navitem{text-align:center;color:#858983;font-size:8px}.navicon{display:block;font-size:16px;margin-bottom:3px}.navitem.sel{color:#203e61;font-weight:750}
+    .driver-hero{margin:3px 12px 10px;padding:16px;border-radius:17px;background:linear-gradient(135deg,#203e61,#122a47);color:#fff;position:relative;overflow:hidden;box-shadow:0 11px 24px #142d4d24}.driver-hero:after{content:"";position:absolute;width:170px;height:170px;border-radius:50%;right:-92px;top:-100px;border:1px solid #ffffff45;box-shadow:0 0 0 22px #ffffff12,0 0 0 44px #ffffff09;animation:ambientDrift 10s ease-in-out infinite alternate}.driver-hero .welcome{color:#d7e0e8}.driver-hero .name{font:700 20px var(--type)}.dutyrow{display:flex;justify-content:space-between;align-items:center;margin-top:13px;position:relative;z-index:1}.dutyrow small{display:block;color:#d7e0e8;font-size:9px}.dutyrow strong{font-size:11px}.toggle{border:1px solid #fff;border-radius:20px;padding:8px 11px;background:#fffefa;color:#1b3857;font-weight:800;font-size:8px;cursor:pointer;box-shadow:0 4px 10px #0e1e3020}.statgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:12px;position:relative;z-index:1}.stat{border:1px solid #ffffff35;background:#ffffff17;border-radius:10px;padding:8px 7px}.stat b{font-size:12px;display:block}.stat span{font-size:7px;color:#d8e0e7}.earncard{margin:0 12px 9px;border-radius:14px;background:#f0eee8;border:1px solid #e4dfd5;padding:11px 13px;display:flex;justify-content:space-between;align-items:center}.earncard small{font-size:8px;color:#7c817f}.earncard strong{font-size:17px;display:block;margin-top:3px;color:#1a3654}.badge{border-radius:10px;background:#fffefa;padding:7px 9px;font-size:8px;color:#334f69;box-shadow:0 3px 10px #30291f0a}.offer{margin:0 12px 9px;border:1px solid #e5ded4;background:#fffefa;border-radius:14px;padding:12px;box-shadow:0 7px 18px #30291f08}.offerhead{display:flex;justify-content:space-between;align-items:center}.offerhead b{font-size:10px}.new{font-size:7px;color:#2b506f;background:#efeee8;border-radius:20px;padding:5px 7px}.offerdetail{font-size:9px;color:#707b84;line-height:1.5;margin:8px 0}.routebar{height:1px;background:#efebe4;margin:8px 0}.moneyrow{display:flex;justify-content:space-between;align-items:center;font-size:9px;color:#697b87}.moneyrow b{font-size:13px;color:#1e3957}.actions{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:9px}.actions button{border-radius:8px;padding:8px;border:1px solid #e1dcd2;background:#f7f5ef;color:#455c70;font:650 9px var(--type)}.actions .accept{background:#203e61;border-color:#203e61;color:white;box-shadow:0 4px 10px #142d4d22}.info{margin:0 12px 9px;border-radius:12px;padding:10px 11px;background:#f0eee8;color:#697981;font-size:8px;line-height:1.55;border:1px solid #e5dfd5}.info b{color:#294c68}.empty{margin:0 12px 10px;border:1px dashed #d5cec3;border-radius:13px;padding:13px;background:#f8f6f0}.empty strong{font-size:10px;color:#2d4b65}.empty p{font-size:8px;color:#7a8284;line-height:1.5;margin:5px 0 0}.hidden{display:none!important}.fade{animation:fade .38s ease}@keyframes fade{from{opacity:.45;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+    @media(max-width:960px){.shell{padding:18px 14px 30px}.intro{align-items:flex-start;flex-direction:column}.stage{grid-template-columns:1fr;gap:14px}.side{display:none}.phone{width:min(390px,100%);height:min(820px,calc(100vh - 240px));min-height:610px;max-height:none}.top{margin-bottom:23px}.concept{font-size:8px}}
+    /* Final type and control polish: keep the editorial feel while making the in-phone UI legible. */
+    button,input{font-family:var(--type)}
+    h1{font-weight:600;letter-spacing:-.045em}
+    .brand{font-weight:700;letter-spacing:-.035em}
+    .side h2{font-weight:600;letter-spacing:-.035em}
+    .switch button,.actions button,.toggle{letter-spacing:.005em}
+    .status{font-size:11px;letter-spacing:.01em}
+    .welcome{font-size:11px;letter-spacing:.005em}
+    .name{font-size:21px;font-weight:600;letter-spacing:-.035em}
+    .sectionhead strong{font-size:13px;font-weight:650;letter-spacing:-.015em}
+    .tiny-link{font-size:10px}
+    .routefield{font-size:11px;font-weight:500}
+    .mode{font-size:9px;line-height:1.35}
+    .mode b{font-size:10px;font-weight:650}
+    .maplabel{font-size:9px}
+    .sample-tag{font-size:8px}
+    .carcopy strong{font-size:12px;font-weight:650;letter-spacing:-.015em}
+    .carcopy span,.carlabel{font-size:9px}
+    .quote small{font-size:9px;font-weight:550}
+    .quote button{font-size:10px}
+    .detailcard h3{font-size:11px;font-weight:650;letter-spacing:-.015em}
+    .detailcard p{font-size:9px;line-height:1.6}
+    .detailrow{font-size:9px;line-height:1.4}
+    .couponline input{font-size:10px}
+    .couponline button{font-size:9px}
+    .navitem{font-size:9px;font-weight:550}
+    .driver-hero .name{font-size:21px;font-weight:650}
+    .dutyrow small{font-size:10px}
+    .dutyrow strong{font-size:12px;font-weight:650}
+    .toggle{font-size:9px}
+    .stat span{font-size:8px;letter-spacing:.035em}
+    .earncard small,.badge{font-size:9px}
+    .offerhead b,.empty strong{font-size:11px}
+    .new{font-size:8px}
+    .offerdetail,.moneyrow,.actions button{font-size:10px}
+    .moneyrow b{font-size:14px}
+    .info,.empty p{font-size:9px;line-height:1.6}
+    @media(max-width:420px){.shell{padding-left:10px;padding-right:10px}.phone{border-radius:34px}.headrow{padding-left:15px;padding-right:15px}.section{padding-left:11px;padding-right:11px}.detailrow{font-size:8.5px}}
+    @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+  </style>
+  <style>
+    /* Premium preview refinement: a calmer Inter-led type scale and clearer product hierarchy. */
+    :root{
+      --type:Inter,"Avenir Next","SF Pro Display",-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;
+      --display:var(--type);
+      --ink:#17263a;--navy:#102a49;--navy-2:#23486c;--muted:#727d89;
+      --line:#e8e2d8;--paper:#fffefa;--canvas:#f6f2eb;--blue:#183b61;
+      --blue-soft:#edf1f3;--green:#397b68;--shadow:0 32px 100px #20324724;
+    }
+    body{font-family:var(--type);letter-spacing:0}
+    .shell{max-width:1440px;padding-top:25px}
+    .top{margin-bottom:28px}
+    .brand{font-size:17px;letter-spacing:-.025em}
+    .mark{border-radius:15px;background:linear-gradient(145deg,#254d72,#102a49);box-shadow:0 12px 26px #102a4930}
+    .tag{font-size:9px;letter-spacing:.14em}
+    .concept{font-size:9px;letter-spacing:.13em;color:#697583;border-color:#e5ded3;box-shadow:0 7px 22px #25384b0b}
+    .intro{margin-bottom:28px}
+    .eyebrow{font-size:9px;letter-spacing:.22em;color:#365b7e}
+    h1{font-family:var(--type);font-weight:600;letter-spacing:-.025em;line-height:1.08}
+    .intro p{font-size:13px;line-height:1.72;max-width:680px}
+    .switch{padding:4px;border-color:#e4ded4;box-shadow:0 10px 28px #25384b0c}
+    .switch button{font-size:12px;font-weight:600;padding:11px 19px;letter-spacing:-.015em}
+    .stage{grid-template-columns:minmax(230px,1fr) 390px minmax(230px,1fr);gap:34px}
+    .side{border-radius:23px;padding:26px 25px;background:#fffefaef;box-shadow:0 22px 52px #25384b0e}
+    .num{font-size:9px;letter-spacing:.2em;color:#7c8790}
+    .side h2{font-family:var(--type);font-size:23px;line-height:1.22;font-weight:600;letter-spacing:-.025em}
+    .side p{font-size:12px;line-height:1.75}
+    .side ul{font-size:11px;line-height:1.45;gap:12px}
+    .phone{border:5px solid #182434;border-radius:39px;box-shadow:0 0 0 2px #fff,var(--shadow),0 50px 110px #20324720;transform:perspective(1600px) rotateY(-.5deg)}
+    .phone:hover{transform:perspective(1600px) rotateY(0) translateY(-5px)}
+    .screen{background:linear-gradient(180deg,#fffefa 0%,#f8f6f1 100%)}
+    .headrow{padding:15px 18px 16px}
+    .welcome{font-size:10px;letter-spacing:.035em;color:#7b8388}
+    .name{font-size:21px;line-height:1.2;font-weight:650;letter-spacing:-.025em;color:#17263a}
+    .avatar{width:39px;height:39px;background:linear-gradient(145deg,#f2f0e9,#e2dfd6)}
+    .hamb{font-size:22px}
+    .section{padding:5px 14px 13px}
+    .sectionhead{margin-bottom:10px}
+    .sectionhead strong{font-size:14px;font-weight:650;letter-spacing:-.02em;color:#17263a}
+    .tiny-link{font-size:11px;font-weight:600;color:#31587a}
+    .searchbox{padding:8px;border-radius:16px;background:#f1eee8;border-color:#e7e1d7;gap:7px}
+    .routefield{height:42px;border-radius:11px;font-size:12px;font-weight:500;box-shadow:0 3px 9px #25384b08}
+    .modes{gap:7px;margin-top:9px}
+    .mode{padding:9px 4px;border-radius:11px;font-size:10px;color:#777f83}
+    .mode b{font-size:11px;font-weight:650;color:#34495d}
+    .mode.on{border-color:#9cacb6;background:#edf1f1;box-shadow:inset 0 0 0 1px #d7e0e1,0 4px 10px #233c5208}
+    .map{height:135px;border-radius:16px;margin-top:10px;box-shadow:0 9px 20px #20324712}
+    .maplabel{font-size:10px;padding:6px 8px}
+    .sample-tag{font-size:9px;letter-spacing:.075em}
+    .carcard{border-radius:17px;box-shadow:0 14px 30px #20324710}
+    .carimage{height:138px;background:radial-gradient(ellipse at 50% 88%,#d8d5cd 0,#ebe9e2 40%,#f7f5ef 82%)}
+    .carimage img{height:132px}
+    .carcopy{padding:11px 12px}
+    .carcopy strong{font-size:12px;letter-spacing:-.025em}
+    .carcopy span{font-size:10px;line-height:1.4}
+    .carlabel{font-size:8px!important;letter-spacing:.06em}
+    .quote{padding:13px 14px;border-radius:15px;background:linear-gradient(125deg,#1e4266,#102a49);box-shadow:0 12px 24px #102a492d}
+    .quote small{font-size:9px;letter-spacing:.07em}
+    .quote strong{font-size:19px;letter-spacing:-.04em}
+    .quote button{padding:10px 12px;border-radius:10px;font-size:9px;font-weight:700}
+    .detailcard{padding:12px;border-radius:15px;box-shadow:0 7px 18px #20324708}
+    .detailcard h3{font-size:11px;font-weight:650;letter-spacing:-.02em}
+    .detailcard p{font-size:10px;line-height:1.6}
+    .detailrow{font-size:10px;line-height:1.5;padding:7px 0}
+    .detailrow b{font-weight:600;color:#294967}
+    .couponline input{height:36px;border-radius:9px;font-size:11px}
+    .couponline button{border-radius:9px;font-size:10px}
+    .bottom{height:72px;background:#fffef4f2;box-shadow:0 -8px 24px #24364a0a}
+    .navitem{font-size:10px;line-height:1.2}
+    .navicon{font-size:17px;margin-bottom:4px}
+    .driver-hero{margin-top:5px;border-radius:19px;padding:17px;background:linear-gradient(135deg,#234b70,#102a49);box-shadow:0 14px 28px #102a4927}
+    .driver-hero .welcome{font-size:10px;color:#dfe7ed}
+    .driver-hero .name{font-size:20px;letter-spacing:-.025em;color:white}
+    .dutyrow{margin-top:15px}
+    .dutyrow small{font-size:10px;color:#d5e1e9}
+    .dutyrow strong{font-size:12px;letter-spacing:0}
+    .toggle{font-size:8px;letter-spacing:.075em;padding:9px 12px}
+    .statgrid{gap:7px;margin-top:14px}
+    .stat{padding:9px 8px;border-radius:11px;background:#ffffff1b}
+    .stat b{font-size:13px;letter-spacing:-.03em}
+    .stat span{font-size:8px;letter-spacing:.025em}
+    .earncard,.offer,.empty,.info{border-radius:15px}
+    .earncard{padding:12px 13px;background:#f0eee8}
+    .earncard small,.badge{font-size:9px;letter-spacing:0}
+    .earncard strong{font-size:18px;letter-spacing:-.035em}
+    .offer{padding:13px;box-shadow:0 9px 22px #20324709}
+    .offerhead b,.empty strong{font-size:11px;letter-spacing:-.02em}
+    .offerdetail,.moneyrow,.actions button{font-size:10px;line-height:1.55}
+    .actions button{border-radius:9px;padding:9px 7px}
+    .info,.empty p{font-size:10px;line-height:1.6}
+    .info{background:#f1eee8}
+    /* One consistent, readable type system across the preview and phone UI. */
+    body,button,input{font-family:var(--type);font-optical-sizing:auto}
+    h1,.side h2,.name,.sectionhead strong,.detailcard h3,.offerhead b,.empty strong{font-family:var(--type)}
+    .intro p,.side p,.side li,.detailcard p,.detailrow,.offerdetail,.info,.empty p{letter-spacing:0}
+    .sectionhead strong,.detailcard h3,.offerhead b,.empty strong{font-weight:650}
+    .detailrow b{font-weight:650}
+    .switch button,.quote button,.couponline button,.actions button{font-family:var(--type);font-weight:650}
+    /* Keep the full mock phone inside short browser windows instead of letting
+       the min-height force it beyond the visible preview area. */
+    .phone{height:min(820px,calc(100dvh - 90px));min-height:min(650px,calc(100dvh - 90px))}
+    @media(max-width:1080px){
+      .stage{grid-template-columns:1fr;gap:14px}
+      .side{display:none}
+    }
+    @media(max-width:960px){
+      .shell{padding-top:15px}
+      .stage{gap:14px}
+      .phone{height:min(820px,calc(100dvh - 190px));min-height:min(610px,calc(100dvh - 190px));}
+      .intro{gap:16px}
+    }
+    @media(max-width:420px){
+      .shell{padding-left:9px;padding-right:9px}
+      .phone{width:min(390px,100%);border-radius:34px}
+      .headrow{padding-left:15px;padding-right:15px}
+      .section{padding-left:11px;padding-right:11px}
+      .detailrow{font-size:8.5px}
+      .concept{letter-spacing:.08em}
+    }
+    @media(prefers-reduced-motion:reduce){.phone,.carimage img,.side{animation:none!important;transition:none!important}}
+  </style>
+  <style>
+    /* Visual QA pass: lighter blue accents, cleaner typography and restrained motion. */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;650;700&display=swap');
+    :root{
+      --type: "Inter", "SF Pro Display", "Avenir Next", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+      --ink:#1d2d3d;
+      --navy:#173B63;
+      --navy-2:#244F78;
+      --blue:#173B63;
+      --blue-soft:#EAF0F6;
+      --muted:#78838d;
+      --line:#e5e0d8;
+      --paper:#fffefa;
+      --canvas:#f7f4ee;
+      --shadow:0 28px 80px #30455a1c;
+    }
+    body{
+      background:
+        radial-gradient(ellipse at 50% -18%,#fffefa 0,#faf8f3 45%,#f1eee7 100%);
+      color:var(--ink);
+      font-family:var(--type);
+    }
+    body:before{opacity:.12;background-image:radial-gradient(#9eabb2 .5px,transparent .5px);background-size:27px 27px}
+    body:after{border-color:#9eb5c31c;box-shadow:0 0 0 28px #9eb5c310,0 0 0 56px #9eb5c308}
+    .mark{background:linear-gradient(145deg,#315D87,#173B63);box-shadow:0 9px 20px #173B6328}
+    .tag{color:#818a8e}
+    .concept{background:#fffefa;border-color:#e7e1d8;color:#71808a}
+    .eyebrow{color:#315D87}
+    h1{font-weight:570;letter-spacing:-.035em;color:#1e2f40}
+    .intro p{color:#75818a}
+    .switch{border-color:#e2ded6;background:#fffefa}
+    .switch button.active{background:linear-gradient(135deg,#315D87,#173B63);box-shadow:0 5px 13px #173B6328}
+    .side{border-color:#e8e3db;background:#fffefaed}
+    .num{color:#5b7d96}
+    .side h2{color:#203449}
+    .tick{background:#e9f0ed;color:#477b6c}
+    .phone{border-color:#273541;box-shadow:0 0 0 2px #fff,var(--shadow),0 42px 90px #30455a16}
+    .screen{background:linear-gradient(180deg,#fffefa 0%,#f8f6f1 100%)}
+    .name{color:#1e2f40}
+    .hamb{color:#244F78}
+    .sectionhead strong{color:#203449}
+    .tiny-link{color:#244F78}
+    .searchbox{background:#f3f0e9;border-color:#e8e2d9}
+    .routefield{border-color:#e9e5de}
+    .pin{background:#244F78;box-shadow:0 0 0 3px #EAF0F6}
+    .pin.end{background:#173B63;box-shadow:0 0 0 3px #E5ECF2}
+    .mode{background:#fffefa;border-color:#e8e3dc}
+    .mode.on{background:#EAF0F6;border-color:#C4D1DD;box-shadow:inset 0 0 0 1px #DCE5EC,0 4px 10px #173B630A}
+    .map{border-color:#dce2df;background:#edf0ed}
+    .map svg .route-line{stroke:#244F78;stroke-dasharray:8 6;animation:routeFlow 8s linear infinite}
+    .map .pulse{fill:#315D87}
+    @keyframes routeFlow{to{stroke-dashoffset:-48}}
+    .maplabel,.sample-tag{background:#fffefaed;border-color:#e5e6e1;box-shadow:0 3px 10px #24384a0a}
+    .carcard{border-color:#e7e2da;background:#fffefa;box-shadow:0 13px 28px #30455a0d}
+    .carimage{background:radial-gradient(ellipse at 50% 88%,#d7d8d4 0,#e9ecea 38%,#f7f7f2 82%)}
+    .carimage img{filter:drop-shadow(0 13px 10px #1f29332a)}
+    .carlabel{background:#EAF0F6!important;color:#244F78!important}
+    .quote{background:linear-gradient(120deg,#315D87,#173B63);box-shadow:0 10px 22px #173B6324}
+    .quote small{color:#f0f5f7}
+    .quote button{color:#173B63;background:#fffefa}
+    .detailcard{border-color:#e8e3dc;background:#fffefa;box-shadow:0 6px 16px #30455a08}
+    .detailcard h3{color:#203449;display:flex;align-items:center;gap:7px}
+    .detailcard h3:before{content:"";width:4px;height:13px;border-radius:4px;background:#52799A;display:inline-block}
+    .detailrow{border-color:#efede8;color:#75818a}
+    .detailrow b{color:#244F78}
+    .couponline input{border-color:#e4e3dd;background:#fffefa}
+    .couponline button{background:#173B63;box-shadow:0 4px 10px #173B631C}
+    .bottom{background:#fffefaed;border-color:#e8e3dc;box-shadow:0 -8px 24px #30455a0a}
+    .navitem.sel{color:#173B63}
+    .driver-hero{background:linear-gradient(135deg,#315D87,#173B63);box-shadow:0 12px 26px #173B6325}
+    .driver-hero:after{border-color:#ffffff5c;box-shadow:0 0 0 22px #ffffff15,0 0 0 44px #ffffff0b}
+    .dutyrow strong{color:#fff}
+    .toggle{color:#173B63;box-shadow:0 4px 10px #203b5120}
+    .stat{background:#ffffff20;border-color:#ffffff40}
+    .earncard{background:#eef2f1;border-color:#e1e7e4}
+    .earncard strong{color:#173B63}
+    .badge,.new{background:#EAF0F6;color:#244F78}
+    .offer{border-color:#e7e2da;background:#fffefa}
+    .actions .accept{background:#173B63;border-color:#173B63;box-shadow:0 4px 10px #173B6320}
+    .info{background:#f0f3f1;border-color:#e4e9e6}
+    .info b,.empty strong{color:#244F78}
+    .empty{background:#f8f7f2;border-color:#d9dedc}
+    .side,.carcard,.quote,.detailcard,.earncard,.offer,.empty,.info{animation:softRise .55s both}
+    .carcard{animation-delay:.04s}.quote{animation-delay:.08s}
+    #customerScreen>.detailcard:nth-of-type(5){animation-delay:.12s}
+    #customerScreen>.detailcard:nth-of-type(6){animation-delay:.16s}
+    #customerScreen>.detailcard:nth-of-type(7){animation-delay:.20s}
+    #customerScreen>.detailcard:nth-of-type(8){animation-delay:.24s}
+    #customerScreen>.detailcard:nth-of-type(9){animation-delay:.28s}
+    #driverScreen>.detailcard{animation-delay:.14s}
+    @keyframes softRise{from{opacity:.55;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}
+    .detailcard:hover,.carcard:hover,.offer:hover{transform:translateY(-2px);box-shadow:0 12px 24px #30455a12}
+    @media(prefers-reduced-motion:reduce){.map svg .route-line,.side,.carcard,.quote,.detailcard,.earncard,.offer,.empty,.info{animation:none!important}}
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="top"><div class="brand"><div class="mark">D</div><div>DrivX<div class="tag">A more considered way to travel</div></div></div><div class="concept">CONCEPT PREVIEW · SAMPLE DATA</div></header>
+    <section class="intro"><div><div class="eyebrow">DRIVX APP PREVIEW</div><h1>Thoughtful journeys, made simple.</h1><p>Preview the customer booking flow and the driver duty dashboard. Map pins, fares and driver figures below are illustrative; live data stays connected to DrivX services in the actual app.</p></div><div class="switch" role="tablist"><button id="customerBtn" class="active" onclick="show('customer')">Customer</button><button id="driverBtn" onclick="show('driver')">Driver</button></div></section>
+    <section class="stage">
+      <aside class="side"><div class="num">01 / CUSTOMER</div><h2>Every detail before you book.</h2><p>Use the same core choices as the customer app: pickup and destination, trip type, schedule, estimated fare, coupons and DrivX rewards.</p><ul><li><span class="tick">✓</span> One Way, Round Trip, Outstation</li><li><span class="tick">✓</span> Scheduled pickup and vehicle details</li><li><span class="tick">✓</span> Fare, coupon, wallet and Miles</li></ul></aside>
+      <div class="phone"><div class="notch"></div><div class="status"><span>9:41</span><span>●●●　▰</span></div>
+        <div id="customerScreen" class="screen fade">
+          <div class="headrow"><div><div class="welcome">Good morning</div><div class="name">Welcome, Amit</div></div><div class="hamb">☰</div></div>
+          <div class="section"><div class="sectionhead"><strong>Where would you like to go?</strong><span class="tiny-link">Saved places</span></div><div class="searchbox"><div class="routefield"><i class="pin"></i>Pickup location <span>⌖</span></div><div class="routefield"><i class="pin end"></i>Destination <span>＋</span></div></div><div class="modes"><div class="mode on"><b>One Way</b>Point to point</div><div class="mode"><b>Round Trip</b>By the hour</div><div class="mode"><b>Outstation</b>One way / return</div></div><div class="map"><svg viewBox="0 0 390 150" preserveAspectRatio="none"><rect width="390" height="150" fill="#eeece6"/><path d="M-10 100L76 -8M18 162L143 -10M124 160L245 -8M223 160L347 -10M313 158L420 20M-12 35L405 119M-20 78L410 40M72 -4L400 84M0 128L392 17" stroke="#fffefa" stroke-width="10"/><path d="M0 58L390 89M0 15L390 132" stroke="#d9d5cc" stroke-width="1.5"/><path class="route-line" d="M58 112C97 107 108 49 169 60S242 109 319 42" stroke="#203e61" stroke-width="3" fill="none" stroke-linecap="round"/><circle class="pulse" cx="58" cy="112" r="9" fill="#203e61" opacity=".3"/><circle cx="58" cy="112" r="5" fill="#203e61" stroke="white" stroke-width="3"/><circle cx="319" cy="42" r="6" fill="#142d4d" stroke="white" stroke-width="3"/><g><circle cx="222" cy="79" r="8" fill="#fffefa" stroke="#637c87" stroke-width="2"/><path d="M218 79h8m-4-4v8" stroke="#637c87" stroke-width="1.5"/></g></svg><div class="maplabel">Gurugram · illustrative map</div><div class="sample-tag">PREVIEW MAP</div></div></div>
+          <div class="carcard"><div class="carimage"><img src="welcome-preview-assets/executive-sedan.png" alt="Premium executive sedan, shown for illustration"></div><div class="carcopy"><div><strong>Professional driver for your car</strong><span>Your own car · sedan shown for illustration</span></div><span class="carlabel">YOUR VEHICLE</span></div></div>
+          <div class="quote"><div><small>ESTIMATED FARE · SERVER QUOTE IN APP</small><strong>₹ —</strong></div><button>Choose places</button></div>
+          <div class="detailcard"><h3>Pickup time · plan ahead</h3><div class="detailrow"><span>Choose date</span><b>Up to 6 months ahead</b></div><div class="detailrow"><span>Pickup time</span><b>30 min minimum lead</b></div><p>Exact available times are checked during booking.</p></div>
+          <div class="detailcard"><h3>Fare breakdown</h3><div class="detailrow"><span>Base / selected package</span><b>From live quote</b></div><div class="detailrow"><span>Extra distance / time</span><b>Shown before confirm</b></div><div class="detailrow"><span>Night charge</span><b>Applied when eligible</b></div><p>Route distance and the current admin pricing version determine the quote. Final amount is confirmed before booking.</p></div>
+          <div class="detailcard"><h3>Apply an offer</h3><div class="couponline"><input placeholder="Enter coupon code" aria-label="Coupon code"><button onclick="applyCoupon(this)">Apply</button></div><p class="coupon-msg">Eligible coupon or wallet credit is applied at checkout; review the reduced fare before confirming.</p></div>
+          <div class="detailcard"><h3>DrivX Rewards</h3><div class="detailrow"><span>Your invite code</span><b>Shown in your account</b></div><div class="detailrow"><span>Invite reward</span><b>₹100 each after eligible trip</b></div><div class="detailrow"><span>DrivX Miles</span><b>Earn on completed bookings</b></div><p>Referral credits unlock only after an eligible completed trip and stay in the in-app wallet.</p></div>
+          <div class="detailcard"><h3>Your trip, in one place</h3><div class="detailrow"><span>When driver is assigned</span><b>Name · rating · vehicle</b></div><div class="detailrow"><span>During an active trip</span><b>Live map · share trip</b></div><div class="detailrow"><span>Trip start / completion</span><b>OTP · fare · rating</b></div><p>Driver contact and live trip sharing appear on the booking after assignment.</p></div>
+          <div class="bottom"><div class="navitem sel"><span class="navicon">⌂</span>Home</div><div class="navitem"><span class="navicon">▤</span>Trips</div><div class="navitem"><span class="navicon">☆</span>Rewards</div><div class="navitem"><span class="navicon">●</span>Account</div></div>
+        </div>
+        <div id="driverScreen" class="screen hidden fade">
+          <div class="headrow"><div><div class="welcome">DRIVX CAPTAIN</div><div class="name">Welcome, Amit</div></div><div class="avatar">AK</div></div>
+          <div class="driver-hero"><div class="welcome">Driver dashboard</div><div class="name">Ready when you are.</div><div class="dutyrow"><div><small>Your duty status</small><strong id="dutyText">Offline · not receiving offers</strong></div><button id="dutyToggle" class="toggle" onclick="toggleDuty()">GO ONLINE</button></div><div class="statgrid"><div class="stat"><b>—</b><span>RATING</span></div><div class="stat"><b>—</b><span>COMPLETED TRIPS</span></div><div class="stat"><b>—</b><span>COMMISSION</span></div></div></div>
+          <div class="section"><div class="sectionhead"><strong>Trip offers</strong><span class="tiny-link">Live when online</span></div></div><div class="empty"><strong id="offerTitle">Offers appear here when you go online</strong><p>Each offer shows its booking reference, pickup and destination, fare estimate, pickup distance, requested vehicle and customer note. Accept or decline from the offer card.</p></div>
+          <div class="earncard"><div><small>TRIP EARNINGS · WALLET</small><strong>₹ —</strong><small>Fare, commission and dues breakdown</small></div><div class="badge">View earnings ↗</div></div>
+          <div class="offer"><div class="offerhead"><b>Active trip controls</b><span class="new">WHEN ASSIGNED</span></div><div class="offerdetail">Pickup → destination · booking ID and customer contact<br>Start trip with customer OTP; record starting odometer.</div><div class="routebar"></div><div class="offerdetail">At drop-off: enter ending odometer, review final fare and commission, then complete trip with end OTP.</div><div class="actions"><button>Start · OTP + odo</button><button class="accept">Complete · OTP + odo</button></div></div>
+          <div class="detailcard"><h3>Captain rewards & payouts</h3><div class="detailrow"><span>Performance</span><b>Trips · rating · badges</b></div><div class="detailrow"><span>Driver referrals</span><b>Milestone rewards</b></div><div class="detailrow"><span>Bank details</span><b>Manage payout account</b></div><div class="detailrow"><span>Commission / dues</span><b>Itemised after each trip</b></div><p>Reward eligibility and payout status are tracked from completed trips and verification.</p></div>
+          <div class="info"><b>Arrive on time.</b> OTR policy, grace period and any penalty are admin-controlled and shown before they apply. During an accepted trip, location sharing is active for customer trip tracking.</div>
+          <div class="bottom"><div class="navitem sel"><span class="navicon">◉</span>Duty</div><div class="navitem"><span class="navicon">▤</span>Trips</div><div class="navitem"><span class="navicon">₹</span>Earnings</div><div class="navitem"><span class="navicon">●</span>Account</div></div>
+        </div>
+      </div>
+      <aside class="side"><div class="num">02 / DRIVER</div><h2>Clear work. Clear earnings.</h2><p>The driver home reflects actual product controls: approval and duty state, trip offers, odometer-based completion, commission and dues, rating and rewards.</p><ul><li><span class="tick">✓</span> Offer details before accept/decline</li><li><span class="tick">✓</span> Odometer-based final fare</li><li><span class="tick">✓</span> Earnings, dues, ratings and rewards</li></ul></aside>
+    </section>
+  </main>
+  <script>
+    function show(mode){const customer=mode==='customer';document.getElementById('customerScreen').classList.toggle('hidden',!customer);document.getElementById('driverScreen').classList.toggle('hidden',customer);document.getElementById('customerBtn').classList.toggle('active',customer);document.getElementById('driverBtn').classList.toggle('active',!customer)}
+    function toggleDuty(){const b=document.getElementById('dutyToggle'),t=document.getElementById('dutyText'),offline=b.textContent==='GO ONLINE';b.textContent=offline?'GO OFFLINE':'GO ONLINE';t.textContent=offline?'Online · eligible for live offers':'Offline · not receiving offers';document.getElementById('offerTitle').textContent=offline?'Waiting for a real booking offer':'Offers appear here when you go online'}
+    function applyCoupon(button){button.textContent='Preview only';button.disabled=true;button.closest('.detailcard').querySelector('.coupon-msg').textContent='This visual preview does not validate coupons. In the app, the server checks the code and shows the reduced fare before confirmation.'}
+  </script>
+</body>
+</html>

@@ -1,0 +1,64 @@
+{
+  "expo": {
+    "name": "DrivX",
+    "slug": "drivx",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "drivx",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "backgroundColor": "#F8FAFC",
+      "resizeMode": "contain",
+      "image": "./assets/splash-icon.png"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "in.drivx.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "DrivX shows your pickup point and shares your live trip while you are using the app.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Drivers only: DrivX streams your position to the customer while an assigned trip is active, and stops when the trip ends."
+      }
+    },
+    "android": {
+      "package": "in.drivx.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#0F172A",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "INTERNET",
+        "POST_NOTIFICATIONS"
+      ],
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "appSurface": "driver",
+      "mapsAndroidConfigured": false,
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "94172ec9-cf4c-4b4a-8530-30d11b803bbd"
+      }
+    },
+    "owner": "amit1998"
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "exactOptionalPropertyTypes": false,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "jsx": "react-jsx",
+    "declaration": true,
+    "baseUrl": ".",
+    "paths": {
+      "@drivx/design-tokens": ["packages/design-tokens/src/index.ts"],
+      "@drivx/design-tokens/*": ["packages/design-tokens/src/*"],
+      "@drivx/domain": ["packages/domain/src/index.ts"],
+      "@drivx/domain/*": ["packages/domain/src/*"],
+      "@drivx/ui/native": ["packages/ui/src/native/index.ts"],
+      "@drivx/ui/web": ["packages/ui/src/web/index.ts"],
+      "@drivx/firebase-client": ["packages/firebase-client/src/index.ts"],
+      "@drivx/firebase-client/*": ["packages/firebase-client/src/*"]
+    }
+  },
+  "exclude": ["node_modules", "**/dist", "**/.next", "**/expo-metro-cache"]
+}

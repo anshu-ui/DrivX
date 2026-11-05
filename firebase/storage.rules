@@ -1,0 +1,71 @@
+rules_version = '2';
+
+/**
+ * Cloud Storage security rules.
+ *
+ * Driver documents are the most sensitive objects in the system: they carry
+ * identity numbers and addresses. They are never publicly readable, never
+ * listable by other users, and only writable by the owning driver through a
+ * path the client cannot choose freely.
+ */
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isAdmin() {
+      return request.auth != null && request.auth.token.admin == true;
+    }
+
+    function isOps() {
+      return request.auth != null && request.auth.token.ops == true;
+    }
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    /**
+     * Roles, not the single `role` claim: one number can be a customer and a
+     * driver at once, and that person still has to be able to file their own
+     * documents. The uid comparison on each path is what keeps anyone else out.
+     */
+    function isDriver() {
+      return request.auth != null && (
+        ('roles' in request.auth.token && 'driver' in request.auth.token.roles)
+        || request.auth.token.role == 'driver'
+      );
+    }
+
+    function uploadAllowed() {
+      return request.resource.size < 8 * 1024 * 1024 &&
+        request.resource.contentType.matches('image/.*|application/pdf') &&
+        // Files must be opaque to the CDN-less client; no HTML or scripts.
+        !request.resource.contentType.matches('text/html|application/javascript');
+    }
+
+    // drivers/{driverUid}/{documentId} — mirrors the Firestore metadata doc.
+    // The uid comparison alone is not enough: a customer's own uid dropped into
+    // this path would match it, so the driver role is required as well.
+    match /drivers/{driverUid}/{documentId} {
+      allow read: if (isDriver() && request.auth.uid == driverUid) || isAdmin() || isOps();
+      allow write: if isDriver() && request.auth.uid == driverUid && uploadAllowed();
+      allow list: if (isDriver() && request.auth.uid == driverUid) || isAdmin() || isOps();
+    }
+
+    // Profile photographs are the only image shown to a counterparty, and the
+    // admin-curated copy is written by Cloud Functions.
+    match /avatars/{uid}/{fileName} {
+      allow read: if signedIn();
+      allow write: if request.auth != null && request.auth.uid == uid && uploadAllowed();
+    }
+
+    // Recorded GPS traces, retained only for dispute resolution.
+    match /trip-traces/{bookingId}/{fileName} {
+      allow read: if isAdmin() || isOps();
+      allow write: if false;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

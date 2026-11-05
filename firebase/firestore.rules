@@ -1,0 +1,439 @@
+rules_version = '2';
+
+/**
+ * DrivX Firestore security rules.
+ *
+ * Posture:
+ *  - Identity comes only from custom claims minted by Cloud Functions.
+ *  - Money, trip state, fares, roles and eligibility are never client-writable;
+ *    those transitions live in Cloud Functions, which bypass these rules.
+ *  - Reads of precise location and driver documents are limited to the specific
+ *    participants of a trip, not to "any authenticated user".
+ *  - Trip events are append-only: no update, no delete, ever.
+ */
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------------------------------------------------------------- helpers
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function uid() {
+      return request.auth.uid;
+    }
+
+    function isAdmin() {
+      return signedIn() && request.auth.token.admin == true;
+    }
+
+    /** Operations staff see live operations but cannot approve drivers or pricing. */
+    function isOps() {
+      return signedIn() && request.auth.token.ops == true;
+    }
+
+    function isStaff() {
+      return isAdmin() || isOps();
+    }
+
+    /**
+     * What an account may do is the `roles` list, not the single `role` claim —
+     * that one only says which surface it opens first. One phone number can
+     * belong to a customer and a driver at the same time, and a check against
+     * `token.role` would lock that person out of whichever half of their own
+     * data they are not currently standing in.
+     */
+    function hasRole(roleName) {
+      return signedIn() && (
+        ('roles' in request.auth.token
+          && roleName in request.auth.token.roles)
+        || request.auth.token.role == roleName
+      );
+    }
+
+    function isDriver() {
+      return hasRole('driver');
+    }
+
+    function isCustomer() {
+      return hasRole('customer');
+    }
+
+    /** Fields that must not appear in the write's changed-key set. */
+    function untouched(fields) {
+      let touched = request.resource.data.diff(resource.data).affectedKeys();
+      return !touched.hasAny(fields);
+    }
+
+    /**
+     * Precise location while idle is a policy, not a customer preference: a
+     * profile may only ever carry `false`. Location is shared during a trip by
+     * the dispatch functions, never by a flag on this document.
+     */
+    function idleLocationStaysOff(data) {
+      return !('privacy' in data)
+        || !('preciseLocationWhileIdle' in data.privacy)
+        || data.privacy.preciseLocationWhileIdle == false;
+    }
+
+    /** The write must not modify any key outside `allowed`. Update rules only. */
+    function onlyKeysAre(allowed) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowed);
+    }
+
+    function bookingDoc(bookingId) {
+      return get(/databases/$(database)/documents/bookings/$(bookingId)).data;
+    }
+
+    function offeredAssignmentPath(bookingId) {
+      return /databases/$(database)/documents/bookings/$(bookingId)/assignments/$("as-" + bookingId + "-" + uid());
+    }
+
+    function isDriverOfferedThisBooking(bookingId) {
+      let offerPath = offeredAssignmentPath(bookingId);
+      return isDriver() && exists(offerPath) &&
+        get(offerPath).data.driverUid == uid() &&
+        get(offerPath).data.status == 'offered';
+    }
+
+    /** Trip participants: the customer who booked, the driver assigned, staff. */
+    function isBookingParticipant(bookingId) {
+      let booking = bookingDoc(bookingId);
+      return isStaff() ||
+        (signedIn() && (uid() == booking.customerUid || uid() == booking.assignedDriverUid)) ||
+        isDriverOfferedThisBooking(bookingId);
+    }
+
+    function isBookingCustomer(bookingId) {
+      let booking = bookingDoc(bookingId);
+      return signedIn() && uid() == booking.customerUid;
+    }
+
+    function isBookingDriver(bookingId) {
+      let booking = bookingDoc(bookingId);
+      return signedIn() && isDriver() && uid() == booking.assignedDriverUid;
+    }
+
+    /**
+     * A booking the customer is allowed to attach to a new ticket. Prevents
+     * support tickets being manufactured against someone else's trip.
+     */
+    function bookingBelongsToCaller(bookingId) {
+      return signedIn() && bookingDoc(bookingId).customerUid == uid();
+    }
+
+    // ------------------------------------------------------------------ users
+    // Provisioned by the onAuthUserCreated function. The account row itself is
+    // not editable by clients; role changes happen only via the setRole callable.
+    match /users/{userId} {
+      allow read: if signedIn() && (uid() == userId || isStaff());
+      allow create, update, delete: if false;
+    }
+
+    // -------------------------------------------------------- customerProfiles
+    match /customerProfiles/{userId} {
+      allow read: if signedIn() && (uid() == userId || isStaff());
+      allow create: if isCustomer() && uid() == userId && idleLocationStaysOff(request.resource.data);
+      allow update: if signedIn() && uid() == userId &&
+        // Aggregates and lifecycle flags are server-owned.
+        untouched([
+          'ratingAverage', 'ratingCount', 'lifetimeBookings',
+          'createdAtMs', 'updatedAtMs', 'uid'
+        ]) &&
+        idleLocationStaysOff(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // ----------------------------------------------------------- driverProfiles
+    match /driverProfiles/{userId} {
+      allow read: if signedIn() && (uid() == userId || isStaff());
+
+      allow create: if isDriver() && uid() == userId &&
+        request.resource.data.verificationStatus == 'not_started' &&
+        request.resource.data.availabilityState == 'offline' &&
+        request.resource.data.ratingCount == 0;
+
+      allow update: if signedIn() && uid() == userId &&
+        // A driver can never self-approve, self-rate, or enter an
+        // assignment/trip state — those are dispatched by Cloud Functions.
+        // The duty terms are on the list for the same reason: dispatch decides
+        // who may be offered work off what this person agreed to, so an
+        // acceptance has to be a call the server can point at, not a field a
+        // device can set on its own way to an offer.
+        //
+        // So is the availability pair, since `setAvailability` exists. Standing
+        // in the queue is what an offer is made from, and `availabilitySinceMs`
+        // *is* the waiting order — a device that could write an hour from 1970
+        // would own the front of the queue. Only the callable sets either, and
+        // it refuses a driver who has not agreed the terms or still owes money.
+        untouched([
+          'verificationStatus', 'verifiedAtMs', 'verifiedByUid', 'rejectionReason',
+          'applicationSubmittedAtMs',
+          'documentsExpiringBeforeMs', 'ratingAverage', 'ratingCount', 'lifetimeTrips',
+          'onTimeArrivalRate', 'acceptanceRate', 'driverId', 'uid', 'createdAtMs', 'updatedAtMs',
+          'dutyTermsVersion', 'dutyTermsAcceptedAtMs',
+          'availabilityState', 'availabilitySinceMs'
+        ]);
+
+      allow delete: if isAdmin();
+
+      // ------------------------------------------------------- dues (subcollection)
+      // What the driver owes the platform: the one-time onboarding fee and one
+      // commission row per completed trip. They read their own bill so the number
+      // they are asked for is the number on the record, and only Cloud Functions
+      // writes it — a driver who could mark their own dues paid would not be a
+      // driver who paid them.
+      match /dues/{dueId} {
+        allow read: if signedIn() && (uid() == userId || isStaff());
+        allow create, update, delete: if false;
+      }
+
+      // ------------------------------------------- driverDocuments (subcollection)
+      // Files live in Cloud Storage under the same private path; this document
+      // is the metadata pointer an admin reviews.
+      match /documents/{documentId} {
+        allow read: if signedIn() && (uid() == userId || isStaff());
+
+        allow create: if signedIn() && uid() == userId &&
+          request.resource.data.driverUid == userId &&
+          request.resource.data.status == 'pending_review' &&
+          request.resource.data.reviewedByUid == null &&
+          request.resource.data.storagePath == 'drivers/' + userId + '/' + documentId;
+
+        // Re-submitting after rejection keeps the review fields untouched.
+        allow update: if signedIn() && uid() == userId &&
+          resource.data.status in ['pending_review', 'rejected'] &&
+          request.resource.data.status == 'pending_review' &&
+          untouched(['reviewedByUid', 'reviewedAtMs', 'driverUid', 'storagePath']);
+
+        allow delete: if signedIn() && uid() == userId &&
+          resource.data.status in ['not_started', 'rejected', 'expired'];
+      }
+    }
+
+    // Admin review of a driver's verification happens through Cloud Functions
+    // (setDriverVerification), which also writes an audit log entry.
+
+    // -------------------------------------------------- dues, across every driver
+    // A collection-group query is matched against this rule alone, not the
+    // `driverProfiles/{userId}/dues/{dueId}` rules above, so the console's
+    // "who owes what" list needs its own grant. Staff only: a driver reads their
+    // own bill through their profile, and one driver must never see another's
+    // balance. Writes stay closed — the ledger belongs to Cloud Functions.
+    match /{path=**}/dues/{dueId} {
+      allow read: if isStaff();
+      allow write: if false;
+    }
+
+    // Driver Duty reads offers with a collection-group query. The booking's
+    // nested assignment rule above protects direct reads, while this recursive
+    // rule lets Firestore authorize that query only for the driverUid it filters
+    // to (or staff). A driver still cannot read another driver's offer.
+    match /{path=**}/assignments/{assignmentId} {
+      allow read: if isStaff() ||
+        (isDriver() && resource.data.driverUid == uid());
+      allow write: if false;
+    }
+
+    // ------------------------------------------------------------ serviceTypes
+    // The app must be able to list what is bookable without a round trip to a
+    // function, so only enabled services are publicly readable.
+    match /serviceTypes/{serviceTypeId} {
+      allow get: if signedIn() && (resource.data.enabled == true || isStaff());
+      // list is evaluated per candidate document, so disabled cab services stay
+      // hidden from customers even in a query.
+      allow list: if signedIn() && request.query.limit <= 25 &&
+        (resource.data.enabled == true || isStaff());
+      allow write: if false;
+    }
+
+    // ------------------------------------------------------------- pricingRules
+    // Never client-readable: prices are served inside a server-signed fare
+    // estimate so a client cannot recompute or tamper with a total.
+    match /pricingRules/{ruleId} {
+      allow read, write: if isAdmin();
+    }
+
+    // ---------------------------------------------------------------- bookings
+    match /bookings/{bookingId} {
+      allow get: if isBookingParticipant(bookingId);
+      // List rules are evaluated per candidate document, so ownership is
+      // checked against each booking rather than trusting the client's query.
+      // `get()` is not available while listing, so the candidate's own fields
+      // are the only thing to test here — which is also why every history query
+      // must filter on customerUid or assignedDriverUid.
+      allow list: if isStaff() ||
+        (signedIn() && request.query.limit <= 50 &&
+          (resource.data.customerUid == uid() || resource.data.assignedDriverUid == uid()));
+
+      // Creation, assignment, status transitions, fares and cancellation all
+      // go through Cloud Functions. Clients have no write path here at all.
+      allow create, update, delete: if false;
+
+      // ------------------------------------------------- trip events (append only)
+      match /events/{eventId} {
+        allow read: if isBookingParticipant(bookingId);
+        allow create: if false;
+        allow update, delete: if false;
+      }
+
+      // ------------------------------------------------------ driver assignments
+      // The offered driver must be able to see an offer before accepting, and
+      // accept/decline is a function call, not a write here.
+      match /assignments/{assignmentId} {
+        allow read: if isStaff() ||
+          (signedIn() &&
+            uid() == get(/databases/$(database)/documents/bookings/$(bookingId)/assignments/$(assignmentId)).data.driverUid);
+        allow create, update, delete: if false;
+      }
+
+    }
+
+    // ----------------------------------------------------------- tripSummaries
+    match /tripSummaries/{bookingId} {
+      allow read: if isBookingParticipant(bookingId);
+      allow write: if false;
+    }
+
+    // ---------------------------------------------------------------- payments
+    match /payments/{paymentId} {
+      allow read: if isStaff() ||
+        (signedIn() &&
+          (uid() == resource.data.customerUid || bookingBelongsToCaller(resource.data.bookingId)));
+      allow write: if false;
+    }
+
+    // ----------------------------------------------------------------- refunds
+    match /refunds/{refundId} {
+      allow read: if isStaff() || isBookingCustomer(resource.data.bookingId);
+      allow write: if false;
+    }
+
+    // ----------------------------------------------------------------- ratings
+    match /ratings/{ratingId} {
+      allow read: if isStaff() ||
+        (signedIn() && (uid() == resource.data.raterUid || uid() == resource.data.ratedUid));
+      allow write: if false;
+    }
+
+    // -------------------------------------------------------------- rewards
+    // Balances, referral attribution and payout records are server-owned.
+    // Mobile clients only read their own account and its append-only ledger.
+    match /rewardAccounts/{userId} {
+      allow get: if signedIn() && (uid() == userId || isStaff());
+      allow list: if isStaff() && request.query.limit <= 100;
+      allow create, update, delete: if false;
+      match /ledger/{entryId} {
+        allow read: if signedIn() && (uid() == userId || isStaff());
+        allow write: if false;
+      }
+    }
+    match /rewardReferrals/{referralId} {
+      allow read: if isStaff() || (signedIn() &&
+        (resource.data.referrerUid == uid() || resource.data.referredUid == uid()));
+      allow write: if false;
+    }
+    match /rewardPayouts/{payoutId} {
+      allow read: if isStaff() || (signedIn() && resource.data.uid == uid());
+      allow write: if false;
+    }
+    match /rewardCodes/{codeId} {
+      allow read, write: if false;
+    }
+    match /rewardCoupons/{codeId} {
+      allow read, write: if false;
+    }
+    match /rewardCouponUsage/{usageId} {
+      allow read, write: if false;
+    }
+
+    // ----------------------------------------------------------- savedPlaces
+    match /savedPlaces/{userId}/places/{placeId} {
+      // `get`, not `read`: `allow read` would also grant list, and an
+      // allow-rule set is an OR — the capped list below would never bind.
+      allow get, create, update: if signedIn() && uid() == userId;
+      allow delete: if signedIn() && uid() == userId;
+      allow list: if signedIn() && uid() == userId && request.query.limit <= 20;
+    }
+
+    // ----------------------------------------------------------- notifications
+    // Nested under the user document so ownership is decidable from the path,
+    // while the collection keeps the name `notifications` for its collection-group
+    // index and TTL override.
+    match /users/{userId}/notifications/{notificationId} {
+      allow read: if signedIn() && uid() == userId;
+      // Only the read receipt is client-writable.
+      allow update: if signedIn() && uid() == userId &&
+        onlyKeysAre(['readAtMs']);
+      allow delete: if signedIn() && uid() == userId;
+      allow create: if false;
+    }
+
+    // ----------------------------------------------------------- supportTickets
+    match /supportTickets/{ticketId} {
+      allow read: if isStaff() ||
+        (signedIn() && uid() == resource.data.openedByUid);
+
+      allow create: if signedIn() &&
+        request.resource.data.openedByUid == uid() &&
+        request.resource.data.status == 'open' &&
+        request.resource.data.assignedAdminUid == null &&
+        request.resource.data.priority in ['low', 'normal', 'high', 'urgent'] &&
+        (
+          !('bookingId' in request.resource.data) ||
+          request.resource.data.bookingId == null ||
+          bookingBelongsToCaller(request.resource.data.bookingId)
+        );
+
+      // The opener may append a reply while the ticket is unresolved; only
+      // staff can change status, priority or assignment.
+      allow update: if signedIn() && (
+        (
+          uid() == resource.data.openedByUid &&
+          resource.data.status != 'closed' &&
+          onlyKeysAre(['body', 'subject', 'lastCustomerReplyAtMs']) &&
+          untouched(['status', 'priority', 'assignedAdminUid', 'openedByUid', 'resolution'])
+        ) ||
+        isStaff()
+      );
+
+      allow delete: if isAdmin();
+    }
+
+    // ----------------------------------------------------------- adminAuditLogs
+    // Append-only record of every privileged human action.
+    match /adminAuditLogs/{logId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // ---------------------------------------------------------------- otpCodes
+    match /otpCodes/{otpId} {
+      allow read, write: if false;
+    }
+
+    // ------------------------------------------------------------ usage (Maps)
+    // Per-day Maps/Places call counters written by Cloud Functions. Admin can
+    // read the spend; nobody reads it client-side who could use it to probe the
+    // budget, and no client may write a number that gates a cost control.
+    match /usage/{dayId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // --------------------------------------------------------------- appConfig
+    match /appConfig/{key} {
+      // `public` carries launch flags such as which service types are enabled.
+      allow read: if (key == 'public' && signedIn()) || isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // Anything not named above is denied by default. This catch-all documents
+    // that intent explicitly and fails closed if a collection is added without
+    // a rule.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

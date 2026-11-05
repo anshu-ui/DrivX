@@ -1,0 +1,26 @@
+{
+  "name": "@drivx/functions",
+  "version": "0.1.0",
+  "private": true,
+  "main": "lib/index.js",
+  "engines": {
+    "node": "22"
+  },
+  "scripts": {
+    "build": "tsc",
+    "serve": "npm run build && firebase functions:shell",
+    "logs": "firebase functions:log",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@drivx/domain": "file:vendor/drivx-domain-0.1.0.tgz",
+    "firebase-admin": "^13.0.1",
+    "firebase-functions": "^6.1.1",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "firebase-functions-test": "^3.4.0",
+    "typescript": "~5.9.3"
+  }
+}

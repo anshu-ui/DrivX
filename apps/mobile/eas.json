@@ -1,0 +1,50 @@
+{
+  "cli": { "version": ">= 16.0.0", "appVersionSource": "local" },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "environment": "development",
+      "env": { "DRIVX_APP_VARIANT": "combined" }
+    },
+    "customer-development": {
+      "extends": "development",
+      "env": { "DRIVX_APP_VARIANT": "customer" }
+    },
+    "driver-development": {
+      "extends": "development",
+      "env": { "DRIVX_APP_VARIANT": "driver" }
+    },
+    "admin-development": {
+      "extends": "development",
+      "env": { "DRIVX_APP_VARIANT": "admin" }
+    },
+    "customer-preview": {
+      "extends": "preview",
+      "environment": "preview",
+      "env": { "DRIVX_APP_VARIANT": "customer" }
+    },
+    "driver-preview": {
+      "extends": "preview",
+      "environment": "preview",
+      "env": { "DRIVX_APP_VARIANT": "driver" }
+    },
+    "preview": { "distribution": "internal", "environment": "preview", "env": { "DRIVX_APP_VARIANT": "combined" } },
+    "customer-production": {
+      "extends": "production",
+      "environment": "production",
+      "env": { "DRIVX_APP_VARIANT": "customer" }
+    },
+    "driver-production": {
+      "extends": "production",
+      "environment": "production",
+      "env": { "DRIVX_APP_VARIANT": "driver" }
+    },
+    "admin-production": {
+      "extends": "production",
+      "environment": "production",
+      "env": { "DRIVX_APP_VARIANT": "admin" }
+    },
+    "production": { "environment": "production", "env": { "DRIVX_APP_VARIANT": "combined" } }
+  }
+}
