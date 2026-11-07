@@ -123,11 +123,11 @@ export function TripMapPanel({
         fullscreenControl: true,
         clickableIcons: false,
         styles: [
-          { elementType: 'geometry', stylers: [{ color: '#eef3f8' }] },
-          { elementType: 'labels.text.fill', stylers: [{ color: '#34445d' }] },
+          { elementType: 'geometry', stylers: [{ color: '#F8FAFC' }] },
+          { elementType: 'labels.text.fill', stylers: [{ color: '#716C69' }] },
           { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
-          { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#dce8f5' }] },
-          { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#cfe1f2' }] },
+          { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#E6E1DA' }] },
+          { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#EAE6E0' }] },
         ],
       });
       setMapError(false);
@@ -141,8 +141,8 @@ export function TripMapPanel({
     if (!map || !window.google?.maps) return;
     const maps = window.google.maps;
     const entries: Array<[string, Point | null, string, string]> = [
-      ['pickup', pickupPoint, 'Pickup', '#174b83'],
-      ['destination', destinationPoint, 'Drop-off', '#2447b5'],
+      ['pickup', pickupPoint, 'Pickup', '#2563EB'],
+      ['destination', destinationPoint, 'Drop-off', '#17171B'],
       ['driver', driverPoint, driverFix?.stale ? `${driverTitle} · last update is old` : driverTitle, '#0e8a62'],
       ['customer', customerPoint, customerFix?.stale ? 'Customer · last update is old' : 'Customer', '#e08b28'],
     ];
@@ -163,7 +163,7 @@ export function TripMapPanel({
     routeRef.current?.setMap(null);
     routeRef.current = null;
     const route = decodePolyline(routePolyline);
-    if (route.length > 1) routeRef.current = new maps.Polyline({ map, path: route, strokeColor: '#174b83', strokeOpacity: 0.88, strokeWeight: 5 });
+    if (route.length > 1) routeRef.current = new maps.Polyline({ map, path: route, strokeColor: '#2563EB', strokeOpacity: 0.88, strokeWeight: 5 });
     if (hasPoints) {
       if (entries.filter((entry) => entry[1] !== null).length > 1) map.fitBounds(bounds, 36);
       else {
@@ -185,7 +185,7 @@ export function TripMapPanel({
             : 'Pickup and destination are shown here. Shared live locations appear after the trip starts.'}
         </Text>
       </View>
-      <View style={{ height, width: '100%', overflow: 'hidden', backgroundColor: '#EEF3F8' }}>
+      <View style={{ height, width: '100%', overflow: 'hidden', backgroundColor: '#F8FAFC' }}>
         {key && !mapError
           ? createElement('div', { ref: setHost, 'aria-label': `${title}, live pickup, destination, driver and customer map`, style: { width: '100%', height: '100%' } })
           : createElement('iframe', { title, src: fallbackUrl, loading: 'lazy', allowFullScreen: true, referrerPolicy: 'no-referrer-when-downgrade', style: { width: '100%', height: '100%', border: 0 } })}

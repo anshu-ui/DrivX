@@ -562,6 +562,7 @@ export const recordOdometer = onCall(CALLABLE_OPTIONS, async (request) => {
     startOdometerKm: start,
     odometerKm: input.odometerKm,
     tripStartMs,
+    scheduledForMs: epochMs(booking.scheduledForMs),
     kind: 'estimate',
     nowMs: now,
   });
@@ -664,6 +665,7 @@ export const confirmCompletion = onCall(CALLABLE_OPTIONS, async (request) => {
     startOdometerKm: start,
     odometerKm: input.odometerKm,
     tripStartMs,
+    scheduledForMs: epochMs(booking.scheduledForMs),
     kind: 'final',
     nowMs: now,
   });

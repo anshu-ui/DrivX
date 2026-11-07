@@ -44,8 +44,8 @@ export function launchCatalogue(nowMs = Date.now()) {
     sortOrder: index + 1,
   }));
 
-  /** ₹200 per eligible trip hour within the configurable 22:00–06:00 window. */
-  const CITY_NIGHT = { enabled: true, fromHour: 22, toHour: 6, mode: 'hourly', flatPaise: 20_000, rate: 0 };
+  /** One-time ₹200 surcharge per eligible trip with scheduled pickup in the 22:00–06:00 window. */
+  const CITY_NIGHT = { enabled: true, fromHour: 22, toHour: 6, mode: 'flat', flatPaise: 20_000, rate: 0 };
   const OUTSTATION_NIGHT = CITY_NIGHT;
 
   const cityOneWay = (id, zoneId, waitChargePerMinutePaise) => ({

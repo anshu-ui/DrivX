@@ -1,4 +1,4 @@
 import { mobileTheme } from '../mobileTheme';
 
-/** Keep the customer app on DrivX's shared white and blue brand theme. */
+/** Keep Customer on the shared royal blue, white and silver theme. */
 export const customerTheme = mobileTheme;

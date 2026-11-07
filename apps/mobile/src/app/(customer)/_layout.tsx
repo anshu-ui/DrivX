@@ -3,12 +3,28 @@ import { StatusBar } from 'expo-status-bar';
 import { ThemeProvider } from '@drivx/ui';
 import { theme } from '@drivx/design-tokens';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFonts } from 'expo-font';
+import {
+  PlusJakartaSans_400Regular,
+  PlusJakartaSans_500Medium,
+  PlusJakartaSans_600SemiBold,
+  PlusJakartaSans_700Bold,
+  PlusJakartaSans_800ExtraBold,
+} from '@expo-google-fonts/plus-jakarta-sans';
 import { TabIcon } from '../../components/TabIcon';
 import { AppSurfaceGate } from '../../components/AppSurfaceGate';
 import { customerTheme } from '../../features/customer/customerTheme';
 
 export default function CustomerLayout() {
+  const [fontsLoaded, fontError] = useFonts({
+    PlusJakartaSans_400Regular,
+    PlusJakartaSans_500Medium,
+    PlusJakartaSans_600SemiBold,
+    PlusJakartaSans_700Bold,
+    PlusJakartaSans_800ExtraBold,
+  });
   const insets = useSafeAreaInsets();
+  if (!fontsLoaded && !fontError) return null;
   return (
     <AppSurfaceGate expects="customer">
       <ThemeProvider theme={customerTheme}>
@@ -16,26 +32,23 @@ export default function CustomerLayout() {
         <Tabs
         screenOptions={{
           headerShown: false,
-          // The active tab is brand navy, at the readable step of the hue: the
-          // label is 13px text, and #1E40AF measures 8.72:1 against the bar.
+          // Keep tab labels legible and consistent with the current brand theme.
           tabBarActiveTintColor: customerTheme.colors.primaryInk,
           tabBarInactiveTintColor: customerTheme.colors.textMuted,
-          // react-navigation sets no font on its label, so without this the one
-          // line of text in the bar renders system-ui at 10px while everything
-          // else on the screen is Plus Jakarta Sans.
+          // Keep the tab labels on the same Plus Jakarta Sans scale as the screens.
           tabBarLabelStyle: {
-            fontFamily: theme.fontFamily.text,
-            fontSize: 10,
-            lineHeight: 13,
-            fontWeight: '500',
-            marginTop: 2,
-            marginBottom: 1,
+            fontFamily: 'PlusJakartaSans_600SemiBold',
+            fontSize: 11,
+            lineHeight: 14,
+            fontWeight: 'normal',
+            marginTop: 3,
+            marginBottom: 2,
             includeFontPadding: false,
           },
           tabBarStyle: {
             backgroundColor: customerTheme.colors.surface,
             borderTopColor: customerTheme.colors.border,
-            paddingHorizontal: 5,
+            paddingHorizontal: 8,
             // Keep the three tabs above Android's gesture/navigation area.
             // The extra bottom inset belongs to the bar, not to the tab items.
             height: theme.sizing.navBarHeight + insets.bottom,
@@ -44,8 +57,10 @@ export default function CustomerLayout() {
           },
           tabBarItemStyle: {
             flex: 1,
+            flexBasis: 0,
+            width: 0,
             minWidth: 0,
-            paddingHorizontal: 0,
+            paddingHorizontal: 2,
             alignItems: 'center',
             justifyContent: 'center',
           },

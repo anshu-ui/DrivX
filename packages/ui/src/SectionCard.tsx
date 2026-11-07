@@ -4,11 +4,7 @@ import { Text } from './Text';
 
 /**
  * The card from the booking screen: a thin-bordered white panel whose header is
- * a small glyph, an uppercase section name and one right-hand action.
- *
- * The header is deliberately an overline rather than a heading — on this screen
- * six of these stack, and six 18px headings compete with each other. The fare
- * number is the only large type left on the page.
+ * a glyph, a readable title and one right-hand action.
  */
 export function SectionCard({
   icon,
@@ -48,13 +44,10 @@ export function SectionCard({
       <View style={[styles.header, { gap: theme.spacing.sm }]}>
         {icon ? <View style={styles.headerIcon}>{icon}</View> : null}
         <Text
-          variant="label"
-          tone="faint"
+          variant="bodyStrong"
+          tone="default"
           style={{
             flexShrink: 1,
-            letterSpacing: 0.9,
-            textTransform: 'uppercase',
-            fontWeight: '700',
           }}
         >
           {title}

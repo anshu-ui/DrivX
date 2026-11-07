@@ -165,14 +165,14 @@ async function pricingOnly() {
     if (updatedOutstationIds.has(snapshot.id)) continue;
     const current = snapshot.data();
     await snapshot.ref.update({
-      nightSurcharge: { ...(current.nightSurcharge ?? {}), enabled: true, fromHour: 22, toHour: 6, mode: 'hourly', flatPaise: 20_000, rate: 0 },
+      nightSurcharge: { ...(current.nightSurcharge ?? {}), enabled: true, fromHour: 22, toHour: 6, mode: 'flat', flatPaise: 20_000, rate: 0 },
       pricingVersion: Number(current.pricingVersion ?? 1) + 1,
       updatedAtMs: Timestamp.now(),
     });
     nightOnlyUpdates += 1;
   }
   console.log(`✓ serviceTypes/chauffeur_outstation — enabled (one-way through 3,000 km and round-trip packages through 11 days)`);
-  console.log(`✓ ₹200/hour night charge active from 10 PM–6 AM on ${nightOnlyUpdates} other pricing rules; their fare rates were left unchanged`);
+  console.log(`✓ One-time ₹200 night charge active for eligible pickups from 10 PM–6 AM on ${nightOnlyUpdates} other pricing rules; their fare rates were left unchanged`);
 }
 
 async function staff(email, displayName, role) {

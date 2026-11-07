@@ -95,7 +95,9 @@ export function asRule(id: string, raw: Record<string, unknown>): PricingRuleRec
       toHour: Number(night.toHour ?? 0),
       // Older rules carried a percentage and nothing else, so no mode means the
       // percentage the document already had.
-      mode: night.mode === 'flat' || night.mode === 'hourly' ? night.mode : 'percent',
+      // Legacy production rules may still say `hourly`; DrivX now charges the
+      // ₹200 night amount once per booking, so normalize that stored value here.
+      mode: night.mode === 'flat' || night.mode === 'hourly' ? 'flat' : 'percent',
       flatPaise: Number(night.flatPaise ?? 0),
       rate: Number(night.rate ?? 0),
     },
@@ -247,6 +249,8 @@ export function meteredTrip(input: {
   startOdometerKm: number;
   odometerKm: number;
   tripStartMs: number;
+  /** Scheduled pickup controls the one-time night charge; actual start prices duration. */
+  scheduledForMs?: number | null;
   waitingMinutes?: number;
   kind: 'estimate' | 'final';
   nowMs: number;
@@ -260,8 +264,8 @@ export function meteredTrip(input: {
       startOdometerKm: input.startOdometerKm,
       odometerKm: input.odometerKm,
       tripStartMs: input.tripStartMs,
-      localStartHour: localStartHour(input.tripStartMs, input.rule.zoneId),
-      localStartMinute: localStartMinute(input.tripStartMs, input.rule.zoneId),
+      localStartHour: localStartHour(input.scheduledForMs ?? input.tripStartMs, input.rule.zoneId),
+      localStartMinute: localStartMinute(input.scheduledForMs ?? input.tripStartMs, input.rule.zoneId),
       waitingMinutes: input.waitingMinutes ?? 0,
       surgeMultiplier: 1,
       kind: input.kind,

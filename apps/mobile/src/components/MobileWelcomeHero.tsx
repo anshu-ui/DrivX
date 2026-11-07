@@ -82,10 +82,10 @@ export function MobileWelcomeHero({ name, fallback, role }: MobileWelcomeHeroPro
       >
         {/* Abstract route artwork keeps the mockup's map-led feel without a fake static map. */}
         <View style={{ position: 'absolute', left: 18, right: 18, top: 16, bottom: 16, opacity: 0.7 }}>
-          <View style={{ position: 'absolute', left: '8%', top: '22%', width: '84%', height: 1, backgroundColor: 'rgba(16,42,82,0.10)', transform: [{ rotate: '-8deg' }] }} />
-          <View style={{ position: 'absolute', left: '12%', top: '63%', width: '76%', height: 1, backgroundColor: 'rgba(16,42,82,0.10)', transform: [{ rotate: '7deg' }] }} />
-          <View style={{ position: 'absolute', left: '28%', top: '2%', width: 1, height: '95%', backgroundColor: 'rgba(16,42,82,0.08)', transform: [{ rotate: '19deg' }] }} />
-          <View style={{ position: 'absolute', left: '72%', top: '4%', width: 1, height: '90%', backgroundColor: 'rgba(16,42,82,0.08)', transform: [{ rotate: '-17deg' }] }} />
+          <View style={{ position: 'absolute', left: '8%', top: '22%', width: '84%', height: 1, backgroundColor: 'rgba(23,23,27,0.10)', transform: [{ rotate: '-8deg' }] }} />
+          <View style={{ position: 'absolute', left: '12%', top: '63%', width: '76%', height: 1, backgroundColor: 'rgba(23,23,27,0.10)', transform: [{ rotate: '7deg' }] }} />
+          <View style={{ position: 'absolute', left: '28%', top: '2%', width: 1, height: '95%', backgroundColor: 'rgba(23,23,27,0.08)', transform: [{ rotate: '19deg' }] }} />
+          <View style={{ position: 'absolute', left: '72%', top: '4%', width: 1, height: '90%', backgroundColor: 'rgba(23,23,27,0.08)', transform: [{ rotate: '-17deg' }] }} />
         </View>
 
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -99,7 +99,7 @@ export function MobileWelcomeHero({ name, fallback, role }: MobileWelcomeHeroPro
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 56 }}>
           <View style={{ width: 12, alignItems: 'center', alignSelf: 'stretch', justifyContent: 'space-between', paddingVertical: 3 }}>
             <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: theme.colors.primary, borderWidth: 2, borderColor: '#ffffff', zIndex: 1 }} />
-            <View style={{ position: 'absolute', top: 10, bottom: 10, left: 5, width: 2, backgroundColor: 'rgba(16,42,82,0.25)' }} />
+            <View style={{ position: 'absolute', top: 10, bottom: 10, left: 5, width: 2, backgroundColor: 'rgba(37,99,235,0.25)' }} />
             <View style={{ width: 10, height: 10, borderRadius: 3, backgroundColor: theme.colors.primaryInk, borderWidth: 2, borderColor: '#ffffff', zIndex: 1 }} />
           </View>
           <View style={{ flex: 1, gap: 5 }}>
@@ -128,7 +128,7 @@ export function MobileWelcomeHero({ name, fallback, role }: MobileWelcomeHeroPro
           </Animated.View>
         </View>
 
-        <View style={{ height: 1, backgroundColor: 'rgba(16,42,82,0.10)' }} />
+        <View style={{ height: 1, backgroundColor: 'rgba(23,23,27,0.10)' }} />
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <Text variant="caption" tone="brand" style={{ fontSize: 12 }}>
             {driver ? 'Trips · earnings · ratings' : 'Your car, driven by a verified professional'}

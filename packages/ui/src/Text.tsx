@@ -27,6 +27,19 @@ export function Text({ variant = 'body', tone = 'default', style, ...rest }: Dri
   const theme = useTheme();
   const fontScale = useFontScale();
   const t = theme.typography[variant];
+  const appFonts = theme.fontFamily as typeof theme.fontFamily & {
+    textMedium?: string;
+    textSemiBold?: string;
+    textBold?: string;
+    textExtraBold?: string;
+  };
+  const weightFont: Record<string, string | undefined> = {
+    '500': appFonts.textMedium,
+    '600': appFonts.textSemiBold,
+    '700': appFonts.textBold,
+    '800': appFonts.textExtraBold,
+  };
+  const selectedWeightFont = weightFont[String(t.fontWeight)];
   // The platform scales `fontSize` for us (allowFontScaling is on by default)
   // but leaves the derived metrics in design units, which clips descenders once
   // a user raises the system text size. Only leading and tracking need
@@ -40,10 +53,10 @@ export function Text({ variant = 'body', tone = 'default', style, ...rest }: Dri
         styles.base,
         {
           color: theme.colors[toneRole[tone]],
-          fontFamily: theme.fontFamily.text,
+          fontFamily: selectedWeightFont ?? theme.fontFamily.text,
           fontSize: t.fontSize,
           lineHeight: leading,
-          fontWeight: t.fontWeight,
+          fontWeight: selectedWeightFont ? 'normal' : t.fontWeight,
           letterSpacing: ('letterSpacing' in t ? t.letterSpacing : 0) * fontScale,
         },
         style,

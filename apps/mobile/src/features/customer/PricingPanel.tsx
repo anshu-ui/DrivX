@@ -133,13 +133,11 @@ function pricingRows(service: BookingOptionService, roundTrip: boolean): string[
   }
   if (terms.nightSurcharge) {
     const night = terms.nightSurcharge;
-    const window = `driving time between ${hourLabel(night.fromHour)} and ${hourLabel(night.toHour)}`;
+    const window = `the scheduled pickup is between ${hourLabel(night.fromHour)} and ${hourLabel(night.toHour)}`;
     rows.push(
-      night.mode === 'flat'
-        ? `${money(night.flatPaise)} night charge applies once when the trip starts during ${window}.`
-        : night.mode === 'hourly'
-          ? `${money(night.flatPaise)} per eligible driving hour applies only to trip minutes that fall within ${window}; partial hours are prorated. The charge is automatic and shown in your fare before booking.`
-          : `${percent(night.rate)} night allowance applies during ${window}.`,
+      night.mode === 'flat' || night.mode === 'hourly'
+        ? `${money(night.flatPaise)} one-time night charge applies per booking when ${window}. It is added automatically and shown in your fare before booking.`
+        : `${percent(night.rate)} night allowance applies when ${window}.`,
     );
   }
   if (terms.waitChargePerMinutePaise > 0) {

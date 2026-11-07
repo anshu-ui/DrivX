@@ -12,7 +12,7 @@
  * shown a made-up value. The route preview uses the device map provider.
  */
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Pressable, ScrollView, Share, TextInput, useWindowDimensions, View } from 'react-native';
+import { Animated, Pressable, ScrollView, TextInput, useWindowDimensions, View } from 'react-native';
 import { router } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import {
@@ -169,7 +169,7 @@ export default function CustomerHome() {
   const options = useBookingOptions();
   const catalogue = useEnabledServiceCatalogue();
   const booking = useCreateBooking();
-  const [rewardCheckout, setRewardCheckout] = useState<{ walletPaise: number; milesPoints: number; customerReferralCode: string | null } | null>(null);
+  const [rewardCheckout, setRewardCheckout] = useState<{ walletPaise: number; milesPoints: number } | null>(null);
   const [rewardsReload, setRewardsReload] = useState(0);
   const [rewardsLoadError, setRewardsLoadError] = useState(false);
   const [couponCode, setCouponCode] = useState('');
@@ -194,7 +194,7 @@ export default function CustomerHome() {
     }
     setRewardCheckout(null);
     setRewardsLoadError(false);
-    void callFunction<{ role: 'customer' }, { account: { walletPaise: number; milesPoints: number; customerReferralCode: string | null } }>(firebase(), 'getRewards', { role: 'customer' })
+    void callFunction<{ role: 'customer' }, { account: { walletPaise: number; milesPoints: number } }>(firebase(), 'getRewards', { role: 'customer' })
       .then((result) => { if (active) setRewardCheckout(result.account); })
       .catch(() => { if (active) { setRewardCheckout(null); setRewardsLoadError(true); } });
     return () => { active = false; };
@@ -460,7 +460,7 @@ export default function CustomerHome() {
                     borderRadius: theme.radius.md, paddingHorizontal: 14,
                     backgroundColor: theme.colors.surface, opacity: pressed ? 0.82 : 0.97,
                     borderWidth: 1, borderColor: theme.colors.border,
-                    shadowColor: '#102d60', shadowOpacity: 0.14, shadowRadius: 8, elevation: 3,
+                    shadowColor: '#17171B', shadowOpacity: 0.14, shadowRadius: 8, elevation: 3,
                   })}
                 >
                   <Marker kind={end} />
@@ -597,7 +597,7 @@ export default function CustomerHome() {
                   </Text>
                 ) : service?.id === 'chauffeur_outstation' ? (
                   <Text variant="caption" tone="faint">
-                    Outstation one-way packages run through 3,000 km. After 500 km, each 50 km package adds ₹285; extra odometer distance is ₹10/km. A ₹200/hour night charge is added only for trip time from 10 PM to 6 AM.
+                    Outstation one-way packages run through 3,000 km. After 500 km, each 50 km package adds ₹285; extra odometer distance is ₹10/km. A one-time ₹200 night charge applies when pickup is scheduled from 10 PM to 6 AM.
                   </Text>
                 ) : null}
 
@@ -807,29 +807,6 @@ export default function CustomerHome() {
                       <Card tone="inset" style={{ gap: theme.spacing.xs }}>
                         <Text variant="label" tone="brand">DrivX Rewards</Text>
                         <Text variant="caption" tone="muted">Available: {money(rewardCheckout.walletPaise)} wallet credit · {rewardCheckout.milesPoints} Miles (100 Miles = ₹20)</Text>
-                        {rewardCheckout.customerReferralCode ? (
-                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacing.sm }}>
-                            <View style={{ flex: 1, gap: 2 }}>
-                              <Text variant="caption" tone="muted">Your personal invite code</Text>
-                              <Text variant="label" tone="brand">{rewardCheckout.customerReferralCode}</Text>
-                            </View>
-                            <Button
-                              label="Share code"
-                              appearance="secondary"
-                              size="sm"
-                              onPress={() => void Share.share({
-                                title: 'Join me on DrivX',
-                                message: `Join DrivX for trusted drivers. Use my invite code ${rewardCheckout.customerReferralCode} when you sign up.`,
-                              })}
-                            />
-                          </View>
-                        ) : (
-                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacing.sm }}>
-                            <Text variant="caption" tone="muted" style={{ flex: 1 }}>Your invite code is being prepared.</Text>
-                            <Button label="Refresh" appearance="secondary" size="sm" onPress={() => setRewardsReload((value) => value + 1)} />
-                          </View>
-                        )}
-                        <Text variant="caption" tone="muted">Share your personal code. Both accounts get their referral credit after your friend completes an eligible first trip.</Text>
                         <TextInput
                           value={couponCode}
                           onChangeText={(value) => {
@@ -921,13 +898,13 @@ export default function CustomerHome() {
                     ) : rewardsLoadError ? (
                       <Card tone="inset" style={{ gap: theme.spacing.xs }}>
                         <Text variant="label" tone="brand">DrivX Rewards</Text>
-                        <Text variant="caption" tone="danger" accessibilityRole="alert">Could not load your invite code or wallet right now.</Text>
+                        <Text variant="caption" tone="danger" accessibilityRole="alert">Could not load your wallet and Miles right now.</Text>
                         <Button label="Retry rewards" appearance="secondary" onPress={() => setRewardsReload((value) => value + 1)} />
                       </Card>
                     ) : user ? (
                       <Card tone="inset" style={{ gap: theme.spacing.xs }}>
                         <Text variant="label" tone="brand">DrivX Rewards</Text>
-                        <Text variant="caption" tone="muted">Loading your invite code and wallet…</Text>
+                        <Text variant="caption" tone="muted">Loading your wallet and Miles…</Text>
                       </Card>
                     ) : null}
                     {breakdown ? (
