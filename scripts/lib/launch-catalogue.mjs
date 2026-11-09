@@ -33,8 +33,9 @@ const DAY_MS = 86_400_000;
  * review. The platform fee is 0: the business takes its
  * cut as commission on the driver's fare, not as a line on the customer's bill.
  *
- * Outstation one-way is offered through 3,000 km. Each additional 50 km after
- * 500 km adds the last supplied package gap (₹285). Odometer overage remains ₹10/km.
+ * Outstation one-way uses the exact distance chart through 3,000 km; odometer
+ * overage beyond the selected package remains ₹10/km. Round trips use the
+ * supplied 1–30 day package chart and do not bill kilometres separately.
  */
 export function launchCatalogue(nowMs = Date.now()) {
   /** Existing local one-way chart, in paise. Outstation has its own rule below. */
@@ -81,22 +82,19 @@ export function launchCatalogue(nowMs = Date.now()) {
   });
 
   const outstationOneWaySlabs = [
-    { upToKilometers: 100, farePaise: 127_000 },
-    { upToKilometers: 150, farePaise: 138_000 },
-    { upToKilometers: 200, farePaise: 166_600 },
-    { upToKilometers: 250, farePaise: 194_000 },
-    { upToKilometers: 300, farePaise: 216_700 },
-    { upToKilometers: 350, farePaise: 272_200 },
-    { upToKilometers: 400, farePaise: 300_000 },
-    { upToKilometers: 450, farePaise: 327_000 },
-    { upToKilometers: 500, farePaise: 355_500 },
+    [100, 1_197], [150, 1_301], [200, 1_565], [250, 1_830], [300, 2_042],
+    [350, 2_568], [400, 2_832], [450, 3_095], [500, 3_360], [600, 3_887],
+    [700, 4_415], [800, 4_942], [900, 5_471], [1_000, 5_990], [1_200, 7_053],
+    [1_400, 8_109], [1_600, 9_164], [1_800, 9_682], [2_000, 10_210],
+    [2_200, 10_751], [2_400, 11_320], [2_600, 12_290], [2_800, 12_440],
+    [3_000, 12_600],
+  ].map(([upToKilometers, rupees]) => ({ upToKilometers, farePaise: rupees * 100 }));
+  const outstationRoundTripDayFares = [
+    1_250, 2_410, 3_570, 4_728, 5_888, 7_047, 8_211, 9_372, 10_534, 11_696,
+    12_854, 14_020, 15_181, 16_340, 17_502, 18_663, 19_824, 20_985, 22_146,
+    23_307, 24_468, 25_629, 26_790, 27_968, 29_111, 30_290, 31_434, 32_594,
+    33_755, 34_916,
   ];
-  // No user-supplied packages above 500 km: carry forward the last provided
-  // 450→500 km difference (₹285 per 50 km) as the requested test-rate rule.
-  for (let km = 550; km <= 3_000; km += 50) {
-    const previous = outstationOneWaySlabs.at(-1);
-    outstationOneWaySlabs.push({ upToKilometers: km, farePaise: previous.farePaise + 28_500 });
-  }
 
   const pricingRules = [
     cityOneWay('ggn-city-one-way', 'zone-ggn-1', 0),
@@ -184,9 +182,9 @@ export function launchCatalogue(nowMs = Date.now()) {
       nightSurcharge: OUTSTATION_NIGHT,
       surge: { enabled: false, maxMultiplier: 1 },
       minimumFarePaise: 0,
-      packages: [1_333, 2_555, 3_777, 4_999, 6_221, 7_443, 8_665, 9_887, 11_109, 12_331, 13_554].map((fare, index) => {
+      packages: outstationRoundTripDayFares.map((fare, index) => {
         const days = index + 1;
-        return { id: `d${days}`, label: `${days} ${days === 1 ? 'day' : 'days'}`, hours: days * 24, includedKilometers: 0, packagePricePaise: fare * 100, extraKmPaise: 0, extraHourPaise: 10_000, sortOrder: days };
+        return { id: `d${days}`, label: `${days} ${days === 1 ? 'day' : 'days'}`, hours: days * 24, includedKilometers: 0, packagePricePaise: fare * 100, extraKmPaise: 0, extraHourPaise: 12_000, sortOrder: days };
       }),
       slabs: [],
       slabOverflowPerKmPaise: 0,
@@ -250,7 +248,7 @@ export function launchCatalogue(nowMs = Date.now()) {
       id: 'chauffeur_outstation',
       name: 'Outstation',
       description:
-        'One-way distance packages up to 3,000 km and day-based outstation round trips up to 11 days.',
+        'Outstation one-way distance packages up to 3,000 km and day-based round-trip packages up to 30 days.',
       enabled: true,
       vehicleOwnership: 'own_car',
       requiresVerifiedDriver: true,

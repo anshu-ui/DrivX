@@ -205,6 +205,7 @@ export default function CustomerHome() {
   }, [entrance]);
 
   const [serviceTypeId, setServiceTypeId] = useState<ServiceTypeId | null>(null);
+  const [hoveredMode, setHoveredMode] = useState<string | null>(null);
   const [pickupId, setPickupId] = useState<string | null>(null);
   const [destinationId, setDestinationId] = useState<string | null>(null);
   /**
@@ -366,13 +367,16 @@ export default function CustomerHome() {
       ? `${days[slot.offsetDays]?.label ?? 'Today'} ${clockLabel(slot)}`
       : DEPARTURE_OPTIONS.find((option) => option.key === departure)?.label ?? 'Choose pickup time';
 
-  const modeSegments: { key: string; serviceId: ServiceTypeId; direction: TripDirection; title: string; icon: 'arrow-forward-outline' | 'git-compare-outline' | 'map-outline' | 'calendar-outline' }[] = [
-    { key: 'one_way', serviceId: 'chauffeur_own_car', direction: 'one_way', title: 'One Way', icon: 'arrow-forward-outline' },
-    { key: 'round_trip', serviceId: 'chauffeur_own_car', direction: 'round_trip', title: 'Round Trip', icon: 'git-compare-outline' },
-    { key: 'outstation', serviceId: 'chauffeur_outstation', direction: 'one_way', title: 'Outstation', icon: 'map-outline' },
-    { key: 'daily', serviceId: 'cab_standard', direction: 'one_way', title: 'Daily', icon: 'calendar-outline' },
+  const modeSegments: { key: string; serviceId: ServiceTypeId; direction: TripDirection; title: string; description: string; icon: 'arrow-forward-outline' | 'git-compare-outline' | 'map-outline' | 'calendar-outline' }[] = [
+    { key: 'one_way', serviceId: 'chauffeur_own_car', direction: 'one_way', title: 'One Way', description: 'One-way city ride', icon: 'arrow-forward-outline' },
+    { key: 'round_trip', serviceId: 'chauffeur_own_car', direction: 'round_trip', title: 'Round trip', description: 'Return to pickup', icon: 'git-compare-outline' },
+    { key: 'outstation', serviceId: 'chauffeur_outstation', direction: 'one_way', title: 'Outstation', description: 'Intercity journey', icon: 'map-outline' },
+    { key: 'daily', serviceId: 'cab_standard', direction: 'one_way', title: 'Daily', description: 'Book by the day', icon: 'calendar-outline' },
   ];
+  const modeGap = theme.spacing.xs;
   const unavailableById = new Map(unavailable.map((row) => [row.id, row]));
+  const outstationService = services.find((row) => row.id === 'chauffeur_outstation') ?? null;
+  const outstationOffersRoundTrip = (outstationService?.roundTripTiers?.length ?? 0) > 0;
   const selectedMode = service?.id === 'chauffeur_outstation'
     ? 'outstation'
     : service?.id === 'cab_standard'
@@ -437,6 +441,150 @@ export default function CustomerHome() {
           role="customer"
         />
 
+        <View style={{ gap: theme.spacing.xs }}>
+          <Text variant="overline" tone="primary">YOUR DRIVX JOURNEY</Text>
+          <Text variant="heading" tone="brand">Choose your service</Text>
+          <Text variant="caption" tone="muted">Select a trip type, then add your pickup and destination.</Text>
+        </View>
+
+        <View style={{ flexDirection: 'row', gap: modeGap, padding: 5, borderRadius: theme.radius.xl, backgroundColor: theme.colors.surfaceMuted, borderWidth: 1, borderColor: theme.colors.border }}>
+          {modeSegments.map((mode) => {
+            const enabledInCatalogue = visibleServiceIds.includes(mode.serviceId);
+            const modeService = services.find((row) => row.id === mode.serviceId) ?? null;
+            const modeOffersRoundTrip = (modeService?.roundTripTiers?.length ?? 0) > 0;
+            const disabled = !enabledInCatalogue || (mode.key === 'round_trip' && services.length > 0 && !modeOffersRoundTrip);
+            const selected = mode.key === 'outstation'
+              ? serviceTypeId === mode.serviceId || (!serviceTypeId && selectedMode === mode.key)
+              : serviceTypeId === mode.serviceId && direction === mode.direction || (!serviceTypeId && selectedMode === mode.key);
+            const reason = unavailableById.get(mode.serviceId)?.reason;
+            return (
+              <Pressable
+                key={mode.key}
+                accessibilityRole="tab"
+                accessibilityState={{ selected, disabled }}
+                accessibilityLabel={reason ? `${mode.title}. ${reason}` : mode.title}
+                disabled={disabled}
+                onHoverIn={() => setHoveredMode(mode.key)}
+                onHoverOut={() => setHoveredMode((current) => current === mode.key ? null : current)}
+                onPress={() => {
+                  setServiceTypeId(mode.serviceId);
+                  // Outstation has its own nested direction switch. Reopening
+                  // that tab keeps the current outstation choice; entering it
+                  // from another service starts with one-way.
+                  setDirection((current) => mode.key === 'outstation' && serviceTypeId === mode.serviceId
+                    ? current
+                    : mode.direction);
+                  setTierId(null);
+                }}
+                style={({ pressed }) => ({
+                  flex: 1,
+                  minWidth: 0,
+                  minHeight: 78,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                  paddingHorizontal: 3,
+                  paddingVertical: 8,
+                  borderRadius: theme.radius.lg,
+                  backgroundColor: selected
+                    ? theme.colors.surfaceBrand
+                    : hoveredMode === mode.key && !disabled
+                      ? theme.colors.primarySoft
+                      : 'transparent',
+                  borderWidth: selected ? 1 : 1,
+                  borderColor: selected
+                    ? theme.colors.surfaceBrand
+                    : hoveredMode === mode.key && !disabled
+                      ? theme.colors.primary
+                      : 'transparent',
+                  opacity: disabled ? 0.48 : pressed ? 0.82 : 1,
+                  transform: [{ translateY: hoveredMode === mode.key && !disabled ? -2 : 0 }],
+                  ...(selected ? { shadowColor: '#17171B', shadowOpacity: 0.14, shadowRadius: 9, shadowOffset: { width: 0, height: 4 }, elevation: 3 } : {}),
+                })}
+              >
+                <View style={{ width: 31, height: 31, borderRadius: 11, backgroundColor: selected ? 'rgba(255,255,255,0.12)' : theme.colors.primarySoft, alignItems: 'center', justifyContent: 'center' }}>
+                  <Ionicons name={mode.icon} size={17} color={selected ? theme.colors.onPrimary : theme.colors.primaryInk} />
+                </View>
+                <Text variant="caption" tone={selected ? 'default' : disabled ? 'faint' : 'brand'} numberOfLines={1} adjustsFontSizeToFit style={{ maxWidth: '100%', color: selected ? theme.colors.onPrimary : undefined, fontWeight: selected ? '700' : '600' }}>{mode.title}</Text>
+                {selected ? <View style={{ position: 'absolute', bottom: 4, width: 20, height: 2, borderRadius: 2, backgroundColor: theme.colors.primary }} /> : null}
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {selectedMode === 'outstation' ? (
+          <Card style={{ gap: theme.spacing.sm, padding: theme.spacing.md, borderColor: theme.colors.border }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs }}>
+              <Ionicons name="map-outline" size={17} color={theme.colors.primary} />
+              <Text variant="label" tone="brand">Outstation trip type</Text>
+            </View>
+            <View style={{ flexDirection: 'row', gap: theme.spacing.xs, padding: 4, borderRadius: theme.radius.lg, backgroundColor: theme.colors.surfaceMuted }}>
+              {([
+                { tripDirection: 'one_way' as const, title: 'One way', icon: 'arrow-forward-outline' as const },
+                { tripDirection: 'round_trip' as const, title: 'Round trip', icon: 'git-compare-outline' as const },
+              ]).map((choice) => {
+                const disabled = !visibleServiceIds.includes('chauffeur_outstation') ||
+                  (choice.tripDirection === 'round_trip' && services.length > 0 && !outstationOffersRoundTrip);
+                const selected = direction === choice.tripDirection;
+                return (
+                  <Pressable
+                    key={choice.tripDirection}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected, disabled }}
+                    accessibilityLabel={choice.title}
+                    disabled={disabled}
+                    onPress={() => {
+                      setServiceTypeId('chauffeur_outstation');
+                      setDirection(choice.tripDirection);
+                      setTierId(null);
+                    }}
+                    style={({ pressed }) => ({
+                      flex: 1,
+                      minHeight: 46,
+                      borderRadius: theme.radius.md,
+                      paddingHorizontal: theme.spacing.sm,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: theme.spacing.xs,
+                      backgroundColor: selected ? theme.colors.surface : 'transparent',
+                      borderWidth: selected ? 1 : 0,
+                      borderColor: theme.colors.border,
+                      opacity: disabled ? 0.45 : pressed ? 0.78 : 1,
+                    })}
+                  >
+                    <Ionicons name={choice.icon} size={16} color={selected ? theme.colors.primaryInk : theme.colors.textMuted} />
+                    <Text variant="label" tone={selected ? 'brand' : disabled ? 'faint' : 'muted'}>{choice.title}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <Text variant="caption" tone="muted">
+              {direction === 'round_trip'
+                ? 'Day-based outstation packages. Kilometres are not billed separately.'
+                : 'Choose an outstation kilometre package. Extra distance uses the outstation rate.'}
+            </Text>
+            {services.length > 0 && !outstationOffersRoundTrip ? (
+              <Text variant="caption" tone="warning">Outstation round-trip packages are not enabled yet. Ask an admin to attach the outstation day-rate chart.</Text>
+            ) : null}
+          </Card>
+        ) : null}
+
+        <View style={{ minHeight: 30, marginTop: -theme.spacing.sm, flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs, paddingHorizontal: theme.spacing.xs }}>
+          <Ionicons name="sparkles-outline" size={14} color={theme.colors.primary} />
+          <Text variant="caption" tone="muted" numberOfLines={2} style={{ flex: 1 }}>
+            {(() => {
+              const current = modeSegments.find((mode) => mode.key === selectedMode);
+              const currentService = current ? unavailableById.get(current.serviceId) : undefined;
+              const currentModeService = current ? services.find((row) => row.id === current.serviceId) : null;
+              const currentDisabled = current && (!visibleServiceIds.includes(current.serviceId) || (current.key === 'round_trip' && services.length > 0 && !(currentModeService?.roundTripTiers?.length)) || (current.key === 'outstation' && direction === 'round_trip' && services.length > 0 && !outstationOffersRoundTrip));
+              return currentDisabled
+                ? currentService?.reason ?? `${current?.title ?? 'This trip'} is temporarily unavailable.`
+                : `${current?.description ?? 'Choose a trip'} · clear fare details before you confirm.`;
+            })()}
+          </Text>
+        </View>
+
         <View style={{ gap: theme.spacing.sm }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <Text variant="heading" tone="brand" style={{ flexShrink: 1, marginRight: theme.spacing.sm }}>Where do you want to go?</Text>
@@ -478,46 +626,6 @@ export default function CustomerHome() {
             ) : null}
           </View>
         </View>
-
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: theme.spacing.xs, paddingBottom: 2 }}>
-          {modeSegments.map((mode) => {
-            const enabledInCatalogue = visibleServiceIds.includes(mode.serviceId);
-            const disabled = !enabledInCatalogue || (mode.key === 'round_trip' && services.length > 0 && !offersRoundTrip);
-            const selected = serviceTypeId === mode.serviceId && direction === mode.direction || (!serviceTypeId && selectedMode === mode.key);
-            const reason = unavailableById.get(mode.serviceId)?.reason;
-            return (
-              <Pressable
-                key={mode.key}
-                accessibilityRole="button"
-                accessibilityState={{ selected, disabled }}
-                accessibilityLabel={reason ? `${mode.title}. ${reason}` : mode.title}
-                disabled={disabled}
-                onPress={() => {
-                  setServiceTypeId(mode.serviceId);
-                  setDirection(mode.direction);
-                  setTierId(null);
-                }}
-                style={({ pressed }) => ({
-                  width: 104,
-                  minHeight: 78,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: theme.spacing.xxs,
-                  padding: theme.spacing.xs,
-                  borderRadius: theme.radius.md,
-                  backgroundColor: selected ? theme.colors.primarySoft : theme.colors.surface,
-                  borderWidth: selected ? 2 : theme.borderWidth.thin,
-                  borderColor: selected ? theme.colors.primary : theme.colors.border,
-                  opacity: disabled ? 0.55 : pressed ? 0.72 : 1,
-                })}
-              >
-                <Ionicons name={mode.icon} size={19} color={selected ? theme.colors.primaryInk : theme.colors.textMuted} />
-                <Text variant="label" tone={selected ? 'primary' : disabled ? 'faint' : 'muted'} numberOfLines={1}>{mode.title}</Text>
-                {disabled ? <Text variant="overline" tone="faint" numberOfLines={1}>{enabledInCatalogue ? 'Pricing unavailable' : 'Coming soon'}</Text> : null}
-              </Pressable>
-            );
-          })}
-        </ScrollView>
 
         <View
           style={{ gap: theme.spacing.lg }}
@@ -593,11 +701,13 @@ export default function CustomerHome() {
               >
                 {tripDirection === 'round_trip' ? (
                   <Text variant="caption" tone="faint">
-                    The driver returns you to pickup. Fare is time-based; distance is not charged separately.
+                    {service?.id === 'chauffeur_outstation'
+                      ? 'This outstation round trip returns to pickup. Select a day package; kilometres are not billed separately.'
+                      : 'The driver returns you to pickup. Fare is time-based; distance is not charged separately.'}
                   </Text>
                 ) : service?.id === 'chauffeur_outstation' ? (
                   <Text variant="caption" tone="faint">
-                    Outstation one-way packages run through 3,000 km. After 500 km, each 50 km package adds ₹285; extra odometer distance is ₹10/km. A one-time ₹200 night charge applies when pickup is scheduled from 10 PM to 6 AM.
+                    Outstation one-way packages follow the listed rates through 3,000 km; distance beyond the selected package is ₹10/km. A one-time ₹200 night charge applies when pickup is scheduled from 10 PM to 6 AM.
                   </Text>
                 ) : null}
 
@@ -621,11 +731,13 @@ export default function CustomerHome() {
                   </View>
                   <View style={{ flexGrow: 1, flexShrink: 1, minWidth: 0 }}>
                     <SelectBox
-                      label={tripDirection === 'round_trip' ? 'Package hours' : 'Rental duration'}
+                      label={tripDirection === 'round_trip' ? service?.id === 'chauffeur_outstation' ? 'Package days' : 'Package hours' : 'Rental duration'}
                       value={
                         chosenTier
                           ? tripDirection === 'round_trip'
-                            ? `${chosenTier.hours} ${chosenTier.hours === 1 ? 'hour' : 'hours'} · ${money(chosenTier.packagePricePaise)}`
+                            ? service?.id === 'chauffeur_outstation'
+                              ? `${Math.max(1, Math.round(chosenTier.hours / 24))} ${Math.round(chosenTier.hours / 24) === 1 ? 'day' : 'days'} · ${money(chosenTier.packagePricePaise)}`
+                              : `${chosenTier.hours} ${chosenTier.hours === 1 ? 'hour' : 'hours'} · ${money(chosenTier.packagePricePaise)}`
                             : `${chosenTier.hours} hours (${chosenTier.includedKilometers} km included)`
                           : 'By distance'
                       }

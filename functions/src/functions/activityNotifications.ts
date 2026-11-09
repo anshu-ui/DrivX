@@ -84,8 +84,8 @@ export const notifyDriverDueCreated = onDocumentCreated(
       uid: event.params.driverUid,
       id: `due_created_${event.params.dueId}`,
       type: 'payment_update',
-      title: onboarding ? 'Onboarding fee ready' : 'Trip commission added',
-      body: `${String(due.title ?? 'DrivX charge')}: ₹${amount} is now due.`,
+      title: onboarding ? 'Onboarding fee ready' : due.kind === 'late_arrival_penalty' ? 'Late start penalty added' : 'Trip commission added',
+      body: onboarding ? `Your one-time onboarding fee of ₹${amount} is ready.` : due.kind === 'late_arrival_penalty' ? `A late-start penalty of ₹${amount} was added after trip completion.` : `${String(due.title ?? 'DrivX charge')}: ₹${amount} is now due.`,
       route: '/dues',
       bookingId: text(due.bookingId),
     });

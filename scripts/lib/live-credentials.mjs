@@ -50,8 +50,13 @@ export function cliAccount() {
 export function liveRefreshCredential() {
   const account = cliAccount();
   const store = cliCredentialsJson();
-  const extra = (store.additionalAccounts ?? []).find((entry) => entry.user?.email === account);
-  const tokens = extra ? extra.tokens : store.tokens;
+  // Firebase CLI can keep an older copy of the same account in
+  // `additionalAccounts` after `login --reauth`. Prefer the primary token set
+  // whenever it belongs to the selected account; otherwise a provisioning
+  // script may keep refreshing the stale duplicate and receive invalid_rapt.
+  const tokens = store.user?.email === account
+    ? store.tokens
+    : (store.additionalAccounts ?? []).find((entry) => entry.user?.email === account)?.tokens;
   if (!tokens?.refresh_token) throw new Error(`No refresh token stored for ${account}.`);
 
   const require = createRequire(import.meta.url);

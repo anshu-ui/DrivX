@@ -77,7 +77,7 @@ type ViewState = { rows: DueRow[] } | { error: string };
 const KIND_LABEL: Record<DriverDueKind, string> = {
   onboarding_fee: 'Onboarding fee',
   commission: 'Trip commission',
-  late_arrival_penalty: 'Late arrival penalty',
+  late_arrival_penalty: 'Late start penalty',
 };
 
 function readDue(snap: { id: string; ref: { path: string }; data: () => DocumentData }): DueRow | null {
@@ -385,7 +385,7 @@ function DriverDues({ group, canRecord }: { group: Group; canRecord: boolean }) 
 
       {canRecord ? (
         <p className="mt-4 text-xs text-ink-muted">
-          Payment is completed by the driver through Cashfree. After gateway confirmation, this charge moves to Successful online payments and the driver's dues clear automatically.
+          Payment is completed by the driver through Cashfree. After gateway confirmation, this charge moves to Successful online payments and the driver&apos;s dues clear automatically.
         </p>
       ) : (
         <p className="mt-4 text-xs text-ink-muted">

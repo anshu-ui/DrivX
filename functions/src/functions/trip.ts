@@ -430,10 +430,10 @@ export const verifyTripOtp = onCall(CALLABLE_OPTIONS, async (request) => {
   if (!STARTABLE.includes(status)) {
     throw failedPrecondition(`A trip cannot be started from "${status}".`);
   }
+  const arrived = status === 'driver_arrived';
 
   await consumeTripOtp({ bookingId: input.bookingId, purpose: 'trip_start', code: input.code, actorUid: caller.uid });
 
-  const arrived = status === 'driver_arrived';
   const now = Date.now();
   const scheduledForMs = epochMs(booking.scheduledForMs);
   const policySnap = await db().doc(`${COLLECTIONS.appConfig}/driverPerformance`).get();
@@ -441,15 +441,13 @@ export const verifyTripOtp = onCall(CALLABLE_OPTIONS, async (request) => {
   const graceMinutes = Number.isInteger(policy.arrivalGraceMinutes) && Number(policy.arrivalGraceMinutes) >= 0
     ? Math.min(180, Number(policy.arrivalGraceMinutes))
     : 10;
-  // Prefer the recorded arrival event, so time spent at pickup after arriving
-  // does not turn an on-time driver into a late one. If no arrival event exists,
-  // the start-OTP verification itself is the arrival proof.
-  const arrivalProofMs = arrived ? (epochMs(booking.arrivalConfirmedAtMs) ?? now) : now;
-  const arrivalLateSeconds = scheduledForMs === null
+  // Measure OTR when the driver verifies the start OTP. An earlier arrival
+  // does not excuse starting the trip after the scheduled time plus grace.
+  const startOtpLateSeconds = scheduledForMs === null
     ? null
-    : Math.max(0, Math.floor((arrivalProofMs - scheduledForMs - graceMinutes * 60_000) / 1000));
+    : Math.max(0, Math.floor((now - scheduledForMs - graceMinutes * 60_000) / 1000));
   const countedArrival = scheduledForMs !== null && booking.arrivalPerformanceCounted !== true;
-  const onTime = arrivalLateSeconds !== null && arrivalLateSeconds === 0;
+  const onTime = startOtpLateSeconds !== null && startOtpLateSeconds === 0;
   const driverRef = db().doc(`driverProfiles/${caller.uid}`);
   const bookingRefDoc = db().doc(bookingRefPath(input.bookingId));
   await db().runTransaction(async (tx) => {
@@ -466,10 +464,13 @@ export const verifyTripOtp = onCall(CALLABLE_OPTIONS, async (request) => {
     tripStartedAtMs: now,
     startOdometerKm: input.odometerKm,
     currentOdometerKm: input.odometerKm,
+    startOtpAtMs: now,
+    startOtpLateSeconds,
+    // Keep legacy reporting fields aligned with the authoritative OTP time.
     arrivalConfirmedAtMs: arrived ? (booking.arrivalConfirmedAtMs ?? now) : now,
     arrivalConfirmedManually: arrived ? Boolean(booking.arrivalConfirmedManually) : true,
-    arrivalLateSeconds,
-    arrivalOnTime: arrivalLateSeconds === null ? null : onTime,
+    arrivalLateSeconds: startOtpLateSeconds,
+    arrivalOnTime: startOtpLateSeconds === null ? null : onTime,
     arrivalPerformanceCounted: countedArrival,
     stateVersion: Number(booking.stateVersion ?? 0) + 1,
     updatedAtMs: serverTimestamp(),
@@ -711,7 +712,8 @@ export const confirmCompletion = onCall(CALLABLE_OPTIONS, async (request) => {
         finalFare,
         actualDistanceMeters: runMetres,
         actualDurationSeconds: durationSeconds,
-        arrivedLateSeconds: typeof booking.arrivalLateSeconds === 'number' ? booking.arrivalLateSeconds : null,
+        lateStartSeconds: typeof booking.startOtpLateSeconds === 'number' ? booking.startOtpLateSeconds : typeof booking.arrivalLateSeconds === 'number' ? booking.arrivalLateSeconds : null,
+        arrivedLateSeconds: typeof booking.startOtpLateSeconds === 'number' ? booking.startOtpLateSeconds : typeof booking.arrivalLateSeconds === 'number' ? booking.arrivalLateSeconds : null,
         // Re-pinned from the metered receipt. At booking time this block priced
         // the trip the map promised; if it stayed there, the driver's Earnings
         // would show the commission on the quote while Duty demanded the one on
@@ -751,10 +753,10 @@ export const confirmCompletion = onCall(CALLABLE_OPTIONS, async (request) => {
     );
   });
 
-  // OTR is assessed at arrival, but collected only after the trip is closed.
+  // OTR is assessed at start-OTP verification, but collected only after close.
   // A stable due id prevents duplicate penalties on function retries. Admin can
   // set the amount to zero to turn the policy off; absent config uses ₹50.
-  const lateSeconds = typeof booking.arrivalLateSeconds === 'number' ? booking.arrivalLateSeconds : 0;
+  const lateSeconds = typeof booking.startOtpLateSeconds === 'number' ? booking.startOtpLateSeconds : typeof booking.arrivalLateSeconds === 'number' ? booking.arrivalLateSeconds : 0;
   const performancePolicy = (await db().doc(`${COLLECTIONS.appConfig}/driverPerformance`).get()).data() ?? {};
   const penaltyPaise = performancePolicy.lateArrivalPenaltyPaise === undefined || performancePolicy.lateArrivalPenaltyPaise === null
     ? 5_000
@@ -769,7 +771,7 @@ export const confirmCompletion = onCall(CALLABLE_OPTIONS, async (request) => {
     const gstPaise = Math.round(penaltyPaise * gstRate);
     try {
       await db().doc(`driverProfiles/${caller.uid}/dues/${dueId}`).create({
-        id: dueId, driverUid: caller.uid, kind: 'late_arrival_penalty', title: 'Late arrival penalty',
+        id: dueId, driverUid: caller.uid, kind: 'late_arrival_penalty', title: 'Late start penalty',
         bookingId: input.bookingId, currency: 'INR', basePaise: penaltyPaise, rate: null,
         commissionablePaise: null, gstRate, gstPaise, totalPaise: penaltyPaise + gstPaise,
         status: 'unpaid', method: null, reference: null, recordedByUid: null, recordedAtMs: null,

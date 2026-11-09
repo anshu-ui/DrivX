@@ -68,17 +68,12 @@ function chartRows(terms: BookingOptionTerms | null): string[] {
   if (!terms || terms.slabs.length === 0) return [];
   const last = terms.slabs[terms.slabs.length - 1]!;
   const outstation = terms.slabs.some((slab) => slab.upToKilometers === 3_000);
-  const visibleSlabs = outstation ? terms.slabs.filter((slab) => slab.upToKilometers <= 500) : terms.slabs;
-  const rows = visibleSlabs.map((slab) => `Up to ${slab.upToKilometers} km — ${money(slab.farePaise)}`);
+  const rows = terms.slabs.map((slab) => `Up to ${slab.upToKilometers} km — ${money(slab.farePaise)}`);
   if (outstation) {
-    const firstExtended = terms.slabs.find((slab) => slab.upToKilometers === 550);
-    rows.push(`Above 500 km, the next 50 km package is ${money(firstExtended?.farePaise ?? last.farePaise + 28_500)}. Each following 50 km adds ₹285, through 3,000 km (${money(last.farePaise)}).`);
+    rows.push(`Packages run through ${last.upToKilometers} km. Distance beyond the selected package is charged at ${money(terms.slabOverflowPerKmPaise ?? 0)} per km.`);
+  } else {
+    rows.push(`Beyond ${last.upToKilometers} km, ${money(last.farePaise)} plus ${money(terms.slabOverflowPerKmPaise ?? 0)} for every additional kilometre.`);
   }
-  rows.push(
-    `Beyond ${last.upToKilometers} km, ${money(last.farePaise)} plus ${money(
-      terms.slabOverflowPerKmPaise ?? 0,
-    )} for every additional kilometre.`,
-  );
   rows.push('One band prices the whole route. The bands are never added together.');
   if (terms.slabOverflowPerKmPaise !== null) {
     rows.push(

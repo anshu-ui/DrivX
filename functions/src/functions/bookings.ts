@@ -35,6 +35,7 @@ import { failedPrecondition, parseInput, permissionDenied, resourceExhausted } f
 import { requireAuth, requireCustomer, requireCustomerCaller, type Caller } from '../lib/guards';
 import { asRule, loadPricingContext, loadRoundTripOffer, offeredTiers, priceTrip, publishedTerms, type PricingContext } from '../lib/pricing';
 import { measureRoute, routingIsConfigured } from '../lib/routes';
+import { assertPickupServiceable } from '../lib/service-area';
 
 /**
  * The customer's booking surface: what can be bought, what it costs, and the
@@ -219,6 +220,7 @@ export const quoteFare = onCall(CALLABLE_OPTIONS, async (request) => {
   // The same schema the client validates with, re-run here: sharing it is what
   // stops the two sides disagreeing about what a valid request is.
   const input = parseInput(fareQuoteInputSchema, request.data);
+  await assertPickupServiceable(input.pickup.city);
 
   const ctx = await loadPricingContext(input.serviceTypeId, input.tripDirection);
   const nowMs = Date.now();
@@ -259,6 +261,7 @@ export const quoteFare = onCall(CALLABLE_OPTIONS, async (request) => {
 export async function previewCouponForCaller(caller: Caller, rawInput: unknown) {
   requireCustomerCaller(caller);
   const input = parseInput(couponPreviewInputSchema, rawInput);
+  await assertPickupServiceable(input.pickup.city);
   const couponCode = input.couponCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 24);
   if (!couponCode) throw new HttpsError('invalid-argument', 'Enter a coupon code.');
 
@@ -372,6 +375,7 @@ async function deduplicatedResult(
 export const createBooking = onCall(CALLABLE_OPTIONS, async (request) => {
   const caller = requireCustomer(request);
   const input = parseInput(createBookingInputSchema, request.data);
+  await assertPickupServiceable(input.pickup.city);
 
   const ctx = await loadPricingContext(input.serviceTypeId, input.tripDirection);
   const nowMs = Date.now();

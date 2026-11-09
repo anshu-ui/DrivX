@@ -152,27 +152,12 @@ async function pricingOnly() {
   }
   await db.collection('serviceTypes').doc('chauffeur_outstation').update({
     enabled: true,
-    description: 'One-way distance packages through 3,000 km, with ₹285 added per 50 km after 500 km; extra odometer distance ₹10/km. Round trips use the 1–11 day packages.',
+    description: 'One-way distance packages through 3,000 km; extra odometer distance is ₹10/km. Round trips use the 1–30 day packages and do not bill kilometres separately.',
     roundTripPricingRuleId: 'ggn-outstation-round-trip',
     updatedAtMs: Timestamp.now(),
   });
-  // The night policy is independent of each rule's base/package fares. Apply it
-  // to the remaining rules without touching any of those rates.
-  const remainingRules = await db.collection('pricingRules').get();
-  const updatedOutstationIds = new Set(pricingFields.map(([id]) => id));
-  let nightOnlyUpdates = 0;
-  for (const snapshot of remainingRules.docs) {
-    if (updatedOutstationIds.has(snapshot.id)) continue;
-    const current = snapshot.data();
-    await snapshot.ref.update({
-      nightSurcharge: { ...(current.nightSurcharge ?? {}), enabled: true, fromHour: 22, toHour: 6, mode: 'flat', flatPaise: 20_000, rate: 0 },
-      pricingVersion: Number(current.pricingVersion ?? 1) + 1,
-      updatedAtMs: Timestamp.now(),
-    });
-    nightOnlyUpdates += 1;
-  }
-  console.log(`✓ serviceTypes/chauffeur_outstation — enabled (one-way through 3,000 km and round-trip packages through 11 days)`);
-  console.log(`✓ One-time ₹200 night charge active for eligible pickups from 10 PM–6 AM on ${nightOnlyUpdates} other pricing rules; their fare rates were left unchanged`);
+  console.log(`✓ serviceTypes/chauffeur_outstation — enabled (one-way and round-trip packages through 3,000 km / 30 days)`);
+  console.log('✓ Updated only the two outstation pricing rules; local pricing and night-charge settings were left untouched');
 }
 
 async function staff(email, displayName, role) {

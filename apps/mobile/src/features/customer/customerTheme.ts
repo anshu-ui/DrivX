@@ -1,4 +1,4 @@
 import { mobileTheme } from '../mobileTheme';
 
-/** Keep Customer on the shared royal blue, white and silver theme. */
+/** Keep the customer and captain apps visually consistent with one design system. */
 export const customerTheme = mobileTheme;

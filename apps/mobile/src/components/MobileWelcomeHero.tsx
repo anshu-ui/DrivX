@@ -39,7 +39,7 @@ export function MobileWelcomeHero({ name, fallback, role }: MobileWelcomeHeroPro
         gap: theme.spacing.md,
         padding: theme.spacing.md,
         borderRadius: 28,
-        borderColor: 'rgba(16, 42, 82, 0.10)',
+        borderColor: theme.colors.border,
         backgroundColor: theme.colors.surface,
       }}
     >
@@ -73,40 +73,40 @@ export function MobileWelcomeHero({ name, fallback, role }: MobileWelcomeHeroPro
           overflow: 'hidden',
           minHeight: 174,
           borderRadius: 23,
-          backgroundColor: theme.colors.surfaceMuted,
-          borderWidth: 1,
-          borderColor: theme.colors.border,
+          backgroundColor: theme.colors.primary,
           padding: theme.spacing.md,
           justifyContent: 'space-between',
         }}
       >
-        {/* Abstract route artwork keeps the mockup's map-led feel without a fake static map. */}
-        <View style={{ position: 'absolute', left: 18, right: 18, top: 16, bottom: 16, opacity: 0.7 }}>
-          <View style={{ position: 'absolute', left: '8%', top: '22%', width: '84%', height: 1, backgroundColor: 'rgba(23,23,27,0.10)', transform: [{ rotate: '-8deg' }] }} />
-          <View style={{ position: 'absolute', left: '12%', top: '63%', width: '76%', height: 1, backgroundColor: 'rgba(23,23,27,0.10)', transform: [{ rotate: '7deg' }] }} />
-          <View style={{ position: 'absolute', left: '28%', top: '2%', width: 1, height: '95%', backgroundColor: 'rgba(23,23,27,0.08)', transform: [{ rotate: '19deg' }] }} />
-          <View style={{ position: 'absolute', left: '72%', top: '4%', width: 1, height: '90%', backgroundColor: 'rgba(23,23,27,0.08)', transform: [{ rotate: '-17deg' }] }} />
+        {/* Lightweight route artwork gives the welcome panel depth without a fake map. */}
+        <View style={{ position: 'absolute', left: 18, right: 18, top: 16, bottom: 16, opacity: 0.82 }}>
+          <View style={{ position: 'absolute', left: '8%', top: '22%', width: '84%', height: 1, backgroundColor: 'rgba(255,255,255,0.20)', transform: [{ rotate: '-8deg' }] }} />
+          <View style={{ position: 'absolute', left: '12%', top: '63%', width: '76%', height: 1, backgroundColor: 'rgba(255,255,255,0.16)', transform: [{ rotate: '7deg' }] }} />
+          <View style={{ position: 'absolute', left: '28%', top: '2%', width: 1, height: '95%', backgroundColor: 'rgba(255,255,255,0.14)', transform: [{ rotate: '19deg' }] }} />
+          <View style={{ position: 'absolute', left: '72%', top: '4%', width: 1, height: '90%', backgroundColor: 'rgba(255,255,255,0.14)', transform: [{ rotate: '-17deg' }] }} />
+          <View style={{ position: 'absolute', width: 126, height: 126, borderRadius: 70, right: -40, top: -44, borderWidth: 1, borderColor: 'rgba(255,255,255,0.13)' }} />
+          <View style={{ position: 'absolute', width: 78, height: 78, borderRadius: 42, right: -16, top: -20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.14)' }} />
         </View>
 
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: 'rgba(255,255,255,0.82)', paddingHorizontal: 10, paddingVertical: 7, borderRadius: 20 }}>
-            <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: theme.colors.primary }} />
-            <Text variant="overline" tone="brand" style={{ fontSize: 10 }}>{driver ? 'DRIVX CAPTAIN' : 'YOUR DRIVX JOURNEY'}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: 'rgba(255,255,255,0.16)', paddingHorizontal: 10, paddingVertical: 7, borderRadius: 20 }}>
+            <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#FFFFFF' }} />
+            <Text variant="overline" tone="onBrand" style={{ fontSize: 10 }}>{driver ? 'DRIVX CAPTAIN' : 'YOUR DRIVX JOURNEY'}</Text>
           </View>
-          <Ionicons name="compass-outline" size={21} color={theme.colors.primaryInk} />
+          <Ionicons name="compass-outline" size={21} color="#FFFFFF" />
         </View>
 
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 56 }}>
           <View style={{ width: 12, alignItems: 'center', alignSelf: 'stretch', justifyContent: 'space-between', paddingVertical: 3 }}>
-            <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: theme.colors.primary, borderWidth: 2, borderColor: '#ffffff', zIndex: 1 }} />
-            <View style={{ position: 'absolute', top: 10, bottom: 10, left: 5, width: 2, backgroundColor: 'rgba(37,99,235,0.25)' }} />
-            <View style={{ width: 10, height: 10, borderRadius: 3, backgroundColor: theme.colors.primaryInk, borderWidth: 2, borderColor: '#ffffff', zIndex: 1 }} />
+            <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#FFFFFF', borderWidth: 2, borderColor: 'rgba(255,255,255,0.7)', zIndex: 1 }} />
+            <View style={{ position: 'absolute', top: 10, bottom: 10, left: 5, width: 2, backgroundColor: 'rgba(255,255,255,0.45)' }} />
+            <View style={{ width: 10, height: 10, borderRadius: 3, backgroundColor: '#FFFFFF', borderWidth: 2, borderColor: 'rgba(255,255,255,0.7)', zIndex: 1 }} />
           </View>
           <View style={{ flex: 1, gap: 5 }}>
-            <Text variant="heading" tone="brand" style={{ fontSize: 19 }}>
+            <Text variant="heading" tone="onBrand" style={{ fontSize: 19 }}>
               {driver ? 'Your next trip starts here' : 'Let’s start your journey'}
             </Text>
-            <Text variant="caption" tone="muted">
+            <Text variant="caption" tone="onBrand" style={{ opacity: 0.9 }}>
               {driver ? 'Go online to receive booking requests.' : 'Choose pickup and destination to see your fare.'}
             </Text>
           </View>
@@ -115,25 +115,25 @@ export function MobileWelcomeHero({ name, fallback, role }: MobileWelcomeHeroPro
               width: 42,
               height: 42,
               borderRadius: 21,
-              backgroundColor: '#ffffff',
+              backgroundColor: 'rgba(255,255,255,0.16)',
               borderWidth: 1,
-              borderColor: theme.colors.border,
+              borderColor: 'rgba(255,255,255,0.22)',
               alignItems: 'center',
               justifyContent: 'center',
               opacity: pulse,
               transform: [{ scale: pulse.interpolate({ inputRange: [0.55, 1], outputRange: [0.94, 1.06] }) }],
             }}
           >
-            <Ionicons name={driver ? 'car-sport' : 'navigate'} size={20} color={theme.colors.primary} />
+            <Ionicons name={driver ? 'car-sport' : 'navigate'} size={20} color="#FFFFFF" />
           </Animated.View>
         </View>
 
-        <View style={{ height: 1, backgroundColor: 'rgba(23,23,27,0.10)' }} />
+        <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.24)' }} />
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Text variant="caption" tone="brand" style={{ fontSize: 12 }}>
+          <Text variant="caption" tone="onBrand" style={{ fontSize: 12 }}>
             {driver ? 'Trips · earnings · ratings' : 'Your car, driven by a verified professional'}
           </Text>
-          <Ionicons name="arrow-forward" size={17} color={theme.colors.primaryInk} />
+          <Ionicons name="arrow-forward" size={17} color="#FFFFFF" />
         </View>
       </View>
     </Card>

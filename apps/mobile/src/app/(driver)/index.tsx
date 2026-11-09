@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Animated, View } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
 import { Button, Card, Screen, ScreenHeader, StateView, StatusPill, Text, useTheme } from '@drivx/ui';
 import { DUTY_TERMS, formatINR } from '@drivx/domain';
@@ -133,30 +134,39 @@ export default function DriverHome() {
           role="driver"
         />
 
-        <Card tone="brand" style={{ gap: theme.spacing.md }}>
+        <Card style={{ gap: theme.spacing.md }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: theme.spacing.md }}>
             <View style={{ flex: 1, gap: theme.spacing.xxs }}>
-              <Text variant="caption" tone="onBrand">DRIVER DASHBOARD</Text>
-              <Text variant="heading" tone="onBrand" numberOfLines={1}>{profile?.fullName ?? status.label}</Text>
-              <Text variant="caption" tone="onBrand">{profile?.driverId ? `Driver ID ${profile.driverId}` : user?.phoneNumber ?? 'Phone number unavailable'}</Text>
+              <Text variant="overline" tone="primary">DRIVX CAPTAIN · DASHBOARD</Text>
+              <Text variant="heading" tone="brand" numberOfLines={1}>{profile?.fullName ?? status.label}</Text>
+              <Text variant="caption" tone="muted">{profile?.driverId ? `Driver ID ${profile.driverId}` : user?.phoneNumber ?? 'Phone number unavailable'}</Text>
             </View>
             <StatusPill label={status.label} tone={status.tone} />
           </View>
-          <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
-            <View style={{ flex: 1, borderRadius: theme.radius.md, backgroundColor: theme.colors.surface, padding: theme.spacing.sm }}>
-              <Text variant="caption" tone="muted">Rating</Text>
+          <View style={{ flexDirection: 'row', gap: theme.spacing.xs }}>
+            <View style={{ flex: 1, minWidth: 0, minHeight: 106, borderRadius: theme.radius.md, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, padding: theme.spacing.sm, gap: 4 }}>
+              <View style={{ width: 26, height: 26, borderRadius: 9, backgroundColor: theme.colors.primarySoft, alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons name="star" size={14} color={theme.colors.primary} />
+              </View>
+              <Text variant="caption" tone="muted" numberOfLines={1} adjustsFontSizeToFit>Rating</Text>
               <Text variant="subheading" tone="brand">{profile?.ratingCount ? `${profile.ratingAverage.toFixed(2)} ★` : '—'}</Text>
-              <Text variant="caption" tone="faint">{profile?.ratingCount ? `${profile.ratingCount} reviews` : 'No reviews yet'}</Text>
+              <Text variant="caption" tone="faint" numberOfLines={1} adjustsFontSizeToFit>{profile?.ratingCount ? `${profile.ratingCount} reviews` : 'No reviews yet'}</Text>
             </View>
-            <View style={{ flex: 1, borderRadius: theme.radius.md, backgroundColor: theme.colors.surface, padding: theme.spacing.sm }}>
-              <Text variant="caption" tone="muted">Completed trips</Text>
+            <View style={{ flex: 1, minWidth: 0, minHeight: 106, borderRadius: theme.radius.md, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, padding: theme.spacing.sm, gap: 4 }}>
+              <View style={{ width: 26, height: 26, borderRadius: 9, backgroundColor: theme.colors.primarySoft, alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons name="car-sport-outline" size={14} color={theme.colors.primary} />
+              </View>
+              <Text variant="caption" tone="muted" numberOfLines={1} adjustsFontSizeToFit>Completed trips</Text>
               <Text variant="subheading" tone="brand">{profile?.lifetimeTrips ?? 0}</Text>
-              <Text variant="caption" tone="faint">Since joining DrivX</Text>
+              <Text variant="caption" tone="faint" numberOfLines={1} adjustsFontSizeToFit>Since joining DrivX</Text>
             </View>
-            <View style={{ flex: 1, borderRadius: theme.radius.md, backgroundColor: theme.colors.surface, padding: theme.spacing.sm }}>
-              <Text variant="caption" tone="muted">Commission rate</Text>
+            <View style={{ flex: 1, minWidth: 0, minHeight: 106, borderRadius: theme.radius.md, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, padding: theme.spacing.sm, gap: 4 }}>
+              <View style={{ width: 26, height: 26, borderRadius: 9, backgroundColor: theme.colors.primarySoft, alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons name="wallet-outline" size={14} color={theme.colors.primary} />
+              </View>
+              <Text variant="caption" tone="muted" numberOfLines={1} adjustsFontSizeToFit>Commission rate</Text>
               <Text variant="subheading" tone="brand">{priced[0] ? `${Math.round(priced[0].split!.rate * 100)}%` : '—'}</Text>
-              <Text variant="caption" tone="faint">{priced.length ? 'Latest completed trip' : 'Shown after first trip'}</Text>
+              <Text variant="caption" tone="faint" numberOfLines={1} adjustsFontSizeToFit>{priced.length ? 'Latest completed trip' : 'Shown after first trip'}</Text>
             </View>
           </View>
         </Card>
@@ -214,7 +224,7 @@ export default function DriverHome() {
               Booking offers are sent to every eligible online driver, regardless of distance or work zone. Your live location is shared with the customer only after you accept a booking.
             </Text>
             <Text variant="caption" tone="muted">
-              Reach pickup by the scheduled time. After the configured grace period, any late-start penalty set by Admin is added to your dues. Admin can change the amount or set it to ₹0 to turn it off.
+              Start the trip by verifying the customer’s OTP at the scheduled pickup time. If you start after the Admin-set grace period, the configured late-start penalty is added to your dues after the trip is completed. Admin can change the amount or set it to ₹0 to turn it off.
             </Text>
             <Button
               label={online ? 'Go offline' : 'Go online and receive trip offers'}
@@ -240,23 +250,23 @@ export default function DriverHome() {
         )}
 
         {dutyTermsAccepted && offers.data?.map((offer) => (
-          <Card key={offer.id} tone="brand" style={{ gap: theme.spacing.sm }}>
-            <Text variant="caption" tone="onBrand">New trip · {offer.bookingReference}</Text>
-            <Text variant="bodyStrong" tone="onBrand">{offer.pickup} → {offer.destination}</Text>
-            <Text variant="caption" tone="onBrand">
+          <Card key={offer.id} style={{ gap: theme.spacing.sm }}>
+            <Text variant="overline" tone="primary">NEW TRIP · {offer.bookingReference}</Text>
+            <Text variant="bodyStrong" tone="default">{offer.pickup} → {offer.destination}</Text>
+            <Text variant="caption" tone="muted">
               Estimate {offer.farePaise === null ? 'unavailable' : formatINR(offer.farePaise)} · {offer.distanceToPickupMeters === null ? 'nearby' : `${(offer.distanceToPickupMeters / 1000).toFixed(1)} km away`} · stays until accepted or declined
             </Text>
-            <Text variant="caption" tone="onBrand">
+            <Text variant="caption" tone="muted">
               Vehicle · {offer.vehicleDescription ? `${offer.vehicleDescription} · ` : ''}{offer.carType === 'either' ? 'Type not specified' : offer.carType} · {offer.transmission === 'either' ? 'Transmission not specified' : offer.transmission}
             </Text>
             {offer.customerNotes ? (
-              <View style={{ borderRadius: theme.radius.md, backgroundColor: theme.colors.surface, padding: theme.spacing.sm }}>
+              <View style={{ borderRadius: theme.radius.md, backgroundColor: theme.colors.surfaceMuted, padding: theme.spacing.sm }}>
                 <Text variant="caption" tone="brand">Customer note</Text>
                 <Text variant="body" tone="default">{offer.customerNotes}</Text>
               </View>
             ) : null}
-            <Text variant="caption" tone="onBrand">The final bill uses the odometer readings at pickup and drop-off.</Text>
-            <View style={{ borderRadius: theme.radius.md, backgroundColor: '#FFFFFF', padding: theme.spacing.sm, gap: theme.spacing.xxs }}>
+            <Text variant="caption" tone="muted">The final bill uses the odometer readings at pickup and drop-off.</Text>
+            <View style={{ borderRadius: theme.radius.md, backgroundColor: theme.colors.surfaceMuted, padding: theme.spacing.sm, gap: theme.spacing.xxs }}>
               <Text variant="caption" tone="brand">How your earnings work</Text>
               <Text variant="caption" tone="muted">This is the customer’s fare estimate. After the trip, the final fare is calculated from the odometer; the Admin-configured commission and tax are shown separately in your dues before you pay.</Text>
             </View>
@@ -287,16 +297,16 @@ export default function DriverHome() {
           <Text variant="caption" tone="danger">Offers could not be refreshed: {offers.error instanceof Error ? offers.error.message : 'Check your connection.'}</Text>
         ) : null}
 
-        <Card tone="brand" style={{ gap: theme.spacing.md }}>
+        <Card style={{ gap: theme.spacing.md }}>
           <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: theme.spacing.lg }}>
             <View style={{ flex: 1, minWidth: 0 }}>
-              <Text variant="caption" tone="onBrand">
+              <Text variant="caption" tone="muted">
                 Kept from completed trips
               </Text>
-              <Text variant="fare" tone="onBrand">
+              <Text variant="fare" tone="brand">
                 {trips.isPending || trips.isError ? '—' : formatINR(keptPaise)}
               </Text>
-              <Text variant="caption" tone="onBrand">
+              <Text variant="caption" tone="muted">
                 {trips.isPending
                   ? 'Reading your trips…'
                   : trips.isError
@@ -309,15 +319,15 @@ export default function DriverHome() {
               </Text>
             </View>
             <View style={{ alignItems: 'flex-end', gap: theme.spacing.xxs }}>
-              <Text variant="caption" tone="onBrand">
+              <Text variant="caption" tone="muted">
                 To clear
               </Text>
-              <Text variant="subheading" tone="onBrand">
+              <Text variant="subheading" tone="brand">
                 {dues.loading || dues.unreadable ? '—' : formatINR(dues.outstandingPaise)}
               </Text>
             </View>
           </View>
-          <Text variant="caption" tone="onBrand">
+          <Text variant="caption" tone="muted">
             {priced.length === 0
               ? 'DrivX keeps a share of every trip you close, plus tax on that share. The office sets the rate; each trip in Earnings shows the one it billed you at.'
               : `DrivX kept ${Math.round(priced[0]!.split!.rate * 100)}% of your last trip, plus ${Math.round(
@@ -326,13 +336,13 @@ export default function DriverHome() {
           </Text>
           {priced[0] ? (
             <View accessibilityLabel={`Latest trip split: DrivX commission ${Math.round(priced[0].split!.rate * 100)} percent; you kept ${formatINR(priced[0].split!.netPaise)}`}>
-              <View style={{ height: 8, overflow: 'hidden', borderRadius: 999, flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.25)' }}>
-                <View style={{ width: `${Math.max(0, Math.min(100, priced[0].split!.rate * 100))}%`, backgroundColor: theme.colors.surface }} />
+              <View style={{ height: 8, overflow: 'hidden', borderRadius: 999, flexDirection: 'row', backgroundColor: theme.colors.surfaceMuted }}>
+                <View style={{ width: `${Math.max(0, Math.min(100, priced[0].split!.rate * 100))}%`, backgroundColor: theme.colors.primary }} />
                 <View style={{ flex: 1, backgroundColor: theme.colors.primarySoft }} />
               </View>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: theme.spacing.xs }}>
-                <Text variant="caption" tone="onBrand">DrivX · {Math.round(priced[0].split!.rate * 100)}% + applicable tax</Text>
-                <Text variant="caption" tone="onBrand">Your net · {formatINR(priced[0].split!.netPaise)}</Text>
+                <Text variant="caption" tone="muted">DrivX · {Math.round(priced[0].split!.rate * 100)}% + applicable tax</Text>
+                <Text variant="caption" tone="muted">Your net · {formatINR(priced[0].split!.netPaise)}</Text>
               </View>
             </View>
           ) : null}
@@ -346,18 +356,18 @@ export default function DriverHome() {
 
         <RequireApproval>
           {trip.data ? (
-            <Card tone="brand" style={{ gap: theme.spacing.xs }}>
+            <Card style={{ gap: theme.spacing.xs }}>
               <View
                 style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: theme.spacing.md }}
               >
                 <View style={{ gap: theme.spacing.xxs, flex: 1, minWidth: 0 }}>
-                  <Text variant="caption" tone="onBrand">
-                    In hand
+                  <Text variant="overline" tone="primary">
+                    ACTIVE TRIP
                   </Text>
-                  <Text variant="heading" tone="onBrand">
+                  <Text variant="heading" tone="brand">
                     {statusLabel(trip.data.status)}
                   </Text>
-                  <Text variant="caption" tone="onBrand">
+                  <Text variant="caption" tone="muted">
                     {trip.data.reference} ·{' '}
                     {trip.data.startOdometerKm === null
                       ? 'waiting for the customer’s start code and the reading at pickup'
