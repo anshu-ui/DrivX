@@ -56,6 +56,7 @@ type DriverSummary = {
   phoneE164: string;
   email: string | null;
   verificationStatus: VerificationStatus;
+  accountStatus: 'active' | 'suspended';
   /** Minted on the first approval; null until then. */
   driverId: string | null;
 };
@@ -130,6 +131,7 @@ function readDriver(uid: string, data: DocumentData): DriverSummary {
     phoneE164: typeof data.phoneE164 === 'string' ? data.phoneE164 : '—',
     email: typeof data.email === 'string' ? data.email : null,
     verificationStatus: (data.verificationStatus as VerificationStatus) ?? 'not_started',
+    accountStatus: data.accountStatus === 'suspended' ? 'suspended' : 'active',
     driverId: typeof data.driverId === 'string' ? data.driverId : null,
   };
 }
@@ -156,6 +158,8 @@ export default function DriverVerification() {
   const [feeMessage, setFeeMessage] = useState<string | null>(null);
   const [resetBusy, setResetBusy] = useState(false);
   const [resetMessage, setResetMessage] = useState<string | null>(null);
+  const [accountBusy, setAccountBusy] = useState(false);
+  const [accountMessage, setAccountMessage] = useState<string | null>(null);
 
   /**
    * The queue is every profile the *server* has marked `pending_review`, nothing
@@ -392,6 +396,26 @@ export default function DriverVerification() {
     }
   }
 
+  async function setAccountStatus() {
+    if (!driver) return;
+    const status = driver.accountStatus === 'suspended' ? 'active' : 'suspended';
+    const note = window.prompt(`Why are you ${status === 'suspended' ? 'pausing' : 'reactivating'} this driver? Enter at least 8 characters for the audit log.`);
+    if (!note || note.trim().length < 8) {
+      setAccountMessage('No change made. Enter an audit reason of at least 8 characters.');
+      return;
+    }
+    setAccountBusy(true);
+    setAccountMessage(null);
+    try {
+      const result = await callFunction<{ driverUid: string; status: 'active' | 'suspended'; reason: string }, { status: string; auditLogId: string }>(firebaseClients(), 'adminSetDriverAccountStatus', { driverUid: driver.uid, status, reason: note.trim() });
+      setAccountMessage(`${result.status === 'suspended' ? 'Driver paused' : 'Driver reactivated'} and kept offline. Audit entry ${result.auditLogId}.`);
+    } catch (error) {
+      setAccountMessage(describe(error));
+    } finally {
+      setAccountBusy(false);
+    }
+  }
+
   return (
     <main className="flex-1">
       <StaffGate
@@ -499,6 +523,7 @@ export default function DriverVerification() {
                               'unknown'}
                             {driver?.driverId ? ` · driver id ${driver.driverId}` : ' · no driver id yet'}
                           </p>
+                          <p className="mt-1 text-xs text-ink-faint">Account access: {driver?.accountStatus === 'suspended' ? 'suspended' : 'active'}</p>
                         </div>
                         <p className="max-w-xs text-xs text-ink-faint">
                           Numbers are kept as their last four characters only. The full number is
@@ -507,8 +532,11 @@ export default function DriverVerification() {
                       </div>
                       {driver ? <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-line pt-4">
                         <button type="button" disabled={resetBusy} onClick={() => void resetOnboarding()} className="rounded-control border border-danger px-4 py-2 text-sm font-semibold text-badge-danger hover:bg-danger-soft disabled:opacity-50">{resetBusy ? 'Resetting…' : 'Reset onboarding'}</button>
+                        <button type="button" disabled={accountBusy} onClick={() => void setAccountStatus()} className="rounded-control border border-line px-4 py-2 text-sm font-semibold hover:bg-surface-muted disabled:opacity-50">{accountBusy ? 'Saving…' : driver.accountStatus === 'suspended' ? 'Reactivate account' : 'Suspend account'}</button>
                         <p className="max-w-2xl text-xs text-ink-muted">Keeps the same phone login and payment/trip ledger; removes uploaded identity documents and returns the profile to onboarding.</p>
                         {resetMessage ? <p role="status" className="w-full text-sm text-ink-muted">{resetMessage}</p> : null}
+                        {accountMessage ? <p role="status" className="w-full text-sm text-ink-muted">{accountMessage}</p> : null}
+                        <p className="w-full text-xs text-ink-faint">Suspended drivers are taken offline and excluded from new offers. Active trips must finish first. Reactivation also leaves the driver offline.</p>
                       </div> : null}
 
                       <ul className="mt-6 space-y-4">

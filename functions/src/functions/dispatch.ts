@@ -201,6 +201,9 @@ export async function respondToAssignmentForCaller(caller: Caller, raw: unknown)
       if (currentOffer.status !== 'offered') {
         throw failedPrecondition('Another action already closed this offer. Refresh Duty for the latest trips.');
       }
+      if (currentProfile.accountStatus === 'suspended') {
+        throw failedPrecondition('Your account is paused by DrivX support. Contact support before accepting trips.');
+      }
       if (!hasAcceptedDutyTerms({ dutyTermsVersion: typeof currentProfile.dutyTermsVersion === 'string' ? currentProfile.dutyTermsVersion : null })) {
         throw failedPrecondition(
           `The terms of duty changed on ${DUTY_TERMS.version}. Agree to them on the Duty screen before you take a trip.`,
@@ -411,6 +414,9 @@ function assignedDriverCard(profile: Record<string, unknown>, uid: string, publi
     ratingAverage: count('ratingAverage'),
     ratingCount: count('ratingCount'),
     lifetimeTrips: count('lifetimeTrips'),
+    onTimeArrivalRate: typeof profile.onTimeArrivalRate === 'number' ? profile.onTimeArrivalRate : null,
+    onTimeArrivalCount: count('onTimeArrivalCount'),
+    lateArrivalCount: count('lateArrivalCount'),
     languages: Array.isArray(profile.languages)
       ? profile.languages.filter((language): language is string => typeof language === 'string')
       : [],
@@ -460,6 +466,9 @@ export async function setAvailabilityForCaller(caller: Caller, raw: unknown) {
   const zoneId = typeof profile.zoneId === 'string' ? profile.zoneId : null;
 
   if (input.state === 'online') {
+    if (profile.accountStatus === 'suspended') {
+      throw failedPrecondition('Your account is paused by DrivX support. Contact support before going online.');
+    }
     assertFreshLocation(input.fixTimeMs);
     if (!caller.claims.driverVerified) {
       throw permissionDenied('Your documents must be approved before you can go online.');
@@ -675,7 +684,7 @@ export const manualAssign = onCall(CALLABLE_OPTIONS, async (request) => {
     throw failedPrecondition('Only bookings waiting for a driver can be assigned.');
   }
   if (booking.assignedDriverUid != null) throw failedPrecondition('This booking already has a driver.');
-  if (profile.verificationStatus !== 'approved' || profile.availabilityState !== 'online') {
+  if (profile.accountStatus === 'suspended' || profile.verificationStatus !== 'approved' || profile.availabilityState !== 'online') {
     throw failedPrecondition('Choose an approved driver who is currently online.');
   }
   if (!hasAcceptedDutyTerms({ dutyTermsVersion: typeof profile.dutyTermsVersion === 'string' ? profile.dutyTermsVersion : null })) {
@@ -717,7 +726,7 @@ export const manualAssign = onCall(CALLABLE_OPTIONS, async (request) => {
     if ((currentBooking.status !== 'requested' && currentBooking.status !== 'searching_driver') || currentBooking.assignedDriverUid != null) {
       throw failedPrecondition('This booking was changed by another dispatch action. Refresh and try again.');
     }
-    if (currentProfile.verificationStatus !== 'approved' || currentProfile.availabilityState !== 'online') {
+    if (currentProfile.accountStatus === 'suspended' || currentProfile.verificationStatus !== 'approved' || currentProfile.availabilityState !== 'online') {
       throw failedPrecondition('This driver is no longer approved and online. Refresh the driver list.');
     }
     if (!hasAcceptedDutyTerms({ dutyTermsVersion: typeof currentProfile.dutyTermsVersion === 'string' ? currentProfile.dutyTermsVersion : null })) {

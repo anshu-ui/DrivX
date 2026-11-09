@@ -113,6 +113,14 @@ export function DriverCardPanel({ driver }: { driver: AssignedDriverCard }) {
         </Text>
       )}
 
+      {driver.onTimeArrivalRate !== null && driver.onTimeArrivalCount > 0 ? (
+        <Text variant="caption" tone="muted">
+          On-time pickup · {Math.round(driver.onTimeArrivalRate * 100)}% ({driver.onTimeArrivalCount} on time, {driver.lateArrivalCount} late)
+        </Text>
+      ) : (
+        <Text variant="caption" tone="muted">On-time pickup record will appear after a measured trip.</Text>
+      )}
+
       {driver.languages.length > 0 ? (
         <Text variant="caption" tone="muted">
           Speaks {driver.languages.map(languageLabel).join(', ')}

@@ -96,6 +96,10 @@ export type AssignedDriverCard = {
   ratingAverage: number;
   ratingCount: number;
   lifetimeTrips: number;
+  /** Null until at least one pickup arrival has been measured. */
+  onTimeArrivalRate: number | null;
+  onTimeArrivalCount: number;
+  lateArrivalCount: number;
   languages: string[];
   vehicle: { make: string | null; model: string | null; plate: string | null };
   /** Copied at assignment; a later profile edit does not rewrite a past trip. */

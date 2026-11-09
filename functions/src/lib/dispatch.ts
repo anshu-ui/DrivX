@@ -127,7 +127,7 @@ export async function waitingDriversFor(
     .where('verificationStatus', '==', 'approved')
     .where('availabilityState', '==', 'online')
     .get();
-  return snap.docs.map((docSnap) => {
+  return snap.docs.filter((docSnap) => docSnap.get('accountStatus') !== 'suspended').map((docSnap) => {
     const data = docSnap.data() as Record<string, unknown>;
     return {
       uid: docSnap.id,
@@ -254,7 +254,7 @@ export async function offerTrip(bookingId: string): Promise<OfferOutcome> {
         if ((liveBookingData.status !== 'requested' && liveBookingData.status !== 'searching_driver') || liveBookingData.assignedDriverUid != null) {
           throw new Error('booking_no_longer_waiting');
         }
-        if (liveProfileData.verificationStatus !== 'approved' || liveProfileData.availabilityState !== 'online') {
+        if (liveProfileData.accountStatus === 'suspended' || liveProfileData.verificationStatus !== 'approved' || liveProfileData.availabilityState !== 'online') {
           throw new Error('driver_no_longer_online');
         }
         if (!hasAcceptedDutyTerms({ dutyTermsVersion: typeof liveProfileData.dutyTermsVersion === 'string' ? liveProfileData.dutyTermsVersion : null })) {

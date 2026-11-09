@@ -102,6 +102,18 @@ function referenceFromKey(idempotencyKey: string): string {
 }
 
 const HOUR_MS = 60 * 60 * 1000;
+const OUTSTATION_DISTANCE_METERS = 100_000;
+
+/** Promote long one-way city journeys to the separately administered outstation chart. */
+function effectiveServiceType(
+  requested: ServiceTypeId,
+  direction: 'one_way' | 'round_trip',
+  distanceMeters: number,
+): ServiceTypeId {
+  return requested === 'chauffeur_own_car' && direction === 'one_way' && distanceMeters > OUTSTATION_DISTANCE_METERS
+    ? 'chauffeur_outstation'
+    : requested;
+}
 
 /**
  * Verified drivers who are online and can serve one service.
@@ -222,24 +234,25 @@ export const quoteFare = onCall(CALLABLE_OPTIONS, async (request) => {
   const input = parseInput(fareQuoteInputSchema, request.data);
   await assertPickupServiceable(input.pickup.city);
 
-  const ctx = await loadPricingContext(input.serviceTypeId, input.tripDirection);
   const nowMs = Date.now();
   const departAtMs = input.scheduledForMs ?? nowMs;
   const route = await measureRoute(input.pickup.location, input.destination.location, departAtMs);
+  const serviceTypeId = effectiveServiceType(input.serviceTypeId, input.tripDirection, route.distanceMeters);
+  const ctx = await loadPricingContext(serviceTypeId, input.tripDirection);
 
   const breakdown = priceTrip({
     ctx,
     distanceMeters: route.distanceMeters,
     durationSeconds: route.durationSeconds ?? 0,
     departAtMs,
-    packageTierId: input.packageTierId ?? null,
+    packageTierId: serviceTypeId === input.serviceTypeId ? input.packageTierId ?? null : null,
     quoteId: `quote-${randomUUID()}`,
     kind: 'estimate',
     nowMs,
   });
 
   const result: FareQuoteResult = {
-    serviceTypeId: input.serviceTypeId,
+    serviceTypeId,
     serviceTypeName: ctx.serviceType.name,
     zoneId: ctx.rule.zoneId,
     pricingRuleId: ctx.rule.id,
@@ -267,14 +280,15 @@ export async function previewCouponForCaller(caller: Caller, rawInput: unknown) 
 
   const nowMs = Date.now();
   const departAtMs = input.scheduledForMs ?? nowMs;
-  const ctx = await loadPricingContext(input.serviceTypeId, input.tripDirection);
   const route = await measureRoute(input.pickup.location, input.destination.location, departAtMs);
+  const serviceTypeId = effectiveServiceType(input.serviceTypeId, input.tripDirection, route.distanceMeters);
+  const ctx = await loadPricingContext(serviceTypeId, input.tripDirection);
   const breakdown = priceTrip({
     ctx,
     distanceMeters: route.distanceMeters,
     durationSeconds: route.durationSeconds ?? 0,
     departAtMs,
-    packageTierId: input.packageTierId ?? null,
+    packageTierId: serviceTypeId === input.serviceTypeId ? input.packageTierId ?? null : null,
     quoteId: `coupon-preview-${randomUUID()}`,
     kind: 'estimate',
     nowMs,
@@ -377,7 +391,6 @@ export const createBooking = onCall(CALLABLE_OPTIONS, async (request) => {
   const input = parseInput(createBookingInputSchema, request.data);
   await assertPickupServiceable(input.pickup.city);
 
-  const ctx = await loadPricingContext(input.serviceTypeId, input.tripDirection);
   const nowMs = Date.now();
   const departAtMs = input.scheduledForMs ?? nowMs;
 
@@ -397,12 +410,14 @@ export const createBooking = onCall(CALLABLE_OPTIONS, async (request) => {
   }
 
   const route = await measureRoute(input.pickup.location, input.destination.location, departAtMs);
+  const serviceTypeId = effectiveServiceType(input.serviceTypeId, input.tripDirection, route.distanceMeters);
+  const ctx = await loadPricingContext(serviceTypeId, input.tripDirection);
   const breakdown = priceTrip({
     ctx,
     distanceMeters: route.distanceMeters,
     durationSeconds: route.durationSeconds ?? 0,
     departAtMs,
-    packageTierId: input.packageTierId ?? null,
+    packageTierId: serviceTypeId === input.serviceTypeId ? input.packageTierId ?? null : null,
     quoteId: `booking-${input.idempotencyKey}`,
     kind: 'estimate',
     nowMs,
@@ -486,7 +501,7 @@ export const createBooking = onCall(CALLABLE_OPTIONS, async (request) => {
         // The customer's copy of the driver lands beside the uid, written by the
         // server when a driver is assigned. Nothing before that has a face to show.
         driver: null,
-        serviceTypeId: input.serviceTypeId,
+        serviceTypeId,
         zoneId: ctx.rule.zoneId,
         // Searching for a driver is dispatch's job (Phase 3); a booking stops at
         // `requested` until a function moves it, which is why no status here is
@@ -569,7 +584,7 @@ export const createBooking = onCall(CALLABLE_OPTIONS, async (request) => {
         fromStatus: null,
         toStatus: 'requested',
         payload: {
-          serviceTypeId: input.serviceTypeId,
+          serviceTypeId,
           packageTierId: breakdown.packageTierId,
           distanceMeters: route.distanceMeters,
           distanceSource: route.source,
@@ -603,14 +618,14 @@ export const createBooking = onCall(CALLABLE_OPTIONS, async (request) => {
       outcome: 'created_dispatch_queued',
       actorUid: caller.uid,
       bookingId,
-      serviceTypeId: input.serviceTypeId,
+      serviceTypeId,
       distanceSource: route.source,
     totalPaise: rewardSnapshot.customerPayablePaise,
     }),
   );
 
   return {
-    serviceTypeId: input.serviceTypeId,
+    serviceTypeId,
     serviceTypeName: ctx.serviceType.name,
     zoneId: ctx.rule.zoneId,
     pricingRuleId: ctx.rule.id,

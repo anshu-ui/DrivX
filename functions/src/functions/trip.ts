@@ -300,6 +300,9 @@ export async function tripCodesForCustomer(callerUid: string, raw: unknown) {
         ratingAverage: count('ratingAverage'),
         ratingCount: count('ratingCount'),
         lifetimeTrips: count('lifetimeTrips'),
+        onTimeArrivalRate: typeof values.onTimeArrivalRate === 'number' ? values.onTimeArrivalRate : null,
+        onTimeArrivalCount: count('onTimeArrivalCount'),
+        lateArrivalCount: count('lateArrivalCount'),
         languages: Array.isArray(values.languages)
           ? values.languages.filter((language): language is string => typeof language === 'string')
           : [],

@@ -218,6 +218,9 @@ export function driverOf(value: unknown): AssignedDriverCard | null {
     ratingAverage: typeof raw.ratingAverage === 'number' ? raw.ratingAverage : 0,
     ratingCount: typeof raw.ratingCount === 'number' ? raw.ratingCount : 0,
     lifetimeTrips: typeof raw.lifetimeTrips === 'number' ? raw.lifetimeTrips : 0,
+    onTimeArrivalRate: typeof raw.onTimeArrivalRate === 'number' ? raw.onTimeArrivalRate : null,
+    onTimeArrivalCount: typeof raw.onTimeArrivalCount === 'number' ? raw.onTimeArrivalCount : 0,
+    lateArrivalCount: typeof raw.lateArrivalCount === 'number' ? raw.lateArrivalCount : 0,
     languages: Array.isArray(raw.languages)
       ? raw.languages.filter((item): item is string => typeof item === 'string')
       : [],

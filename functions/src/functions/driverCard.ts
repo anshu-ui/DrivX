@@ -43,6 +43,9 @@ function cardFrom(profile: Record<string, unknown>, uid: string): AssignedDriver
     ratingAverage: count(profile.ratingAverage),
     ratingCount: count(profile.ratingCount),
     lifetimeTrips: count(profile.lifetimeTrips),
+    onTimeArrivalRate: typeof profile.onTimeArrivalRate === 'number' ? profile.onTimeArrivalRate : null,
+    onTimeArrivalCount: count(profile.onTimeArrivalCount),
+    lateArrivalCount: count(profile.lateArrivalCount),
     languages: Array.isArray(profile.languages)
       ? profile.languages.filter((item): item is string => typeof item === 'string')
       : [],

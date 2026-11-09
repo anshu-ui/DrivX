@@ -1,8 +1,9 @@
 import type { CallableRequest } from 'firebase-functions/v2/https';
 import type { AuthClaims } from '@drivx/domain';
 import { CLAIM_DEFAULTS, holdsRole } from '@drivx/domain';
+import { db } from './admin';
 import { assertNoOutstandingDues } from './dues';
-import { permissionDenied } from './errors';
+import { failedPrecondition, permissionDenied } from './errors';
 
 /** The caller, verified from the ID token the SDK attached to the request. */
 export type Caller = {
@@ -105,6 +106,11 @@ export async function requireDriverForNewWork(request: CallableRequest<unknown>)
 }
 
 export async function requireDriverForNewWorkCaller(caller: Caller): Promise<Caller> {
+  const profile = await db().doc(`driverProfiles/${caller.uid}`).get();
+  if (!profile.exists) throw failedPrecondition('Your driver profile is missing, so no new trip can be offered.');
+  if (profile.get('accountStatus') === 'suspended') {
+    throw failedPrecondition('Your account is paused by DrivX support. Contact support before taking new trips.');
+  }
   await assertNoOutstandingDues(caller.uid);
   return caller;
 }

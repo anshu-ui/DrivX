@@ -58,14 +58,20 @@ export const notifyBookingStateChanged = onDocumentUpdated(
       if (message) await deliverInbox({ uid: customerUid, id: `booking_${status}_${bookingId}_${version}`, ...message, route, bookingId });
     }
 
-    if (driverUid && (status === 'cancelled' || status === 'completed')) {
+    const driverMessage: Record<string, { type: 'driver_assigned' | 'trip_started' | 'trip_completed' | 'booking_cancelled'; title: string; body: string; route: string }> = {
+      assigned: { type: 'driver_assigned', title: 'New trip assigned', body: `You accepted booking ${reference}. Open Trips for the pickup, customer and vehicle details.`, route: '/trips' },
+      driver_en_route: { type: 'driver_assigned', title: 'Pickup reminder', body: `You are on the way to the pickup for ${reference}. Arrive by the booked time to avoid the late-start penalty.`, route: '/trip' },
+      driver_arrived: { type: 'driver_assigned', title: 'Pickup reached', body: `You marked yourself at pickup for ${reference}. Confirm the start OTP with the customer.`, route: '/trip' },
+      trip_started: { type: 'trip_started', title: 'Trip started', body: `Trip ${reference} is underway. Keep location sharing on until the trip ends.`, route: '/trip' },
+      completed: { type: 'trip_completed', title: 'Trip completed', body: `Trip ${reference} is complete. Your commission is being added to dues.`, route: '/dues' },
+      cancelled: { type: 'booking_cancelled', title: 'Booking cancelled', body: `Booking ${reference} was cancelled.`, route: '/' },
+    };
+    const driverMessageForStatus = driverMessage[status];
+    if (driverUid && driverMessageForStatus) {
       await deliverInbox({
         uid: driverUid,
         id: `driver_booking_${status}_${bookingId}_${version}`,
-        type: status === 'cancelled' ? 'booking_cancelled' : 'trip_completed',
-        title: status === 'cancelled' ? 'Booking cancelled' : 'Trip completed',
-        body: status === 'cancelled' ? `Booking ${reference} was cancelled.` : `Trip ${reference} is complete. Your commission is being added to dues.`,
-        route: status === 'completed' ? '/dues' : '/',
+        ...driverMessageForStatus,
         bookingId,
       });
     }

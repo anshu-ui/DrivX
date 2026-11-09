@@ -6,7 +6,15 @@ import { db, serverTimestamp, writeAuditLog } from '../lib/admin';
 import { requireAdmin, requireAuth, requireCustomer, requireCustomerCaller, requireDriver, requireDriverCaller, type Caller } from '../lib/guards';
 import { invalidArgument } from '../lib/errors';
 
-const OPTIONS = { region: REGION, cors: true };
+const OPTIONS = {
+  region: REGION,
+  cors: true,
+  memory: '256MiB' as const,
+  // These low-volume reward endpoints need only fractional CPU and stay under
+  // the project's asia-south1 Cloud Run CPU quota.
+  cpu: 0.08,
+  maxInstances: 1,
+};
 export const DEFAULT_REWARD_RULES = {
   enabled: true, customerReferralCreditPaise: 10_000, customerReferralMinimumFarePaise: 39_900,
   creditExpiryDays: 60, milesPer100Rupees: 5, milesPaisePer100Points: 2_000,
@@ -284,7 +292,13 @@ async function settleCompletedBooking(bookingId: string, booking: Record<string,
   });
 }
 
-export const settleRewardsOnTripCompletion = onDocumentUpdated({ region: REGION, document: 'bookings/{bookingId}' }, async event => {
+export const settleRewardsOnTripCompletion = onDocumentUpdated({
+  region: REGION,
+  document: 'bookings/{bookingId}',
+  memory: '256MiB',
+  cpu: 0.08,
+  maxInstances: 1,
+}, async event => {
   const before = event.data?.before.data(); const after = event.data?.after.data(); if (!after || after.status !== 'completed' || before?.status === 'completed') return;
   await settleCompletedBooking(event.params.bookingId, after);
 });

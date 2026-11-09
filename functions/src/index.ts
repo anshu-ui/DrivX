@@ -9,7 +9,7 @@
 export { bookingOptions, cancelBooking, createBooking, dispatchNewBooking, quoteFare, registerDeviceToken, unregisterDeviceToken } from './functions/bookings';
 export { notifyBookingCreated, notifyBookingStateChanged, notifyDriverDueCreated, notifyDriverDueSettled, notifyDriverVerification } from './functions/activityNotifications';
 export { setDriverVerification } from './functions/driverVerification';
-export { adminManageBooking, resetDriverOnboarding } from './functions/adminOperations';
+export { adminManageBooking, adminSetDriverAccountStatus, resetDriverOnboarding } from './functions/adminOperations';
 export {
   publishDriverCardOnAssignmentEvent,
   publishDriverCardOnImportedBookingEvent,

@@ -4,8 +4,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { User } from 'firebase/auth';
 import { getPermissionsAsync } from 'expo-notifications';
 import { enablePushNotifications } from '../features/customer/pushNotifications';
+import { mobileTheme } from '../features/mobileTheme';
 
 const preferenceKey = (uid: string) => `drivx.push.enabled.${uid}`;
+const { colors, radius } = mobileTheme;
+const fontFamily = mobileTheme.fontFamily as typeof mobileTheme.fontFamily & {
+  textSemiBold: string;
+  textBold: string;
+  textExtraBold: string;
+};
 
 function hasWebPushKey() {
   return Boolean(process.env.EXPO_PUBLIC_FIREBASE_VAPID_KEY
@@ -51,23 +58,25 @@ export function PushPermissionGate({
 
   const missingWebKey = Platform.OS === 'web' && !hasWebPushKey();
   return (
-    <View style={{ flex: 1, minHeight: '100%', backgroundColor: '#F5F8FC', justifyContent: 'center', padding: 24 }}>
-      <View style={{ width: '100%', maxWidth: 520, alignSelf: 'center', backgroundColor: 'white', borderColor: '#E1E8F0', borderWidth: 1, borderRadius: 24, padding: 26, gap: 14 }}>
-        <View style={{ width: 54, height: 54, borderRadius: 18, backgroundColor: '#EAF1FF', alignItems: 'center', justifyContent: 'center' }}>
-          <Text style={{ color: '#155EEF', fontSize: 26, fontWeight: '900' }}>⌁</Text>
+    <View style={{ flex: 1, minHeight: '100%', backgroundColor: colors.background, justifyContent: 'center', padding: 24 }}>
+      <View style={{ width: '100%', maxWidth: 520, alignSelf: 'center', backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: radius.xl, padding: 26, gap: 14 }}>
+        <View style={{ width: 54, height: 54, borderRadius: radius.lg, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={{ color: colors.primary, fontFamily: fontFamily.textExtraBold, fontSize: 26 }}>⌁</Text>
         </View>
-        <Text style={{ color: '#14243A', fontSize: 25, fontWeight: '900' }}>Turn on DrivX notifications</Text>
-        <Text style={{ color: '#66758B', fontSize: 15, lineHeight: 23 }}>
+        <Text style={{ color: colors.textBrand, fontFamily: fontFamily.textExtraBold, fontSize: 25, lineHeight: 32 }}>
+          Turn on DrivX notifications
+        </Text>
+        <Text style={{ color: colors.textMuted, fontFamily: fontFamily.text, fontSize: 15, lineHeight: 23 }}>
           Get driver offers, booking confirmations, trip status and payment updates. You can continue using DrivX without notifications and enable them later in settings.
         </Text>
         {missingWebKey ? (
-          <Text accessibilityRole="alert" style={{ color: '#B42318', fontSize: 14, lineHeight: 21 }}>
+          <Text accessibilityRole="alert" style={{ color: colors.danger, fontFamily: fontFamily.text, fontSize: 14, lineHeight: 21 }}>
             Push notifications are unavailable in this browser. You can still use DrivX; trip updates remain available in the app.
           </Text>
         ) : null}
-        {error ? <Text accessibilityRole="alert" style={{ color: '#B42318', fontSize: 14 }}>{error}</Text> : null}
+        {error ? <Text accessibilityRole="alert" style={{ color: colors.danger, fontFamily: fontFamily.text, fontSize: 14, lineHeight: 21 }}>{error}</Text> : null}
         {!ready ? (
-          <ActivityIndicator color="#155EEF" />
+          <ActivityIndicator color={colors.primary} />
         ) : (
           <TouchableOpacity
             accessibilityRole="button"
@@ -81,21 +90,27 @@ export function PushPermissionGate({
                 .catch((reason) => setError(reason instanceof Error ? reason.message : 'Notifications could not be enabled.'))
                 .finally(() => setBusy(false));
             }}
-            style={{ minHeight: 52, borderRadius: 14, backgroundColor: busy || missingWebKey ? '#A9BAD4' : '#155EEF', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18 }}
+            style={{ minHeight: 52, borderRadius: radius.md, backgroundColor: busy || missingWebKey ? colors.disabledSurface : colors.primary, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18 }}
           >
-            <Text style={{ color: 'white', fontSize: 16, fontWeight: '800' }}>{busy ? 'Enabling…' : 'Allow notifications'}</Text>
+            <Text style={{ color: busy || missingWebKey ? colors.disabledText : colors.onPrimary, fontFamily: fontFamily.textBold, fontSize: 16 }}>
+              {busy ? 'Enabling…' : 'Allow notifications'}
+            </Text>
           </TouchableOpacity>
         )}
         <TouchableOpacity disabled={busy} onPress={() => setDismissed(true)} style={{ paddingVertical: 8 }}>
-          <Text style={{ textAlign: 'center', color: '#155EEF', fontWeight: '700' }}>Continue without notifications</Text>
+          <Text style={{ textAlign: 'center', color: colors.primaryInk, fontFamily: fontFamily.textSemiBold }}>
+            Continue without notifications
+          </Text>
         </TouchableOpacity>
         {Platform.OS !== 'web' ? (
           <TouchableOpacity onPress={() => void Linking.openSettings()} style={{ paddingVertical: 10 }}>
-            <Text style={{ textAlign: 'center', color: '#155EEF', fontWeight: '700' }}>Open device notification settings</Text>
+            <Text style={{ textAlign: 'center', color: colors.primaryInk, fontFamily: fontFamily.textSemiBold }}>
+              Open device notification settings
+            </Text>
           </TouchableOpacity>
         ) : null}
         <TouchableOpacity disabled={busy} onPress={() => void onSignOut()} style={{ paddingVertical: 8 }}>
-          <Text style={{ textAlign: 'center', color: '#66758B', fontWeight: '700' }}>Sign out</Text>
+          <Text style={{ textAlign: 'center', color: colors.textMuted, fontFamily: fontFamily.textSemiBold }}>Sign out</Text>
         </TouchableOpacity>
       </View>
     </View>
