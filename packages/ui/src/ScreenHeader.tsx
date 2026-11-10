@@ -25,7 +25,7 @@ export function ScreenHeader({
     <View style={[styles.root, { gap: theme.spacing.md }, style]}>
       <View style={[styles.copy, { gap: theme.spacing.xs }]}>
         {eyebrow ? (
-          <Text variant="overline" tone="muted">
+          <Text variant="overline" tone="primary">
             {eyebrow}
           </Text>
         ) : null}

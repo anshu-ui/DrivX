@@ -53,12 +53,13 @@ export function SelectBox({
           backgroundColor: disabled
             ? theme.colors.disabledSurface
             : pressed
-              ? theme.colors.border
+              ? theme.colors.primarySoft
               : theme.colors.surfaceMuted,
           borderColor: expanded ? theme.colors.borderFocus : 'transparent',
           borderWidth: theme.borderWidth.thin,
           borderRadius: theme.radius.lg,
         },
+        pressed && !disabled ? { transform: [{ scale: 0.99 }] } : null,
         style,
       ]}
     >

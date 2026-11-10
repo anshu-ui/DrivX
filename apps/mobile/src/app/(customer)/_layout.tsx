@@ -114,8 +114,14 @@ export default function CustomerLayout() {
           to it silently resolve to the group's initial screen instead. Hiding the
           button is the part that was actually wanted.
         */}
-        <Tabs.Screen name="trips/[bookingId]" options={{ tabBarButton: () => null }} />
-        <Tabs.Screen name="saved-places" options={{ tabBarButton: () => null }} />
+        <Tabs.Screen
+          name="trips/[bookingId]"
+          options={{ tabBarButton: () => null, tabBarItemStyle: { display: 'none' } }}
+        />
+        <Tabs.Screen
+          name="saved-places"
+          options={{ tabBarButton: () => null, tabBarItemStyle: { display: 'none' } }}
+        />
         </Tabs>
       </ThemeProvider>
     </AppSurfaceGate>

@@ -91,7 +91,7 @@ export default function DriverLayout() {
           // with nothing on hand has no reason to see an empty code form. Only the
           // button is hidden — `href: null` would also drop the screen from the
           // linkable route table, and then this push resolves back to Duty.
-          options={{ tabBarButton: () => null }}
+          options={{ tabBarButton: () => null, tabBarItemStyle: { display: 'none' } }}
         />
         <Tabs.Screen
           name="trips"
@@ -115,10 +115,10 @@ export default function DriverLayout() {
           }}
         />
         <Tabs.Screen name="rewards" options={{ title: 'Rewards', tabBarIcon: ({ color, size }) => <TabIcon name="gift-outline" color={color} size={size} /> }} />
-        <Tabs.Screen name="documents" options={{ tabBarButton: () => null }} />
+        <Tabs.Screen name="documents" options={{ tabBarButton: () => null, tabBarItemStyle: { display: 'none' } }} />
         {/* Opened from Account, not from the bar: five tabs is the practical limit
             on a phone, and a driver has no reason to sit on an empty ticket desk. */}
-        <Tabs.Screen name="support" options={{ tabBarButton: () => null }} />
+        <Tabs.Screen name="support" options={{ tabBarButton: () => null, tabBarItemStyle: { display: 'none' } }} />
       </Tabs>
       </ThemeProvider>
     </AppSurfaceGate>

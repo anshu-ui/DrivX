@@ -42,7 +42,21 @@ export function SectionCard({
       ]}
     >
       <View style={[styles.header, { gap: theme.spacing.sm }]}>
-        {icon ? <View style={styles.headerIcon}>{icon}</View> : null}
+        {icon ? (
+          <View
+            style={[
+              styles.headerIcon,
+              {
+                width: 40,
+                height: 40,
+                borderRadius: theme.radius.md,
+                backgroundColor: theme.colors.primarySoft,
+              },
+            ]}
+          >
+            {icon}
+          </View>
+        ) : null}
         <Text
           variant="bodyStrong"
           tone="default"
@@ -65,7 +79,7 @@ export function SectionCard({
 
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center' },
-  headerIcon: { alignItems: 'center', justifyContent: 'center' },
+  headerIcon: { alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   // Keeps the action pinned right even when the title is long enough to wrap.
   headerSpacer: { flex: 1 },
 });

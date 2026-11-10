@@ -107,10 +107,11 @@ export function SegmentedTabs<T extends string>({
                 paddingHorizontal: theme.spacing.sm,
                 borderRadius: filled ? theme.radius.lg : theme.radius.md,
                 backgroundColor: pressed && !option.disabled ? theme.colors.primarySoft : colors.bg,
-                borderColor: colors.border,
+                borderColor: active ? theme.colors.primary : colors.border,
                 borderWidth: theme.borderWidth.thin,
                 opacity: option.disabled ? 0.55 : 1,
               },
+              pressed && !option.disabled ? { transform: [{ scale: 0.985 }] } : null,
               active && variant === 'card' ? theme.elevation.card : null,
             ]}
           >

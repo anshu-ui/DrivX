@@ -141,6 +141,7 @@ export function Button({
         pressed && !inactive && {
           backgroundColor: palette.bgPressed,
           borderColor: palette.borderPressed,
+          transform: [{ scale: 0.985 }],
         },
         style,
       ]}

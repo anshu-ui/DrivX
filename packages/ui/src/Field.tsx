@@ -72,7 +72,7 @@ export const Field = forwardRef<ComponentRef<typeof TextInput>, FieldProps>(func
             borderRadius: theme.radius.md,
             borderWidth: invalid || focused ? theme.borderWidth.focus : theme.borderWidth.thin,
             borderColor,
-            backgroundColor: disabled ? colors.disabledSurface : colors.surface,
+            backgroundColor: disabled ? colors.disabledSurface : focused ? colors.surface : colors.surfaceMuted,
             color: disabled ? colors.disabledText : colors.text,
             paddingHorizontal: theme.spacing.md,
             fontFamily: theme.fontFamily.text,

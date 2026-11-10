@@ -47,11 +47,12 @@ export function OptionCard({
             : selected
               ? theme.colors.surface
               : theme.colors.surfaceMuted,
-          borderColor: selected ? theme.colors.textBrand : theme.colors.border,
+          borderColor: selected ? theme.colors.primary : theme.colors.border,
           // The selected card gains a border rather than a colour, so a row of
           // them stays legible on a screen that already uses brand navy for actions.
           borderWidth: selected ? theme.borderWidth.focus : theme.borderWidth.thin,
         },
+        pressed && { transform: [{ scale: 0.99 }] },
         style,
       ]}
     >
@@ -62,7 +63,7 @@ export function OptionCard({
             width: ring,
             height: ring,
             borderRadius: ring / 2,
-            borderColor: selected ? theme.colors.textBrand : theme.colors.disabledText,
+            borderColor: selected ? theme.colors.primary : theme.colors.disabledText,
             borderWidth: theme.borderWidth.thin,
           },
         ]}
@@ -73,7 +74,7 @@ export function OptionCard({
               width: ring - 8,
               height: ring - 8,
               borderRadius: (ring - 8) / 2,
-              backgroundColor: theme.colors.textBrand,
+              backgroundColor: theme.colors.primary,
             }}
           />
         ) : null}
@@ -126,7 +127,7 @@ export function Chip({
         styles.row,
         {
           gap: theme.spacing.xs,
-          minHeight: 40,
+          minHeight: theme.sizing.touchTarget,
           paddingHorizontal: theme.spacing.md,
           borderRadius: theme.radius.lg,
           backgroundColor: selected
@@ -134,10 +135,11 @@ export function Chip({
             : pressed
               ? theme.colors.surfaceMuted
               : theme.colors.surface,
-          borderColor: selected ? theme.colors.textBrand : theme.colors.border,
+          borderColor: selected ? theme.colors.primary : theme.colors.border,
           borderWidth: selected ? theme.borderWidth.focus : theme.borderWidth.thin,
           opacity: disabled ? 0.45 : 1,
         },
+        pressed && !disabled ? { transform: [{ scale: 0.985 }] } : null,
         style,
       ]}
     >

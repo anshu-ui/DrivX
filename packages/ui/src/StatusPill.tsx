@@ -5,8 +5,8 @@ import { useTheme } from './ThemeProvider';
 export type PillTone = 'neutral' | 'brand' | 'info' | 'success' | 'warning' | 'danger';
 
 /**
- * Status is one of five fixed colours, used the same way in all three surfaces:
- * success blue, warning amber, danger red, info sky, neutral grey. The text
+ * Status uses consistent semantic colours across customer and driver screens:
+ * success, warning amber, danger red, info sky, and neutral slate. The text
  * comes from `statusInk` so it clears AA against its own tint. `info` keeps a
  * separate ground from `primarySoft`, because under a navy brand a brand-blue
  * pill would read as "press me" rather than as a neutral fact.

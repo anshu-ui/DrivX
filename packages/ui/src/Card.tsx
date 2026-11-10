@@ -5,8 +5,8 @@ export type CardProps = {
   children: React.ReactNode;
   /**
    * `raised` is the standard white card, `flat` the same without shadow,
-   * `brand` the near-black slate surface used for the live trip, and `inset` a
-   * quiet panel for notes and footers.
+   * `brand` a deep-blue surface used for featured trip details, and `inset` a
+   * softly tinted panel for notes and footers.
    */
   tone?: 'raised' | 'flat' | 'brand' | 'inset';
   padded?: boolean;

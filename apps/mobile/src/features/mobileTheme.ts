@@ -1,26 +1,33 @@
 import { theme, type Theme } from '@drivx/design-tokens';
 
-/** Customer and Driver share the warm paper palette and typography used by the app mockup. */
+/** Customer and Driver share the clean, cool-white app palette and typography. */
 export const mobileTheme = {
   ...theme,
   radius: {
     ...theme.radius,
-    md: 14,
-    lg: 18,
+    md: 16,
+    lg: 20,
     xl: 24,
+  },
+  sizing: {
+    ...theme.sizing,
+    inputHeight: 56,
+    buttonLg: 58,
+    cardGap: 18,
   },
   colors: {
     ...theme.colors,
-    // A very light cream ground keeps the screens soft without tinting cards.
-    background: '#F7F6F2',
-    surface: '#FFFEFC',
-    surfaceMuted: '#F2F0EB',
+    // Cool white page ground with softly tinted panels for clear hierarchy.
+    background: '#F6F8FC',
+    surface: '#FFFFFF',
+    surfaceMuted: '#F1F5FB',
     surfaceBrand: '#172033',
-    border: '#E8E5DE',
+    border: '#E3E9F2',
     borderFocus: '#315EE8',
     text: '#172033',
-    textMuted: '#727B8B',
-    textFaint: '#8991A0',
+    // Keep helper text and timestamps readable on white and blue-tinted panels.
+    textMuted: '#64748B',
+    textFaint: '#475569',
     textBrand: '#172033',
     textOnBrand: '#FFFFFF',
     primary: '#315EE8',
@@ -42,13 +49,30 @@ export const mobileTheme = {
     brandTintDeep: '#DCE6FF',
     ink: '#172033',
     inkDeep: '#101827',
-    ground: '#F7F6F2',
-    white: '#FFFEFC',
+    ground: '#F6F8FC',
+    white: '#FFFFFF',
     body: '#172033',
-    secondary: '#727B8B',
-    faint: '#8991A0',
-    border: '#E8E5DE',
-    panel: '#F2F0EB',
+    secondary: '#64748B',
+    faint: '#475569',
+    border: '#E3E9F2',
+    panel: '#F1F5FB',
+  },
+  elevation: {
+    ...theme.elevation,
+    card: {
+      shadowColor: '#172033',
+      shadowOpacity: 0.06,
+      shadowRadius: 9,
+      shadowOffset: { width: 0, height: 3 },
+      elevation: 2,
+    },
+    floating: {
+      shadowColor: '#172033',
+      shadowOpacity: 0.12,
+      shadowRadius: 18,
+      shadowOffset: { width: 0, height: 7 },
+      elevation: 7,
+    },
   },
   support: {
     ...theme.support,
