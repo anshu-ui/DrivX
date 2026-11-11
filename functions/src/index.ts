@@ -6,7 +6,7 @@
  * ships identity, roles and verification for real; later phases are declared
  * with their input contract and fail with `unimplemented` rather than pretending.
  */
-export { bookingOptions, cancelBooking, createBooking, dispatchNewBooking, quoteFare, registerDeviceToken, unregisterDeviceToken } from './functions/bookings';
+export { bookingOptions, cancelBooking, createBooking, dispatchNewBooking, previewCoupon, quoteFare, registerDeviceToken, unregisterDeviceToken } from './functions/bookings';
 export { notifyBookingCreated, notifyBookingStateChanged, notifyDriverDueCreated, notifyDriverDueSettled, notifyDriverVerification } from './functions/activityNotifications';
 export { setDriverVerification } from './functions/driverVerification';
 export { adminManageBooking, adminSetDriverAccountStatus, resetDriverOnboarding } from './functions/adminOperations';

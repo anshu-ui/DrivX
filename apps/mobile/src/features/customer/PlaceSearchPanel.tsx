@@ -12,7 +12,7 @@ import {
 } from './places';
 
 /** How long a pause before the words in the box are worth a Google call. */
-const DEBOUNCE_MS = 180;
+const DEBOUNCE_MS = 140;
 
 type Row = { key: string; primary: string; secondary: string; onPress: () => void };
 
@@ -192,6 +192,7 @@ export function PlaceSearchPanel({
           <Pressable
             key={row.key}
             accessibilityRole="button"
+            disabled={busy}
             onPress={row.onPress}
             style={({ pressed }) => ({
               flexDirection: 'row',
@@ -205,6 +206,7 @@ export function PlaceSearchPanel({
                 : isSelected
                   ? theme.colors.primarySoft
                   : 'transparent',
+              opacity: busy ? 0.55 : 1,
             })}
           >
             <Ionicons

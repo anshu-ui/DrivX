@@ -55,6 +55,29 @@ const registerTokenInput = z.object({
   platform: z.enum(['ios', 'android', 'web']),
 });
 
+/** Shared by the callable and authenticated HTTP gateway. */
+export async function registerDeviceTokenForCaller(caller: Caller, rawInput: unknown) {
+  if (!caller.uid) throw new HttpsError('unauthenticated', 'Sign-in required.');
+  const input = parseInput(registerTokenInput, rawInput);
+  const tokenId = createHash('sha256').update(input.token).digest('hex');
+  await db().collection('users').doc(caller.uid).collection('deviceTokens').doc(tokenId).set({
+    token: input.token,
+    platform: input.platform,
+    updatedAtMs: serverTimestamp(),
+  }, { merge: true });
+  return { registered: true };
+}
+
+/** Revoke only the caller's own device token. */
+export async function unregisterDeviceTokenForCaller(caller: Caller, rawInput: unknown) {
+  if (!caller.uid) throw new HttpsError('unauthenticated', 'Sign-in required.');
+  const parsed = z.object({ token: z.string().min(20).max(600) }).safeParse(rawInput);
+  if (!parsed.success) throw new HttpsError('invalid-argument', 'A device token is required.');
+  const tokenId = createHash('sha256').update(parsed.data.token).digest('hex');
+  await db().collection('users').doc(caller.uid).collection('deviceTokens').doc(tokenId).delete();
+  return { unregistered: true };
+}
+
 /**
  * Stores the device's push token on the caller's own account.
  *
@@ -64,25 +87,13 @@ const registerTokenInput = z.object({
  */
 export const registerDeviceToken = onCall(CALLABLE_OPTIONS, async (request) => {
   const caller = requireAuth(request);
-  const input = parseInput(registerTokenInput, request.data);
-  const tokenId = createHash('sha256').update(input.token).digest('hex');
-  await db().collection('users').doc(caller.uid).collection('deviceTokens').doc(tokenId).set({
-    token: input.token,
-    platform: input.platform,
-    updatedAtMs: serverTimestamp(),
-  }, { merge: true });
-
-  return { registered: true };
+  return registerDeviceTokenForCaller(caller, request.data);
 });
 
 /** Revokes this signed-in device's push target when the user turns push off. */
 export const unregisterDeviceToken = onCall(CALLABLE_OPTIONS, async (request) => {
   const caller = requireAuth(request);
-  const input = z.object({ token: z.string().min(20).max(600) }).safeParse(request.data);
-  if (!input.success) throw new HttpsError('invalid-argument', 'A device token is required.');
-  const tokenId = createHash('sha256').update(input.data.token).digest('hex');
-  await db().collection('users').doc(caller.uid).collection('deviceTokens').doc(tokenId).delete();
-  return { unregistered: true };
+  return unregisterDeviceTokenForCaller(caller, request.data);
 });
 
 /** Display code for a booking, e.g. DRX-7K3QD2. Ambiguous glyphs are excluded. */
@@ -327,6 +338,15 @@ export async function previewCouponForCaller(caller: Caller, rawInput: unknown) 
     currency: 'INR' as const,
   };
 }
+
+/**
+ * Direct callable kept alongside the authenticated Hosting gateway so older
+ * native builds (which use the regional Functions URL) can still preview a
+ * coupon instead of receiving a function-level 404.
+ */
+export const previewCoupon = onCall(CALLABLE_OPTIONS, async (request) =>
+  previewCouponForCaller(requireCustomer(request), request.data),
+);
 
 /**
  * Rebuilds a response from a booking that already exists.

@@ -5,7 +5,7 @@ import { CALLABLE_OPTIONS } from '../lib/config';
 import { callerFromVerifiedToken, requireAdminCaller, requireCustomerCaller, requireDriverCaller, requireDriverForNewWorkCaller, requireVerifiedDriverCaller } from '../lib/guards';
 import { acceptDutyTermsForCaller } from './duty';
 import { publishCustomerLocationForCaller, publishDriverLocationForCaller, respondToAssignmentForCaller, setAvailabilityForCaller, startTripApproachForCaller } from './dispatch';
-import { cancelBookingForCaller, previewCouponForCaller } from './bookings';
+import { cancelBookingForCaller, previewCouponForCaller, registerDeviceTokenForCaller, unregisterDeviceTokenForCaller } from './bookings';
 import { customerContactForAssignedDriverCaller, tripCodesForCustomer } from './trip';
 import { rateTripForCaller } from './ratings';
 import { resolvePlaceForCaller, reverseGeocodeForCaller, searchPlacesForCaller } from './places';
@@ -40,6 +40,10 @@ const handlers = {
     resolvePlaceForCaller(requireCustomerCaller(callerFromVerifiedToken(uid, claims)), data),
   reverseGeocode: async (uid: string, claims: Record<string, unknown>, data: unknown) =>
     reverseGeocodeForCaller(requireCustomerCaller(callerFromVerifiedToken(uid, claims)), data),
+  registerDeviceToken: async (uid: string, claims: Record<string, unknown>, data: unknown) =>
+    registerDeviceTokenForCaller(callerFromVerifiedToken(uid, claims), data),
+  unregisterDeviceToken: async (uid: string, claims: Record<string, unknown>, data: unknown) =>
+    unregisterDeviceTokenForCaller(callerFromVerifiedToken(uid, claims), data),
   getRewards: async (uid: string, claims: Record<string, unknown>, data: unknown) =>
     getRewardsForCaller(callerFromVerifiedToken(uid, claims), data),
   claimReferralCode: async (uid: string, claims: Record<string, unknown>, data: unknown) =>
@@ -58,6 +62,9 @@ const customerActions = new Set([
 ]);
 const driverActions = new Set(['claimDriverReferralCode', 'requestDriverRewardPayout']);
 const adminActions = new Set(['manageRewardsAdmin']);
+// Device-token operations need a valid Firebase identity but are available to
+// both customer and driver accounts. Helpers scope writes to that token's uid.
+const selfServiceActions = new Set(['registerDeviceToken', 'unregisterDeviceToken']);
 
 const httpStatus: Record<string, number> = {
   'invalid-argument': 400,
@@ -133,7 +140,7 @@ export const driverGateway = onRequest(
       if (customerActions.has(functionName)) requireCustomerCaller(caller);
       else if (driverActions.has(functionName)) requireDriverCaller(caller);
       else if (adminActions.has(functionName)) requireAdminCaller(caller);
-      else if (functionName !== 'getRewards') requireDriverCaller(caller);
+      else if (functionName !== 'getRewards' && !selfServiceActions.has(functionName)) requireDriverCaller(caller);
       if (functionName === 'publishDriverLocation' || functionName === 'respondToAssignment') requireVerifiedDriverCaller(caller);
 
       const payload = request.body as { data?: unknown } | undefined;

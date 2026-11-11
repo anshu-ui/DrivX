@@ -55,6 +55,8 @@ const hostingCallableNames = new Set([
   'searchPlaces',
   'resolvePlace',
   'reverseGeocode',
+  'registerDeviceToken',
+  'unregisterDeviceToken',
   'getRewards',
   'claimReferralCode',
   'claimDriverReferralCode',
