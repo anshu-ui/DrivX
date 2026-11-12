@@ -13,6 +13,7 @@ import type { FirebaseClients } from './client';
 /** Codes a client may branch on; they mirror the Functions RPC vocabulary. */
 export type FunctionErrorCode =
   | 'unimplemented'
+  | 'unauthenticated'
   | 'permission-denied'
   | 'invalid-argument'
   | 'failed-precondition'
@@ -75,6 +76,19 @@ const hostingCallableNames = new Set([
  */
 const NO_RESPONSE = / \[0\]$/;
 
+const knownFunctionErrorCodes: FunctionErrorCode[] = [
+  'unimplemented',
+  'unauthenticated',
+  'permission-denied',
+  'invalid-argument',
+  'failed-precondition',
+  'not-found',
+  'resource-exhausted',
+  'unavailable',
+  'internal',
+  'unknown',
+];
+
 function functionsFor(clients: FirebaseClients, functionName: string): Functions {
   const useHostingProxy =
     !clients.env.useEmulators &&
@@ -101,18 +115,7 @@ function toFunctionError(functionName: string, error: unknown): FunctionCallErro
   const raw = String(candidate?.code ?? 'unknown');
   // The SDK prefixes callable errors with "functions/".
   const suffix = raw.startsWith('functions/') ? raw.slice('functions/'.length) : raw;
-  const known: FunctionErrorCode[] = [
-    'unimplemented',
-    'permission-denied',
-    'invalid-argument',
-    'failed-precondition',
-    'not-found',
-    'resource-exhausted',
-    'unavailable',
-    'internal',
-    'unknown',
-  ];
-  const code: FunctionErrorCode = (known as string[]).includes(suffix)
+  const code: FunctionErrorCode = (knownFunctionErrorCodes as string[]).includes(suffix)
     ? (suffix as FunctionErrorCode)
     : 'unknown';
   const message = candidate?.details?.message ?? candidate?.message ?? `${functionName} failed`;
@@ -125,6 +128,88 @@ function toFunctionError(functionName: string, error: unknown): FunctionCallErro
   );
 }
 
+type GatewayErrorBody = {
+  error?: {
+    status?: unknown;
+    message?: unknown;
+  };
+};
+
+/**
+ * Calls the authenticated Hosting gateway with an explicit Firebase bearer
+ * token. This avoids relying on the callable SDK to attach auth when its
+ * Functions instance is pointed at a custom Hosting URL. If the cached token
+ * was revoked or expired, refresh it once before showing an auth error.
+ */
+async function callHostingGateway<Request, Response>(
+  clients: FirebaseClients,
+  functionName: string,
+  data: Request,
+): Promise<Response> {
+  const user = clients.auth.currentUser;
+  if (!user) {
+    throw new FunctionCallError('unauthenticated', 'Sign in again to continue.', functionName);
+  }
+
+  const baseURL = clients.env.functionsBaseURL!.replace(/\/+$/, '');
+  const url = `${baseURL}/${encodeURIComponent(functionName)}`;
+  const send = (token: string) => fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ data }),
+  });
+
+  let httpResponse: globalThis.Response;
+  try {
+    httpResponse = await send(await user.getIdToken());
+    if (httpResponse.status === 401) {
+      try {
+        httpResponse = await send(await user.getIdToken(true));
+      } catch {
+        // Preserve the gateway's original response; it contains the useful
+        // sign-in/revocation message for the customer.
+      }
+    }
+  } catch (error) {
+    throw toFunctionError(functionName, error);
+  }
+
+  let body: (GatewayErrorBody & { result?: Response }) | null = null;
+  try {
+    body = await httpResponse.json() as GatewayErrorBody & { result?: Response };
+  } catch {
+    // The gateway should always return JSON, but keep a useful error if the
+    // proxy or network returned an HTML error page instead.
+  }
+
+  if (!httpResponse.ok) {
+    const rawStatus = String(body?.error?.status ?? 'unknown').toLowerCase().replaceAll('_', '-');
+    const code: FunctionErrorCode = (knownFunctionErrorCodes as string[]).includes(rawStatus)
+      ? rawStatus as FunctionErrorCode
+      : httpResponse.status === 401
+        ? 'unauthenticated'
+        : httpResponse.status === 403
+          ? 'permission-denied'
+          : httpResponse.status === 404
+            ? 'not-found'
+            : 'internal';
+    const message = typeof body?.error?.message === 'string'
+      ? body.error.message
+      : code === 'unauthenticated'
+        ? 'Your sign-in has expired. Sign in again to cancel this trip.'
+        : `${functionName} failed with HTTP ${httpResponse.status}.`;
+    throw new FunctionCallError(code, message, functionName);
+  }
+
+  if (!body || !Object.prototype.hasOwnProperty.call(body, 'result')) {
+    throw new FunctionCallError('internal', `${functionName} returned an invalid response.`, functionName);
+  }
+  return body.result as Response;
+}
+
 /**
  * Calls a v2 callable and returns its data. Errors surface as
  * `FunctionCallError` with the server's own code and message intact.
@@ -134,6 +219,12 @@ export async function callFunction<Request, Response>(
   functionName: string,
   data: Request,
 ): Promise<Response> {
+  const useHostingProxy =
+    !clients.env.useEmulators &&
+    clients.env.functionsBaseURL &&
+    hostingCallableNames.has(functionName);
+  if (useHostingProxy) return callHostingGateway<Request, Response>(clients, functionName, data);
+
   const invoke = httpsCallable<Request, Response>(functionsFor(clients, functionName), functionName);
   try {
     const response = await invoke(data);

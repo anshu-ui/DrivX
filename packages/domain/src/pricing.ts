@@ -267,7 +267,25 @@ export function canonicalFareSnapshot(rule: PricingRuleRecord, tier: HourlyPacka
   return parts.join('|');
 }
 
-/** The night line, when this departure is inside the rule's window at all. */
+/** True when the scheduled journey starts in, or is estimated to enter, the night window. */
+function journeyOverlapsNightWindow(
+  localStartHour: number,
+  localStartMinute: number,
+  durationSeconds: number,
+  fromHour: number,
+  toHour: number,
+): boolean {
+  if (fromHour === toHour) return false;
+  if (isNightHour(localStartHour, fromHour, toHour)) return true;
+  if (durationSeconds <= 0) return false;
+
+  const startSeconds = localStartHour * HOUR_SECONDS + localStartMinute * MINUTE_SECONDS;
+  const nextWindowStart = (fromHour * HOUR_SECONDS - startSeconds + 86_400) % 86_400 || 86_400;
+  // A trip ending exactly at the window boundary has not spent time inside it.
+  return durationSeconds > nextWindowStart;
+}
+
+/** The one-time night line, when the scheduled/estimated journey overlaps the window. */
 function nightLine(
   rule: PricingRuleRecord,
   corePaise: MoneyPaise,
@@ -279,35 +297,16 @@ function nightLine(
   if (!night.enabled) return null;
 
   const window = `between ${clockLabel(night.fromHour)} and ${clockLabel(night.toHour)}`;
-  if (night.mode === 'flat') {
-    if (!isNightHour(localStartHour, night.fromHour, night.toHour)) return null;
+  if (night.mode === 'flat' || night.mode === 'hourly') {
+    if (!journeyOverlapsNightWindow(localStartHour, localStartMinute, durationSeconds, night.fromHour, night.toHour)) return null;
     if (night.flatPaise <= 0) return null;
     return {
       key: 'night_surcharge',
-      label: 'Night allowance',
+      label: 'Night charge',
       amountPaise: paise(night.flatPaise),
-      detail: `Flat ₹${rupeesLabel(night.flatPaise)} for a departure ${window}`,
-    };
-  }
-  if (night.mode === 'hourly') {
-    if (night.flatPaise <= 0 || durationSeconds <= 0) return null;
-    let cursor = localStartHour * 3_600 + localStartMinute * 60;
-    let remaining = durationSeconds;
-    let eligibleSeconds = 0;
-    while (remaining > 0) {
-      const hour = Math.floor(((cursor % 86_400) + 86_400) % 86_400 / 3_600);
-      const segmentSeconds = Math.min(remaining, 3_600 - (cursor % 3_600));
-      if (isNightHour(hour, night.fromHour, night.toHour)) eligibleSeconds += segmentSeconds;
-      cursor += segmentSeconds;
-      remaining -= segmentSeconds;
-    }
-    if (eligibleSeconds <= 0) return null;
-    const amountPaise = paise((eligibleSeconds * night.flatPaise) / 3_600);
-    return {
-      key: 'night_surcharge',
-      label: 'Night charges',
-      amountPaise,
-      detail: `${Math.round(eligibleSeconds / 60)} eligible minutes between ${clockLabel(night.fromHour)} and ${clockLabel(night.toHour)} × ₹${rupeesLabel(night.flatPaise)}/hour`,
+      detail: isNightHour(localStartHour, night.fromHour, night.toHour)
+        ? `Flat ₹${rupeesLabel(night.flatPaise)} for a departure ${window}`
+        : `One-time ₹${rupeesLabel(night.flatPaise)} because the estimated journey overlaps ${window}`,
     };
   }
   if (night.rate <= 0 || !isNightHour(localStartHour, night.fromHour, night.toHour)) return null;

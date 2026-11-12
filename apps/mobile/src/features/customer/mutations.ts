@@ -153,7 +153,7 @@ export function useCancelBooking() {
       if (!user) {
         return {
           ok: false as const,
-          error: new FunctionCallError('permission-denied', 'Sign in first.', 'cancelBooking'),
+          error: new FunctionCallError('unauthenticated', 'Sign in again to cancel this trip.', 'cancelBooking'),
         };
       }
 

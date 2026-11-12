@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f3f0eb">
+  <meta name="description" content="The DrivX app is coming soon to the App Store and Google Play. Book a trusted driver online in the meantime.">
+  <title>DrivX app — Coming soon</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root{color-scheme:light;--blue:#2563eb;--blue2:#2563eb;--ink:#111113;--muted:#777575;--line:#dfddd8;--paper:#fff;--wash:#f5f2ec;--green:#18875a}
+    *{box-sizing:border-box}
+    html,body{margin:0;min-height:100%;font-family:"Plus Jakarta Sans",Arial,sans-serif;color:var(--ink)}
+    body{overflow-x:hidden;background:radial-gradient(ellipse at 15% 8%,rgba(255,255,255,.88),transparent 34%),radial-gradient(ellipse at 92% 88%,rgba(223,221,216,.38),transparent 32%),#f3f0eb}
+    a{color:inherit}
+    .page{min-height:100svh;display:flex;flex-direction:column;position:relative;isolation:isolate}
+    .page:before,.page:after{position:absolute;z-index:-1;content:"";border:1px solid rgba(17,17,19,.055);border-radius:50%;pointer-events:none}
+    .page:before{width:540px;height:540px;top:-310px;right:-140px;box-shadow:0 0 0 42px rgba(17,17,19,.018),0 0 0 84px rgba(17,17,19,.012)}
+    .page:after{width:360px;height:360px;bottom:-245px;left:-170px;box-shadow:0 0 0 36px rgba(17,17,19,.018)}
+    .topbar{height:82px;width:min(1160px,calc(100% - 48px));margin:auto;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(17,17,19,.1)}
+    .brand{display:inline-flex;align-items:center;gap:11px;text-decoration:none;font-size:20px;font-weight:800;letter-spacing:-.055em;color:var(--ink)}
+    .brand-mark{width:35px;height:35px;display:grid;place-items:center;border-radius:12px;background:var(--blue);color:white;font-size:17px;box-shadow:0 7px 16px rgba(37,99,235,.2)}
+    .availability{display:flex;align-items:center;gap:9px;padding:9px 13px;border:1px solid var(--line);border-radius:999px;background:rgba(255,255,255,.78);font-family:"DM Mono",monospace;font-size:10px;font-weight:500;color:#267150;letter-spacing:.035em}
+    .live-dot{width:8px;height:8px;border-radius:50%;background:#27ad72;box-shadow:0 0 0 0 rgba(39,173,114,.42);animation:pulse 1.8s infinite}
+    main{width:min(1160px,calc(100% - 48px));margin:auto;flex:1;display:grid;grid-template-columns:minmax(0,1.08fr) minmax(340px,.92fr);align-items:center;gap:clamp(38px,8vw,110px);padding:68px 0 84px}
+    .copy{max-width:610px;animation:rise .65s cubic-bezier(.2,.7,.2,1) both}
+    .kicker{display:inline-flex;align-items:center;gap:8px;margin-bottom:24px;padding:8px 12px;border:1px solid var(--line);border-radius:999px;background:rgba(255,255,255,.72);color:var(--blue);font-family:"DM Mono",monospace;font-size:10px;font-weight:500;letter-spacing:.11em;text-transform:uppercase}
+    .kicker span{width:6px;height:6px;border-radius:50%;background:var(--blue)}
+    h1{margin:0;max-width:600px;font-size:clamp(44px,6.2vw,76px);line-height:1.035;letter-spacing:-.075em;font-weight:800;color:var(--ink)}
+    h1 em{font-style:normal;color:var(--blue2)}
+    .lead{margin:23px 0 0;max-width:510px;color:#555452;font-size:16px;line-height:1.8}
+    .store-box{display:flex;align-items:center;gap:14px;margin-top:29px;padding:15px 17px;border:1px solid var(--line);border-radius:18px;background:rgba(255,255,255,.84);box-shadow:0 10px 35px rgba(17,17,19,.045)}
+    .store-icon{width:43px;height:43px;flex:none;display:grid;place-items:center;border-radius:14px;background:#edf2ff;color:var(--blue)}
+    .store-icon svg{width:22px;height:22px}
+    .store-copy{min-width:0}
+    .store-copy strong{display:block;font-size:13px;font-weight:800;color:var(--ink)}
+    .store-copy small{display:block;margin-top:4px;color:var(--muted);font-size:11px;line-height:1.5}
+    .store-status{margin-left:auto;padding:7px 9px;border-radius:999px;background:#edf2ff;color:var(--blue);font-family:"DM Mono",monospace;font-size:9px;font-weight:500;letter-spacing:.07em;text-transform:uppercase;white-space:nowrap}
+    .actions{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin-top:26px}
+    .button{min-height:49px;padding:0 20px;display:inline-flex;align-items:center;justify-content:center;gap:9px;border:1px solid transparent;border-radius:13px;text-decoration:none;font-size:12px;font-weight:800;transition:transform .2s,box-shadow .2s,background .2s}
+    .button:hover{transform:translateY(-2px)}
+    .button-primary{background:var(--blue);color:#fff;box-shadow:0 9px 19px rgba(37,99,235,.2)}
+    .button-primary:hover{background:#1d4ed8;box-shadow:0 13px 22px rgba(37,99,235,.24)}
+    .button-secondary{border-color:var(--line);background:rgba(255,255,255,.72);color:var(--ink)}
+    .button svg{width:16px;height:16px}
+    .fineprint{margin:16px 0 0;color:var(--muted);font-size:10px;line-height:1.7}
+    .visual-wrap{min-height:440px;display:grid;place-items:center;position:relative;animation:rise .75s .1s cubic-bezier(.2,.7,.2,1) both}
+    .halo{position:absolute;width:min(390px,88vw);aspect-ratio:1;border-radius:50%;background:radial-gradient(circle,rgba(37,99,235,.1) 0 34%,rgba(223,221,216,.22) 35% 51%,transparent 52%);animation:drift 7s ease-in-out infinite}
+    .phone{position:relative;width:258px;height:454px;padding:9px;border:1px solid rgba(255,255,255,.9);border-radius:37px;background:linear-gradient(145deg,#313133,#111113 70%);box-shadow:0 36px 80px rgba(17,17,19,.2),inset 0 0 0 1px rgba(17,17,19,.3);transform:rotate(3deg);animation:float 5.5s ease-in-out infinite}
+    .phone-screen{position:relative;height:100%;overflow:hidden;padding:26px 17px 18px;border-radius:29px;background:linear-gradient(160deg,#fff 0%,#f5f2ec 100%)}
+    .notch{width:78px;height:19px;margin:0 auto 24px;border-radius:999px;background:#101526}
+    .screen-top{display:flex;align-items:center;justify-content:space-between;font-size:11px;font-weight:800;color:var(--ink)}
+    .avatar{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:#edf2ff;color:var(--blue);font-size:12px}
+    .screen-title{margin:24px 0 4px;font-size:21px;font-weight:800;letter-spacing:-.055em;color:var(--ink)}
+    .screen-sub{margin:0;color:var(--muted);font-size:10px}
+    .map{height:183px;margin-top:18px;position:relative;overflow:hidden;border:1px solid var(--line);border-radius:21px;background-color:#e9e7e2;background-image:linear-gradient(28deg,transparent 46%,rgba(255,255,255,.95) 47% 49%,transparent 50%),linear-gradient(145deg,transparent 37%,rgba(255,255,255,.95) 38% 40%,transparent 41%),linear-gradient(90deg,transparent 48%,rgba(255,255,255,.8) 49% 50%,transparent 51%),linear-gradient(0deg,transparent 63%,rgba(255,255,255,.8) 64% 65%,transparent 66%);background-size:120px 100px,135px 105px,90px 120px,100px 110px}
+    .route{position:absolute;left:53px;top:98px;width:126px;height:54px;border:3px solid var(--blue);border-top:0;border-right:0;border-radius:0 0 0 22px;transform:rotate(-12deg);filter:drop-shadow(0 2px 2px rgba(37,99,235,.13))}
+    .pin{position:absolute;width:17px;height:17px;border:4px solid #fff;border-radius:50%;background:#2563eb;box-shadow:0 2px 9px rgba(37,99,235,.42)}
+    .pin.start{left:43px;top:89px}.pin.end{right:43px;bottom:30px;background:#27a76f}
+    .vehicle{position:absolute;left:102px;top:69px;width:36px;height:20px;display:grid;place-items:center;border-radius:7px;background:var(--blue);color:#fff;box-shadow:0 4px 10px rgba(37,99,235,.32);font-size:13px;animation:car-move 4s ease-in-out infinite}
+    .route-card{position:absolute;left:12px;right:12px;bottom:12px;padding:12px;border:1px solid rgba(255,255,255,.9);border-radius:15px;background:rgba(255,255,255,.95);box-shadow:0 8px 20px rgba(17,17,19,.1)}
+    .route-card-top{display:flex;align-items:center;justify-content:space-between;font-size:10px;font-weight:800;color:var(--ink)}
+    .route-card-top b{color:var(--green);font-size:8px;letter-spacing:.06em}
+    .route-line{height:1px;margin:10px 0;background:var(--line)}
+    .route-caption{font-size:8px;color:var(--muted)}
+    .bottom-nav{position:absolute;left:18px;right:18px;bottom:13px;display:flex;justify-content:space-around;padding:10px 5px;border:1px solid rgba(255,255,255,.9);border-radius:18px;background:rgba(255,255,255,.93);box-shadow:0 8px 22px rgba(17,17,19,.08)}
+    .nav-item{display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--muted);font-size:7px;font-weight:700}
+    .nav-item svg{width:17px;height:17px}
+    .nav-item.active{color:var(--blue)}
+    .floating-chip{position:absolute;display:flex;align-items:center;gap:8px;padding:11px 13px;border:1px solid rgba(255,255,255,.88);border-radius:15px;background:rgba(255,255,255,.9);box-shadow:0 14px 35px rgba(17,17,19,.1);color:var(--ink);font-size:9px;font-weight:800;backdrop-filter:blur(12px)}
+    .floating-chip.one{top:58px;right:-3px;animation:float 5s .35s ease-in-out infinite}
+    .floating-chip.two{bottom:45px;left:-28px;animation:float 5.5s .7s ease-in-out infinite}
+    .chip-icon{width:23px;height:23px;display:grid;place-items:center;border-radius:8px;background:#edf2ff;color:var(--blue)}
+    .chip-icon svg{width:13px;height:13px}
+    footer{width:min(1160px,calc(100% - 48px));margin:0 auto;padding:19px 0 25px;border-top:1px solid rgba(17,17,19,.1);display:flex;justify-content:space-between;gap:16px;color:var(--muted);font-size:10px}
+    footer a{color:var(--blue);text-decoration:none;font-weight:700}
+    @keyframes pulse{70%{box-shadow:0 0 0 8px rgba(39,173,114,0)}100%{box-shadow:0 0 0 0 rgba(39,173,114,0)}}
+    @keyframes rise{from{opacity:0;transform:translateY(17px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes float{0%,100%{translate:0 0}50%{translate:0 -10px}}
+    @keyframes drift{0%,100%{transform:scale(.96);opacity:.8}50%{transform:scale(1.04);opacity:1}}
+    @keyframes car-move{0%,100%{transform:translate(0,0)}50%{transform:translate(13px,7px)}}
+    @media(max-width:760px){.topbar,main,footer{width:min(100% - 34px,560px)}.topbar{height:70px}.availability{font-size:9px;padding:8px 10px}main{grid-template-columns:1fr;gap:20px;padding:52px 0 60px}.copy{max-width:560px}h1{font-size:clamp(43px,12vw,66px)}.lead{font-size:14px}.visual-wrap{min-height:425px;grid-row:2}.phone{width:230px;height:405px}.phone-screen{padding:22px 15px 14px}.map{height:156px}.bottom-nav{left:15px;right:15px}.floating-chip.one{right:0}.floating-chip.two{left:0}footer{flex-wrap:wrap;font-size:9px}}
+    @media(max-width:390px){.store-box{padding:12px;gap:10px}.store-status{font-size:8px;padding:6px}.actions{align-items:stretch}.button{flex:1;padding:0 12px}.visual-wrap{transform:scale(.93);margin:-15px 0}.floating-chip.one{right:-8px}.floating-chip.two{left:-8px}}
+    @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="DrivX home"><span class="brand-mark">D</span><span>DrivX</span></a>
+      <div class="availability"><span class="live-dot"></span><span>ONLINE BOOKING IS LIVE · DELHI NCR</span></div>
+    </header>
+    <main>
+      <section class="copy" aria-labelledby="title">
+        <div class="kicker"><span></span> YOUR RIDE, ONE TAP AWAY</div>
+        <h1 id="title">The DrivX app<br>is <em>coming soon.</em></h1>
+        <p class="lead" id="store-message">A smoother way to book trusted drivers is on its way. We’re putting the finishing touches on the DrivX app.</p>
+        <div class="store-box">
+          <span class="store-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2.7" width="14" height="18.6" rx="3"/><path d="M9 6h6M10 18h4"/></svg>
+          </span>
+          <span class="store-copy"><strong id="store-title">Coming soon to Google Play</strong><small id="store-subtitle">We’ll share the download link as soon as it’s ready.</small></span>
+          <span class="store-status">Coming soon</span>
+        </div>
+        <div class="actions">
+          <a class="button button-primary" href="/customer/sign-in">Book online now
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+          </a>
+          <a class="button button-secondary" href="/">Back to DrivX</a>
+        </div>
+        <p class="fineprint">No app download needed to book online. DrivX is currently serving Delhi NCR.</p>
+      </section>
+      <div class="visual-wrap" aria-hidden="true">
+        <div class="halo"></div>
+        <div class="floating-chip one"><span class="chip-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12h16M12 4v16"/></svg></span>Simple booking, soon</div>
+        <div class="phone">
+          <div class="phone-screen">
+            <div class="notch"></div>
+            <div class="screen-top"><span>Good morning</span><span class="avatar">D</span></div>
+            <h2 class="screen-title">Where to?</h2>
+            <p class="screen-sub">A trusted driver is just ahead.</p>
+            <div class="map"><span class="route"></span><span class="pin start"></span><span class="pin end"></span><span class="vehicle">✦</span>
+              <div class="route-card"><div class="route-card-top"><span>Delhi NCR ride</span><b>● LIVE AREA</b></div><div class="route-line"></div><div class="route-caption">Delhi · Gurugram · Noida and nearby</div></div>
+            </div>
+            <div class="bottom-nav">
+              <span class="nav-item active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 11 12 4l9 7v9H3z"/><path d="M9 20v-6h6v6"/></svg>Book</span>
+              <span class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 4h14v17H5zM8 8h8M8 12h8M8 16h5"/></svg>Trips</span>
+              <span class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.6 2.6 0 1 1 4.6 1.7c-1.2 1.1-2.1 1.4-2.1 3M12 17.5v.1"/></svg>Help</span>
+              <span class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3.5"/><path d="M5 21a7 7 0 0 1 14 0"/></svg>Account</span>
+            </div>
+          </div>
+        </div>
+        <div class="floating-chip two"><span class="chip-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 12 4 4L19 6"/></svg></span>Book online today</div>
+      </div>
+    </main>
+    <footer><span>© <span id="year"></span> DrivX · Your journey, in trusted hands.</span><span>Serving Delhi NCR <span class="live-dot" style="display:inline-block;vertical-align:middle;margin:0 5px"></span> <a href="/">drivx.in</a></span></footer>
+  </div>
+  <script>
+    const params=new URLSearchParams(location.search);
+    const store=params.get("store");
+    if(store==="app-store"){
+      document.title="DrivX app — Coming soon to the App Store";
+      document.getElementById("store-title").textContent="Coming soon to the App Store";
+      document.getElementById("store-subtitle").textContent="The iPhone app is in the works. Check back soon for the download link.";
+    }else{
+      document.title="DrivX app — Coming soon to Google Play";
+      document.getElementById("store-title").textContent="Coming soon to Google Play";
+      document.getElementById("store-subtitle").textContent="The Android app is in the works. Check back soon for the download link.";
+    }
+    document.getElementById("year").textContent=new Date().getFullYear();
+  </script>
+</body>
+</html>

@@ -9,6 +9,8 @@
   <meta property="og:description" content="Reliable drivers for the journeys that matter.">
   <meta property="og:url" content="https://drivx.in/">
   <title>DrivX — Your journey, in trusted hands</title>
+  <script src="/analytics-config.js"></script>
+  <script defer src="/analytics.js"></script>
   <style>
     .bottom-cta .drivx-support-inline{box-sizing:border-box;max-width:430px;margin-top:25px;padding-top:18px;border-top:1px solid rgba(255,255,255,.28);font-family:inherit;text-align:left}
     .bottom-cta .drivx-support-inline *{box-sizing:border-box}
@@ -18,6 +20,17 @@
     .bottom-cta .drivx-support-links a{color:#fff;font-family:inherit;font-size:11px;font-weight:600;line-height:1.5;text-decoration:underline;text-decoration-color:rgba(255,255,255,.55);text-underline-offset:3px;overflow-wrap:anywhere;transition:color .18s ease,opacity .18s ease}
     .bottom-cta .drivx-support-links a:hover{color:#191719;text-decoration-color:currentColor}
     @media(max-width:760px){.bottom-cta .drivx-support-inline{max-width:none;margin-top:22px;padding-top:16px}.bottom-cta .drivx-support-links{gap:9px 13px}}
+    .cities-card .eyebrow{display:inline-flex;align-items:center;gap:9px;opacity:1!important}
+    .cities-card .eyebrow:before{content:"";width:8px;height:8px;flex:none;border-radius:50%;background:#7df0ad;box-shadow:0 0 0 0 rgba(125,240,173,.55);animation:drivx-live-pulse 1.8s ease-out infinite}
+    .cities-card h3 em{color:#fff!important}
+    .cities-card .city-list span{align-items:center;gap:10px}
+    .cities-card .city-list b{flex:none;padding:5px 8px;border:1px solid rgba(255,255,255,.2);border-radius:999px;background:rgba(255,255,255,.12);color:#d8ffe7;font-size:8px;letter-spacing:.08em;opacity:1}
+    .cities-card .drivx-live-note{margin:15px 0 0;color:rgba(255,255,255,.82);font-size:10px;line-height:1.55}
+    @keyframes drivx-live-pulse{0%{box-shadow:0 0 0 0 rgba(125,240,173,.55)}70%{box-shadow:0 0 0 8px rgba(125,240,173,0)}100%{box-shadow:0 0 0 0 rgba(125,240,173,0)}}
+    .site-header .driver-app-button{border-color:#2563eb!important;color:#2563eb!important;background:rgba(37,99,235,.06)!important;white-space:nowrap}
+    .site-header .driver-app-button:hover{border-color:#2563eb!important;background:#2563eb!important;color:#fff!important;box-shadow:0 10px 22px rgba(37,99,235,.22)!important}
+    .site-header .driver-app-button:focus-visible{outline:3px solid rgba(37,99,235,.3);outline-offset:3px}
+    @media(prefers-reduced-motion:reduce){.cities-card .eyebrow:before{animation:none}}
   </style>
   <script>
     (()=>{
@@ -26,7 +39,13 @@
         const target=event.target.closest("[data-testid]");
         if(!target)return;
         const id=target.getAttribute("data-testid")||"";
-        if(/^(login-button|header-book-button|hero-book-button|difference-cta-button|bottom-book-button|service-.*-button)$/.test(id)){
+        if(id==="app-store-button"||id==="play-store-button"){
+          event.preventDefault();event.stopImmediatePropagation();go(`/app-coming-soon.html?store=${id==="app-store-button"?"app-store":"google-play"}`);return;
+        }
+        if(id==="driver-app-button"){
+          event.preventDefault();event.stopImmediatePropagation();go("/driver/sign-in");return;
+        }
+        if(/^(header-book-button|hero-book-button|difference-cta-button|bottom-book-button|service-.*-button)$/.test(id)){
           event.preventDefault();event.stopImmediatePropagation();go("/customer/sign-in");return;
         }
         if(id==="app-preview-button"){
@@ -38,7 +57,23 @@
         if(!root)return;
         for(const section of root.querySelectorAll("section")){
           const text=(section.innerText||section.textContent||"").replace(/\s+/g," ").toLowerCase();
-          if(text.includes("inside the experience")||text.includes("drivx / design system"))section.style.setProperty("display","none","important");
+          if((text.includes("inside the experience")||text.includes("drivx / design system"))&&!(section.style.getPropertyValue("display")==="none"&&section.style.getPropertyPriority("display")==="important"))section.style.setProperty("display","none","important");
+        }
+        const cities=root.querySelector(".cities-card");
+        if(cities){
+          const eyebrow=cities.querySelector(".eyebrow");
+          const heading=cities.querySelector("h3");
+          const list=cities.querySelector(".city-list");
+          if(eyebrow&&eyebrow.textContent!=="NOW SERVING DELHI NCR")eyebrow.textContent="NOW SERVING DELHI NCR";
+          if(heading&&heading.innerHTML!=="We’re live across<br><em>Delhi NCR.</em>")heading.innerHTML="We’re live across<br><em>Delhi NCR.</em>";
+          if(list&&list.dataset.drivxLive!=="true"){
+            list.dataset.drivxLive="true";
+            list.innerHTML='<span>Delhi <b>LIVE</b></span><span>Gurugram <b>LIVE</b></span><span>Noida <b>LIVE</b></span><span>Greater Noida <b>LIVE</b></span><span>Ghaziabad <b>LIVE</b></span><span>Faridabad <b>LIVE</b></span>';
+            const note=document.createElement("p");
+            note.className="drivx-live-note";
+            note.textContent="Book a trusted driver across Delhi, Gurugram, Noida and nearby NCR cities. More cities are coming soon.";
+            list.after(note);
+          }
         }
         const cta=root.querySelector("section.bottom-cta");
         if(!cta||cta.querySelector(".drivx-support-inline"))return;

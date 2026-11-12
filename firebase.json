@@ -4,6 +4,14 @@
       "site": "drivx-116de",
       "public": ".firebase/live-site",
       "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+      "headers": [
+        {
+          "source": "/app-coming-soon.html",
+          "headers": [
+            { "key": "Cache-Control", "value": "no-cache, max-age=0, must-revalidate" }
+          ]
+        }
+      ],
       "rewrites": [
         { "source": "/api/**", "function": { "functionId": "driverGateway", "region": "asia-south1" } },
         { "source": "/driver", "destination": "/driver/index.html" },

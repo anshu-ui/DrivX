@@ -249,7 +249,7 @@ export function meteredTrip(input: {
   startOdometerKm: number;
   odometerKm: number;
   tripStartMs: number;
-  /** Scheduled pickup controls the one-time night charge; actual start prices duration. */
+  /** Scheduled pickup anchors the one-time night charge against the trip's actual elapsed duration. */
   scheduledForMs?: number | null;
   waitingMinutes?: number;
   kind: 'estimate' | 'final';

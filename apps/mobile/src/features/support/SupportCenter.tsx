@@ -61,7 +61,7 @@ export function SupportCenter({ role }: { role: LegalRole }) {
         ['How can I get help with an upload or payment?', 'Open a support ticket here and include the document type or Cashfree order reference. Never send an OTP, password or card details.'],
       ]
     : [
-        ['How is the fare estimated?', 'DrivX uses the selected service, route distance or hourly package, and any disclosed eligible night charge. The estimate is shown before you confirm.'],
+        ['How is the fare estimated?', 'DrivX uses the selected service, route distance or hourly package, and a one-time night charge when the scheduled pickup or map-estimated trip overlaps the configured night window. The estimate is shown before you confirm.'],
         ['How do I pay for a trip?', 'Trip fare is paid directly to the driver in cash at the end of the trip. The current Cashfree checkout is only for driver onboarding and driver dues.'],
         ['Can the final fare change?', 'For a metered trip, the server uses the trip odometer reading and the agreed quote snapshot to calculate eligible extra distance or time. The receipt shows the calculation.'],
         ['How do I contact support?', 'Open a ticket here with your booking number and a short description. Do not include OTPs, passwords or payment card details.'],

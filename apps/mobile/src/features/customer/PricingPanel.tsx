@@ -128,7 +128,7 @@ function pricingRows(service: BookingOptionService, roundTrip: boolean): string[
   }
   if (terms.nightSurcharge) {
     const night = terms.nightSurcharge;
-    const window = `the scheduled pickup is between ${hourLabel(night.fromHour)} and ${hourLabel(night.toHour)}`;
+    const window = `the scheduled pickup or map-estimated journey overlaps ${hourLabel(night.fromHour)}–${hourLabel(night.toHour)}`;
     rows.push(
       night.mode === 'flat' || night.mode === 'hourly'
         ? `${money(night.flatPaise)} one-time night charge applies per booking when ${window}. It is added automatically and shown in your fare before booking.`

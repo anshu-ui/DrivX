@@ -407,8 +407,9 @@ export type BookingOptionTerms = {
   waitChargePerMinutePaise: MoneyPaise;
   minimumFarePaise: MoneyPaise;
   /**
-   * Null when nothing is added for a night departure. `flat` is one amount added
-   * once — the ₹150 night allowance — and `percent` is a share of the fare.
+   * Null when no night charge is configured. `flat` is one amount added once
+   * when pickup or estimated route duration overlaps the night window; `percent`
+   * is a share of the fare.
    */
   nightSurcharge: {
     fromHour: number;

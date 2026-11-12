@@ -707,7 +707,7 @@ export default function CustomerHome() {
                   </Text>
                 ) : service?.id === 'chauffeur_outstation' ? (
                   <Text variant="caption" tone="faint">
-                    Outstation one-way packages follow the listed rates through 3,000 km; distance beyond the selected package is ₹10/km. A one-time ₹200 night charge applies when pickup is scheduled from 10 PM to 6 AM.
+                    Outstation one-way packages follow the listed rates through 3,000 km; distance beyond the selected package is ₹10/km. A one-time night charge applies when scheduled pickup is between 10 PM and 6 AM, or the map-estimated trip overlaps those hours.
                   </Text>
                 ) : null}
 

@@ -215,10 +215,10 @@ export const DISTANCE_ROUNDING_MODES = ['one_decimal', 'next_whole_km'] as const
 export type DistanceRoundingMode = (typeof DISTANCE_ROUNDING_MODES)[number];
 
 /**
- * What a night departure costs. `flat` adds one configured amount once to an
- * eligible booking — the ₹150 night allowance the owner approved; `percent` adds
- * a share of the core fare, which is how the earlier rules were written and is
- * still what a zone may want for a surge-shaped night premium.
+ * How a configured night surcharge is calculated. `flat` adds one configured
+ * amount once when pickup or estimated route duration overlaps the window;
+ * `percent` adds a share of the core fare. `hourly` remains in stored data for
+ * compatibility and is treated as a one-time flat charge.
  */
 export const NIGHT_SURCHARGE_MODES = ['flat', 'percent', 'hourly'] as const;
 export type NightSurchargeMode = (typeof NIGHT_SURCHARGE_MODES)[number];

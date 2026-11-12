@@ -39,6 +39,7 @@ module.exports = ({ config }) => {
       ...(config.plugins ?? []),
       '@react-native-firebase/app',
       '@react-native-firebase/auth',
+      '@react-native-firebase/analytics',
       '@react-native-firebase/messaging',
       ['expo-maps', { requestLocationPermission: true, locationPermission: 'DrivX uses your location to show pickup and active trip routes.' }],
       ...(variant.surface === 'driver' ? [[ 'expo-location', {

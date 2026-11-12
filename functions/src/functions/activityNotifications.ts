@@ -1,6 +1,7 @@
 import { onDocumentCreated, onDocumentUpdated } from 'firebase-functions/v2/firestore';
-import { REGION } from '../lib/config';
+import { REGION, RESEND_API_KEY, RESEND_FROM_EMAIL } from '../lib/config';
 import { deliverInbox } from '../lib/notify';
+import { sendCustomerAssignmentEmail } from '../lib/bookingAssignmentEmail';
 
 function text(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
@@ -27,20 +28,42 @@ export const notifyBookingCreated = onDocumentCreated(
 );
 
 export const notifyBookingStateChanged = onDocumentUpdated(
-  { region: REGION, document: 'bookings/{bookingId}' },
+  {
+    region: REGION,
+    document: 'bookings/{bookingId}',
+    secrets: [RESEND_API_KEY, RESEND_FROM_EMAIL],
+    retry: true,
+  },
   async (event) => {
     const before = event.data?.before.data();
     const after = event.data?.after.data();
-    if (!before || !after || before.status === after.status) return;
+    if (!before || !after) return;
+    const statusChanged = before.status !== after.status;
+    const assignmentChanged = before.assignedDriverUid !== after.assignedDriverUid;
+    const driverUid = text(after.assignedDriverUid);
+    const beforeCardUid = text((before.driver as { uid?: unknown } | null)?.uid);
+    const afterCardUid = text((after.driver as { uid?: unknown } | null)?.uid);
+    const assignmentCardChanged = beforeCardUid !== afterCardUid;
+    if (!statusChanged && !assignmentChanged && !assignmentCardChanged) return;
     const bookingId = event.params.bookingId;
     const status = String(after.status ?? '');
     const reference = text(after.reference) ?? bookingId;
     const customerUid = text(after.customerUid);
-    const driverUid = text(after.assignedDriverUid);
     const version = Number(after.stateVersion ?? 0);
     const route = `/trips/${bookingId}`;
 
-    if (customerUid) {
+    // The public driver card is published by a separate Firestore trigger. Wait
+    // until that card matches the assigned UID so the first email includes the
+    // real driver's name, contact, photo and vehicle rather than a placeholder.
+    // The email helper is idempotent per booking/driver/state version.
+    if (
+      status === 'assigned' && driverUid && afterCardUid === driverUid &&
+      (assignmentChanged || statusChanged || assignmentCardChanged)
+    ) {
+      await sendCustomerAssignmentEmail(bookingId, after as Record<string, unknown>);
+    }
+
+    if (statusChanged && customerUid) {
       const driver = after.driver as { fullName?: unknown; phoneE164?: unknown } | null;
       const driverName = text(driver?.fullName);
       const assignedBody = driverName
@@ -57,6 +80,8 @@ export const notifyBookingStateChanged = onDocumentUpdated(
       const message = customerMessage[status];
       if (message) await deliverInbox({ uid: customerUid, id: `booking_${status}_${bookingId}_${version}`, ...message, route, bookingId });
     }
+
+    if (!statusChanged) return;
 
     const driverMessage: Record<string, { type: 'driver_assigned' | 'trip_started' | 'trip_completed' | 'booking_cancelled'; title: string; body: string; route: string }> = {
       assigned: { type: 'driver_assigned', title: 'New trip assigned', body: `You accepted booking ${reference}. Open Trips for the pickup, customer and vehicle details.`, route: '/trips' },

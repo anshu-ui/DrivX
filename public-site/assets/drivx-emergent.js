@@ -845,15 +845,17 @@ function HomePage() {
         "x-id": "App_60_478",
         "x-dynamic": "false",
         children: [/*#__PURE__*/(0,react_jsx_dev_runtime__WEBPACK_IMPORTED_MODULE_19__.jsxDEV)("button", {
-          className: "login-button",
-          "data-testid": "login-button",
+          className: "outline-button driver-app-button",
+          "data-testid": "driver-app-button",
+          "aria-label": "Open DrivX Captain driver sign in",
+          title: "Driver sign in",
           "x-file-name": "App",
           "x-line-number": "60",
           "x-column": "510",
           "x-component": "button",
           "x-id": "App_60_510",
           "x-dynamic": "false",
-          children: "Log in"
+          children: "DrivX Captain"
         }, void 0, false, {
           fileName: _jsxFileName,
           lineNumber: 60,

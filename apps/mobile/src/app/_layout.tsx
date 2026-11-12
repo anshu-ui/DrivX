@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SystemUI from 'expo-system-ui';
@@ -12,6 +12,7 @@ import AdminApp from '../admin/AdminApp';
 import { usePushRegistrationSync } from '../features/customer/pushNotifications';
 import { PushPermissionGate } from '../components/PushPermissionGate';
 import { appSurface } from '../lib/appSurface';
+import { trackAppScreen } from '../lib/analytics';
 import '../features/driver/locationTask';
 
 const queryClient = new QueryClient({
@@ -38,8 +39,13 @@ const queryClient = new QueryClient({
  */
 function RootStack() {
   const { status, user, surface, needsProfile, signOut } = useSession();
+  const pathname = usePathname();
   usePushRegistrationSync(status === 'signed_in' ? user : null);
   const stackKey = status === 'signed_in' ? `${user?.uid ?? 'anon'}:${surface}` : 'guest';
+
+  useEffect(() => {
+    trackAppScreen(pathname, surface ?? appSurface);
+  }, [pathname, surface]);
 
   const stack = (
     <Stack

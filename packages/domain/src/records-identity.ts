@@ -547,7 +547,7 @@ export type PricingRuleRecord = {
      */
     fromHour: number;
     toHour: number;
-    /** `flat` charges once; `percent` charges a fare share; `hourly` prorates `flatPaise` by eligible night hours. */
+    /** `flat` and legacy `hourly` both charge `flatPaise` once when the journey overlaps the night window; `percent` charges a fare share. */
     mode: NightSurchargeMode;
     flatPaise: MoneyPaise;
     rate: number;
