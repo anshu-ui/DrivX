@@ -18,6 +18,7 @@ import {
 import { db, epochMs, rtdb, serverTimestamp } from '../lib/admin';
 import { CALLABLE_OPTIONS } from '../lib/config';
 import { offerTrip, workFactsFor } from '../lib/dispatch';
+import { measureRoute } from '../lib/routes';
 import { deliverInbox } from '../lib/notify';
 import { failedPrecondition, notFound, parseInput, permissionDenied } from '../lib/errors';
 import {
@@ -379,6 +380,39 @@ const locationFields = {
   speedMps: z.number().min(0).max(200).nullish(),
 };
 
+function geoPointFromPlace(value: unknown): { lat: number; lng: number } | null {
+  if (!value || typeof value !== 'object') return null;
+  const location = (value as { location?: unknown }).location;
+  if (!location || typeof location !== 'object') return null;
+  const lat = Number((location as { lat?: unknown }).lat);
+  const lng = Number((location as { lng?: unknown }).lng);
+  return Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180
+    ? { lat, lng }
+    : null;
+}
+
+/** Recalculate the driver's road ETA at most every four minutes while en route. */
+async function refreshDriverEnRouteEta(booking: Record<string, unknown>, bookingId: string, origin: { lat: number; lng: number }, now: number): Promise<void> {
+  if (booking.status !== 'driver_en_route') return;
+  const previous = booking.driverEnRouteEta && typeof booking.driverEnRouteEta === 'object'
+    ? booking.driverEnRouteEta as Record<string, unknown>
+    : null;
+  const lastCalculatedAt = epochMs(previous?.calculatedAtMs);
+  if (lastCalculatedAt !== null && now - lastCalculatedAt < 4 * 60_000) return;
+  const pickup = geoPointFromPlace(booking.pickup);
+  if (!pickup) return;
+  const route = await measureRoute(origin, pickup, now);
+  if (route.durationSeconds === null) return;
+  const eta = {
+    minutes: Math.max(0, Math.ceil(route.durationSeconds / 60)),
+    calculatedAtMs: now,
+    distanceMeters: route.distanceMeters,
+    source: route.source,
+    trafficAware: false,
+  };
+  await db().doc(bookingRefPath(bookingId)).update({ driverEnRouteEta: eta, updatedAtMs: serverTimestamp() });
+}
+
 const availabilityInput = z.discriminatedUnion('state', [
   z.object({ state: z.literal('online'), ...locationFields }),
   z.object({ state: z.enum(['offline', 'break']) }),
@@ -480,7 +514,7 @@ export async function setAvailabilityForCaller(caller: Caller, raw: unknown) {
     const work = await workFactsFor(caller.uid);
     if (work.outstandingPaise > 0) {
       throw failedPrecondition(
-        'You have commission outstanding, so new trips are held until the office records the payment.',
+        `You have ₹${(work.outstandingPaise / 100).toFixed(2)} in commission outstanding, so new trips are held until the office records the payment.`,
       );
     }
     if (work.carryingBooking) {
@@ -625,6 +659,12 @@ export async function publishDriverLocationForCaller(caller: Caller, raw: unknow
     rtdb().ref(`${activePath}/location`).set(location),
     rtdb().ref(activePath).update({ updatedAtMs: now, status: booking.status }),
   ]);
+  try {
+    await refreshDriverEnRouteEta(booking, input.bookingId, { lat: input.lat, lng: input.lng }, now);
+  } catch (error) {
+    // A transient Routes/Firestore ETA update must not interrupt location sharing.
+    console.warn(JSON.stringify({ level: 'warn', fn: 'publishDriverLocation', outcome: 'eta_refresh_failed', bookingId: input.bookingId, detail: String((error as Error).message ?? error) }));
+  }
   return { published: true, tracking: 'trip', receivedAtMs: now };
 }
 
@@ -773,7 +813,7 @@ export const manualAssign = onCall(CALLABLE_OPTIONS, async (request) => {
   const destination = (booking.destination as { label?: string } | null)?.label ?? 'the drop';
   const customerNotes = (booking.customerPreferences as { notes?: unknown } | null)?.notes;
   await deliverInbox({
-    uid: input.driverUid, id: `offer_${assignmentId}`, type: 'assignment_offer',
+    uid: input.driverUid, id: `offer_${assignmentId}`, type: 'assignment_offer', surface: 'driver',
     title: `Trip ${String(booking.reference ?? input.bookingId)} is ready for you`,
     body: `${pickup} to ${destination}. This offer stays open until a driver accepts or declines it.`,
     route: '/', bookingId: input.bookingId,

@@ -19,6 +19,7 @@ import {
   type DriverDueKind,
 } from '@drivx/domain';
 import { toEpochMs } from '@drivx/firebase-client';
+import { callFunction } from '@drivx/firebase-client';
 import { firebaseClients } from '../../lib/firebase';
 import { ConsoleHeader, StaffGate, describe, stamp, useReviewerSession, type Reviewer } from '../../lib/staff-session';
 
@@ -73,6 +74,13 @@ type Group = {
 };
 
 type ViewState = { rows: DueRow[] } | { error: string };
+
+type DriverReport = {
+  driver: { uid: string; name: string; driverId: string | null; phone: string | null };
+  totals: { bookingCount: number; completedCount: number; cancelledCount: number; grossFarePaise: number; driverNetPaise: number; commissionTotalPaise: number; commissionPaidPaise: number; commissionOutstandingPaise: number };
+  limited: boolean;
+  bookings: Array<{ id: string; reference: string; status: string; createdAtMs: number | null; completedAtMs: number | null; farePaise: number; fareKind: 'final' | 'estimate' | null; commissionPaise: number | null; commissionStatus: string | null }>;
+};
 
 const KIND_LABEL: Record<DriverDueKind, string> = {
   onboarding_fee: 'Onboarding fee',
@@ -166,6 +174,48 @@ function DuesBoard({ reviewer }: { reviewer: Reviewer }) {
   const [view, setView] = useState<ViewState | null>(null);
   const [faces, setFaces] = useState<Record<string, DriverFace>>({});
   const [namesError, setNamesError] = useState<string | null>(null);
+  const [drivers, setDrivers] = useState<Array<DriverFace & { uid: string }>>([]);
+  const [driverFilter, setDriverFilter] = useState('');
+  const [selectedDriverUid, setSelectedDriverUid] = useState<string | null>(null);
+  const [driverReport, setDriverReport] = useState<DriverReport | null>(null);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void getDocs(collection(firebaseClients().firestore, COLLECTIONS.driverProfiles))
+      .then((snap) => {
+        if (!active) return;
+        const rows = snap.docs.map((row) => {
+          const data = row.data();
+          return {
+            uid: row.id,
+            fullName: typeof data.fullName === 'string' && data.fullName.trim() ? data.fullName : 'No name on file',
+            phoneE164: typeof data.phoneE164 === 'string' ? data.phoneE164 : '—',
+            driverId: typeof data.driverId === 'string' ? data.driverId : null,
+            availabilityState: typeof data.availabilityState === 'string' ? data.availabilityState : null,
+          };
+        }).sort((a, b) => a.fullName.localeCompare(b.fullName));
+        setDrivers(rows);
+      })
+      .catch((error) => { if (active) setNamesError(describe(error)); });
+    return () => { active = false; };
+  }, []);
+
+  async function openDriverReport(uid: string) {
+    setSelectedDriverUid(uid);
+    setDriverReport(null);
+    setReportError(null);
+    setReportLoading(true);
+    try {
+      const result = await callFunction<{ driverUid: string }, DriverReport>(firebaseClients(), 'getAdminDriverEarningsReport', { driverUid: uid });
+      setDriverReport(result);
+    } catch (error) {
+      setReportError(describe(error));
+    } finally {
+      setReportLoading(false);
+    }
+  }
 
 
   useEffect(() => {
@@ -280,6 +330,27 @@ function DuesBoard({ reviewer }: { reviewer: Reviewer }) {
         </p>
       </section>
 
+      <section className="mt-6 rounded-card border border-line bg-surface p-6 shadow-card">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div><h2 className="text-lg font-semibold">Driver earnings & trip history</h2><p className="mt-1 text-sm text-ink-muted">Choose a driver to review bookings, cancellations, trip fares and commission settled or outstanding.</p></div>
+          <label className="grid gap-1 text-xs font-semibold text-ink-muted">Find driver<input value={driverFilter} onChange={(event) => setDriverFilter(event.target.value)} placeholder="Name, phone or driver ID" className="min-h-10 w-64 rounded-control border border-line bg-surface px-3 text-sm text-ink" /></label>
+        </div>
+        <div className="mt-4 max-h-56 overflow-y-auto divide-y divide-line rounded-xl border border-line">
+          {drivers.filter((driver) => `${driver.fullName} ${driver.phoneE164} ${driver.driverId ?? ''}`.toLowerCase().includes(driverFilter.trim().toLowerCase())).map((driver) => <button key={driver.uid} type="button" onClick={() => void openDriverReport(driver.uid)} className={`flex w-full flex-wrap items-center justify-between gap-2 px-4 py-3 text-left hover:bg-surface-muted ${selectedDriverUid === driver.uid ? 'bg-accent-soft' : ''}`}><span><span className="block text-sm font-semibold">{driver.fullName}</span><span className="text-xs text-ink-muted">{driver.driverId ?? 'No driver ID'} · {driver.phoneE164}</span></span><span className="text-xs font-semibold text-accent">View report →</span></button>)}
+          {drivers.length === 0 ? <p className="p-4 text-sm text-ink-muted">Loading driver accounts…</p> : null}
+        </div>
+        {reportError ? <p role="alert" className="mt-4 rounded-control bg-danger-soft p-3 text-sm text-badge-danger">Could not load this driver report: {reportError}</p> : null}
+        {reportLoading ? <p className="mt-4 text-sm text-ink-muted">Loading driver history…</p> : null}
+        {driverReport ? <div className="mt-5 border-t border-line pt-5">
+          <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-xl font-bold">{driverReport.driver.name}</h3><p className="mt-1 text-sm text-ink-muted">{driverReport.driver.driverId ?? 'No driver ID'} · {driverReport.driver.phone ?? 'No phone on file'} · {driverReport.driver.uid}</p></div><button type="button" onClick={() => { setSelectedDriverUid(null); setDriverReport(null); }} className="rounded-control border border-line px-3 py-2 text-xs font-semibold">Close details</button></div>
+          <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{[
+            ['Bookings', driverReport.totals.bookingCount], ['Completed', driverReport.totals.completedCount], ['Cancelled', driverReport.totals.cancelledCount], ['Trip fares', formatINR(driverReport.totals.grossFarePaise)], ['Driver net', formatINR(driverReport.totals.driverNetPaise)], ['Commission billed', formatINR(driverReport.totals.commissionTotalPaise)], ['Commission paid', formatINR(driverReport.totals.commissionPaidPaise)], ['Commission outstanding', formatINR(driverReport.totals.commissionOutstandingPaise)],
+          ].map(([label, value]) => <div key={String(label)} className="rounded-xl bg-surface-muted p-3"><dt className="text-xs text-ink-muted">{label}</dt><dd className="mt-1 font-mono text-lg font-bold">{value}</dd></div>)}</dl>
+          {driverReport.limited ? <p className="mt-3 text-xs text-badge-warning">Showing totals and the latest 5,000 assigned bookings; older trip rows exceed the report limit.</p> : null}
+          <div className="mt-5 overflow-x-auto"><table className="w-full min-w-[680px] text-left text-sm"><thead><tr className="border-b border-line text-xs uppercase text-ink-muted"><th className="py-2 pr-3">Booking</th><th className="py-2 pr-3">Status</th><th className="py-2 pr-3">Created / completed</th><th className="py-2 pr-3">Fare</th><th className="py-2 pr-3">Commission</th></tr></thead><tbody>{driverReport.bookings.slice(0, 100).map((row) => <tr key={row.id} className="border-b border-line"><td className="py-2 pr-3 font-medium">{row.reference}<span className="block text-[10px] text-ink-faint">{row.id}</span></td><td className="py-2 pr-3 capitalize">{row.status.replaceAll('_', ' ')}</td><td className="py-2 pr-3 text-xs text-ink-muted">{stamp(row.createdAtMs)}{row.completedAtMs ? <span className="block">Done {stamp(row.completedAtMs)}</span> : null}</td><td className="py-2 pr-3 font-mono">{row.farePaise > 0 ? <>{formatINR(row.farePaise)}<span className="block text-[10px] text-ink-faint">{row.fareKind}</span></> : '—'}</td><td className="py-2 pr-3 font-mono">{row.commissionPaise === null ? '—' : `${formatINR(row.commissionPaise)} · ${row.commissionStatus}`}</td></tr>)}</tbody></table>{driverReport.bookings.length > 100 ? <p className="mt-2 text-xs text-ink-muted">Showing latest 100 of {driverReport.bookings.length} booking rows; totals above include all loaded rows.</p> : null}</div>
+        </div> : selectedDriverUid && !reportLoading && !reportError ? <p className="mt-4 text-sm text-ink-muted">No report available.</p> : null}
+      </section>
+
       {rows === null && !listError ? <p className="mt-6 text-sm text-ink-muted">Loading…</p> : null}
 
 
@@ -333,13 +404,6 @@ function DuesBoard({ reviewer }: { reviewer: Reviewer }) {
 }
 
 function DriverDues({ group, canRecord }: { group: Group; canRecord: boolean }) {
-
-  const shortBy = group.rows
-    .map((row) => row.bookingId?.replace(/^bk-/, '').slice(0, 8))
-    .filter((id): id is string => Boolean(id));
-
-
-
   return (
     <article className="rounded-card border border-line bg-surface p-6 shadow-card">
       <div className="flex flex-wrap items-start justify-between gap-4">

@@ -51,7 +51,7 @@ const DOC_BASE =
 /** The same path without the host: Firestore wants resource names inside a write. */
 const DOC_RESOURCE = `projects/${PROJECT_ID}/databases/(default)/documents`;
 /** The onboarding fee default: ₹500 + 5% GST, expressed in paise. */
-const FEE = { base: 50_000, gst: 2_500, total: 52_500 };
+const FEE = { base: 50_000, gstRate: 0.05, gst: 2_500, total: 52_500 };
 
 const failures = [];
 function check(label, ok, detail) {
@@ -178,7 +178,7 @@ check(
   seededDue.data()?.basePaise === FEE.base &&
     seededDue.data()?.gstPaise === FEE.gst &&
     seededDue.data()?.totalPaise === FEE.total &&
-    seededDue.data()?.gstRate === 0,
+    seededDue.data()?.gstRate === FEE.gstRate,
   `${seededDue.data()?.basePaise}+${seededDue.data()?.gstPaise}=${seededDue.data()?.totalPaise} paise`,
 );
 check('and it is unpaid, because nobody has collected it', seededDue.data()?.status === 'unpaid');

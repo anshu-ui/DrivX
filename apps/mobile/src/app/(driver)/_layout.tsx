@@ -108,6 +108,10 @@ export default function DriverLayout() {
           }}
         />
         <Tabs.Screen
+          name="support"
+          options={{ title: 'Help', tabBarIcon: ({ color, size }) => <TabIcon name="help-circle-outline" color={color} size={size} /> }}
+        />
+        <Tabs.Screen
           name="account"
           options={{
             title: 'Account',
@@ -116,9 +120,6 @@ export default function DriverLayout() {
         />
         <Tabs.Screen name="rewards" options={{ title: 'Rewards', tabBarIcon: ({ color, size }) => <TabIcon name="gift-outline" color={color} size={size} /> }} />
         <Tabs.Screen name="documents" options={{ tabBarButton: () => null, tabBarItemStyle: { display: 'none' } }} />
-        {/* Opened from Account, not from the bar: five tabs is the practical limit
-            on a phone, and a driver has no reason to sit on an empty ticket desk. */}
-        <Tabs.Screen name="support" options={{ tabBarButton: () => null, tabBarItemStyle: { display: 'none' } }} />
       </Tabs>
       </ThemeProvider>
     </AppSurfaceGate>

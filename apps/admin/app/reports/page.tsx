@@ -52,9 +52,9 @@ export default function ReportsPage() {
     return () => { stopBookings(); stopPayments(); };
   }, []);
 
-  const now = Date.now();
   const days = useMemo(() => Array.from({ length: 7 }, (_, index) => { const date = new Date(); date.setHours(12, 0, 0, 0); date.setDate(date.getDate() - (6 - index)); const key = timeKey(date.getTime(), 'day'); return { key, label: new Intl.DateTimeFormat('en-IN', { weekday: 'short', timeZone: 'Asia/Kolkata' }).format(date) }; }), []);
   const months = useMemo(() => Array.from({ length: 6 }, (_, index) => { const date = new Date(); date.setDate(1); date.setHours(12, 0, 0, 0); date.setMonth(date.getMonth() - (5 - index)); const key = timeKey(date.getTime(), 'month'); return { key, label: new Intl.DateTimeFormat('en-IN', { month: 'short', timeZone: 'Asia/Kolkata' }).format(date) }; }), []);
+  const currentMonth = months.at(-1)?.key;
   const bookings = feed?.bookings ?? []; const payments = feed?.payments ?? [];
   const dailyBookings = days.map((day) => ({ label: day.label, value: bookings.filter((row) => row.createdAtMs && timeKey(row.createdAtMs, 'day') === day.key).length }));
   const monthlyBookings = months.map((month) => ({ label: month.label, value: bookings.filter((row) => row.createdAtMs && timeKey(row.createdAtMs, 'month') === month.key).length }));
@@ -63,7 +63,7 @@ export default function ReportsPage() {
   const completedFarePaise = completed.reduce((sum, row) => sum + row.farePaise, 0);
   const cancelled = bookings.filter((row) => row.status === 'cancelled').length;
   const onlinePaymentPaise = payments.reduce((sum, row) => sum + row.amountPaise, 0);
-  const paidThisMonth = payments.filter((row) => row.createdAtMs && timeKey(row.createdAtMs, 'month') === timeKey(now, 'month')).reduce((sum, row) => sum + row.amountPaise, 0);
+  const paidThisMonth = payments.filter((row) => row.createdAtMs && timeKey(row.createdAtMs, 'month') === currentMonth).reduce((sum, row) => sum + row.amountPaise, 0);
 
   return <main className="flex-1"><StaffGate checked={checked} reviewer={reviewer} claim="staff" signInHeading="Staff sign-in" signInBlurb="Only the administrator and operations team can read company-wide booking and payment reports.">{(signedIn) => <>
     <ConsoleHeader title="Reports & growth" blurb="Live booking activity, completed trip fares and Cashfree-confirmed driver payments." reviewer={signedIn} links={[{ href: '/', label: 'Overview' }, { href: '/bookings', label: 'Bookings & dispatch' }, { href: '/verification', label: 'Driver reviews' }, { href: '/dues', label: 'Earnings & dues' }, { href: '/reports', label: 'Reports & growth' }, { href: '/pricing', label: 'Fare settings' }, { href: '/rewards', label: 'Rewards & loyalty' }]} />

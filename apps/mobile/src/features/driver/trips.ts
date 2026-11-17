@@ -9,10 +9,30 @@ import {
   type FareBreakdown,
   type Place,
 } from '@drivx/domain';
-import { toEpochMs } from '@drivx/firebase-client';
+import { callFunction, toEpochMs } from '@drivx/firebase-client';
 import { useSession } from '../auth/AuthProvider';
 import { firebase } from '../../lib/firebase';
 import { fareOf, placeOf } from '../customer/queries';
+
+export type EarningsTotals = { trips: number; pricedTrips: number; grossPaise: number; commissionPaise: number; netPaise: number };
+export type DriverEarningsSummary = {
+  today: EarningsTotals;
+  week: EarningsTotals;
+  month: EarningsTotals;
+  days: { date: string; trips: number; grossPaise: number; commissionPaise: number; netPaise: number }[];
+  limited: boolean;
+};
+
+/** Full, server-aggregated earnings periods; the server scopes this to the signed-in driver. */
+export function useDriverEarningsSummary() {
+  const { user } = useSession();
+  return useQuery<DriverEarningsSummary>({
+    queryKey: ['driverEarningsSummary', user?.uid ?? 'anon'],
+    enabled: Boolean(user),
+    staleTime: 60_000,
+    queryFn: () => callFunction<Record<string, never>, DriverEarningsSummary>(firebase(), 'getDriverEarningsSummary', {}),
+  });
+}
 
 /**
  * The trips this account drove to the end.

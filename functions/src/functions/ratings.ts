@@ -165,6 +165,7 @@ export async function rateTripForCaller(caller: Caller, rawInput: unknown) {
     const said = describeTags(outcome.tags);
     await deliverInbox({
       uid: driverUid,
+      surface: 'driver',
       id: `rated_${input.bookingId}`,
       type: 'driver_rated',
       title: `You were rated on trip ${reference}`,

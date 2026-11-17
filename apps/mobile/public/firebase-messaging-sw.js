@@ -24,7 +24,15 @@ self.addEventListener('notificationclick', (event) => {
   const data = event.notification.data || {};
   const surface = self.location.pathname.split('/').filter(Boolean)[0];
   const base = ['customer', 'driver', 'admin'].includes(surface) ? `/${surface}` : '/customer';
-  const target = new URL(data.route || `${base}/trips`, self.location.origin).href;
+  const route = typeof data.route === 'string' && data.route.startsWith('/') && !data.route.startsWith('//')
+    ? data.route
+    : '/';
+  const targetPath = route === '/'
+    ? `${base}/`
+    : route === base || route.startsWith(`${base}/`)
+      ? route
+      : `${base}${route}`;
+  const target = new URL(targetPath, self.location.origin).href;
   event.waitUntil((async () => {
     const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     for (const client of windows) {

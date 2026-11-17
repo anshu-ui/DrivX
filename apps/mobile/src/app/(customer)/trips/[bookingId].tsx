@@ -6,6 +6,7 @@ import { DriverCardPanel } from '../../../features/customer/DriverCardPanel';
 import { RateDriverPanel } from '../../../features/customer/RateDriverPanel';
 import { TripCodePanel } from '../../../features/customer/TripCodePanel';
 import { TripMapPanel } from '../../../features/customer/TripMapPanel';
+import { TripTrackingShare } from '../../../features/customer/TripTrackingShare';
 import { useLiveCustomerFix, useLiveDriverFix, usePublishCustomerLocation } from '../../../features/customer/liveLocation';
 import { useBookingDetail } from '../../../features/customer/queries';
 import {
@@ -127,7 +128,7 @@ export default function TripDetail() {
           ) : null}
           {booking.etaMinutes !== null ? (
             <Text variant="caption" tone="muted">
-              Driver estimated {booking.etaMinutes} min from the pickup point
+              Driver is about {booking.etaMinutes} min from pickup
             </Text>
           ) : null}
           {booking.status === 'cancelled' ? (
@@ -146,6 +147,22 @@ export default function TripDetail() {
           ) : null}
         </Card>
 
+        {booking.status === 'requested' || booking.status === 'searching_driver' ? (
+          <Card tone="inset" style={{ gap: theme.spacing.xs }}>
+            <Text variant="bodyStrong" tone="brand">We’re finding your driver</Text>
+            <Text variant="caption" tone="muted">
+              If no driver has accepted yet, a later pickup time or a nearby main-road pickup can improve availability. This request stays active until you cancel it; check the trip screen for updates.
+            </Text>
+          </Card>
+        ) : null}
+
+        {booking.status === 'completed' ? (
+          <Card tone="inset" style={{ gap: theme.spacing.xs }}>
+            <Text variant="subheading" tone="brand">Thanks for riding with DrivX</Text>
+            <Text variant="caption" tone="muted">Your trip is complete. The final fare and trip record are saved here. Thank you for choosing DrivX.</Text>
+          </Card>
+        ) : null}
+
         {booking.assignedDriverUid ? (
           <TripMapPanel
             pickup={booking.pickup}
@@ -156,6 +173,16 @@ export default function TripDetail() {
             title="Live driver map"
           />
         ) : null}
+
+        {booking.serviceTypeId === 'chauffeur_outstation' ? (
+          <Card tone="inset">
+            <Text variant="caption" tone="muted">
+              Outstation trip: the driver’s meals during the trip are arranged by the customer.
+            </Text>
+          </Card>
+        ) : null}
+
+        {tripStarted ? <TripTrackingShare bookingId={booking.id} /> : null}
 
         <View style={{ gap: theme.spacing.sm }}>
           {booking.driver ? (
@@ -192,6 +219,14 @@ export default function TripDetail() {
                   pickup — {drivenKm} km driven
                 </Text>
               </View>
+            ) : null}
+            {booking.estimatedDistanceMeters !== null ? (
+              <Text variant="caption" tone="muted">
+                Estimated route · {(booking.estimatedDistanceMeters / 1000).toFixed(1)} km
+                {booking.estimatedDurationSeconds !== null
+                  ? ` · ${Math.round(booking.estimatedDurationSeconds / 60)} min`
+                  : ''}
+              </Text>
             ) : null}
             {fare.items.map((item) => (
               <View

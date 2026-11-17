@@ -304,7 +304,9 @@ describe('profiles', () => {
         dutyTermsAcceptedAtMs: 1,
       }),
     );
-    await expectDenied(updateDoc(doc(db, 'driverProfiles', DRIVER_ONE), { availabilityState: 'online' }));
+    // The seeded value is already `online`; write a different state so this
+    // actually exercises the server-owned field guard instead of a no-op.
+    await expectDenied(updateDoc(doc(db, 'driverProfiles', DRIVER_ONE), { availabilityState: 'offline' }));
     await expectDenied(updateDoc(doc(db, 'driverProfiles', DRIVER_ONE), { availabilityState: 'break' }));
     await expectDenied(updateDoc(doc(db, 'driverProfiles', DRIVER_ONE), { availabilitySinceMs: 1000 }));
     // Reading their own row is untouched — the Duty screen shows the state the
@@ -713,6 +715,7 @@ describe('support tickets', () => {
     await expectAllowed(
       setDoc(doc(ctx.firestore(), 'supportTickets', runId('tk-9')), {
         openedByUid: CUSTOMER_ONE,
+        forRole: 'customer',
         bookingId: BOOKING_ONE,
         subject: 'Late arrival',
         body: 'Driver was 20 minutes late.',
@@ -773,6 +776,25 @@ describe('support tickets', () => {
     expect(
       (await expectAllowed(getDoc(doc(ctxFor(env, ADMIN_UID, 'admin').firestore(), 'supportTickets', 'tk-1')))).exists(),
     ).toBe(true);
+  });
+
+  it('keeps customer and driver app ticket lists separated by the selected role query', async () => {
+    await seedViaServer(env, async (owner) => {
+      await setDoc(doc(owner.firestore(), 'supportTickets', 'tk-same-account-driver'), {
+        id: 'tk-same-account-driver', openedByUid: CUSTOMER_ONE, forRole: 'driver',
+        subject: 'Driver account issue', body: 'A driver-only request.', status: 'open',
+        priority: 'normal', assignedAdminUid: null, createdAtMs: 2,
+      });
+    });
+    const dualRoleDb = ctxFor(env, CUSTOMER_ONE, 'dual').firestore();
+    const customerTickets = await expectAllowed(getDocs(query(
+      collection(dualRoleDb, 'supportTickets'),
+      where('openedByUid', '==', CUSTOMER_ONE),
+      where('forRole', '==', 'customer'),
+      orderBy('createdAtMs', 'desc'),
+      limit(20),
+    )));
+    expect(customerTickets.docs.map((row) => row.id)).toEqual(['tk-1']);
   });
 });
 

@@ -133,6 +133,7 @@ async function notifyCodes(input: {
   const trip = input.reference ?? input.bookingId;
   await deliverInbox({
     uid: input.uid,
+    surface: 'customer',
     id: `codes_${input.bookingId}`,
     type: 'trip_codes',
     title: `Your codes for trip ${trip}`,
@@ -140,6 +141,11 @@ async function notifyCodes(input: {
       `Start code ${input.start} — read it to the driver at the car, with the opening odometer reading. ` +
       `End code ${input.end} — read it at the drop, when the trip is being closed. ` +
       'Neither code expires, and each one works once.',
+    // OTPs remain readable only inside the signed-in customer's app inbox. The
+    // lock-screen push is just an alert, so a driver or passer-by cannot read a
+    // start/end code from notification previews.
+    pushTitle: `Trip codes ready · ${trip}`,
+    pushBody: 'Open DrivX to view your start and end codes. Keep them private.',
     route: `/trips/${input.bookingId}`,
     bookingId: input.bookingId,
   });

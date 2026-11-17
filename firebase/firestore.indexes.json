@@ -5,7 +5,40 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "customerUid", "order": "ASCENDING" },
+        { "fieldPath": "reference", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "bookings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "assignedDriverUid", "order": "ASCENDING" },
+        { "fieldPath": "reference", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "bookings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "customerUid", "order": "ASCENDING" },
         { "fieldPath": "createdAtMs", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "bookings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "assignedDriverUid", "order": "ASCENDING" },
+        { "fieldPath": "createdAtMs", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "bookings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "assignedDriverUid", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "completedAtMs", "order": "DESCENDING" }
       ]
     },
     {
@@ -163,6 +196,7 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "openedByUid", "order": "ASCENDING" },
+        { "fieldPath": "forRole", "order": "ASCENDING" },
         { "fieldPath": "createdAtMs", "order": "DESCENDING" }
       ]
     },

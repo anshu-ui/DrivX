@@ -1,7 +1,7 @@
 import Constants from 'expo-constants';
-import { createElement, useEffect, useRef } from 'react';
+import { createElement } from 'react';
 import { AppleMaps, GoogleMaps } from 'expo-maps';
-import { Animated, Platform, View } from 'react-native';
+import { Platform, View } from 'react-native';
 import { Card, Text, useTheme } from '@drivx/ui';
 import type { Place } from '@drivx/domain';
 import type { LiveDriverFix } from './liveLocation';
@@ -33,7 +33,6 @@ export function TripMapPanel({
   compact?: boolean;
 }) {
   const theme = useTheme();
-  const routeProgress = useRef(new Animated.Value(0)).current;
   const pickupPoint = coordinates(pickup);
   const destinationPoint = coordinates(destination);
   const driverPoint = driverFix ? { latitude: driverFix.lat, longitude: driverFix.lng } : null;
@@ -42,12 +41,15 @@ export function TripMapPanel({
   const polylines = routeCoordinates.length > 1
     ? [{ id: 'trip-route', coordinates: routeCoordinates, color: theme.colors.primary, width: 6 }]
     : [];
-  const points = [pickupPoint, destinationPoint, driverPoint, customerPoint, ...routeCoordinates].filter((point) => point !== null);
+  // Keep the camera fitted to the booked route. Driver/customer GPS fixes are
+  // markers only; using them as the camera centre made the map jump on every
+  // location refresh.
+  const points = [pickupPoint, destinationPoint, ...routeCoordinates].filter((point) => point !== null);
 
   // The first booking frame still shows a usable city map before the customer
   // chooses an address. This is only the launch-area camera centre; no pin or
   // current-location claim is rendered until we have a real coordinate.
-  const centre = driverPoint ?? pickupPoint ?? points[0] ?? { latitude: 28.4595, longitude: 77.0266 };
+  const centre = pickupPoint ?? destinationPoint ?? points[0] ?? { latitude: 28.4595, longitude: 77.0266 };
   const latitudeSpread = points.length ? Math.max(...points.map((point) => Math.abs(point.latitude - centre.latitude))) : 0;
   const longitudeSpread = points.length ? Math.max(...points.map((point) => Math.abs(point.longitude - centre.longitude))) : 0;
   const spread = Math.max(latitudeSpread, longitudeSpread);
@@ -56,16 +58,6 @@ export function TripMapPanel({
   const webMapUrl = pickupPoint && destinationPoint
     ? `https://maps.google.com/maps?saddr=${pickupPoint.latitude},${pickupPoint.longitude}&daddr=${destinationPoint.latitude},${destinationPoint.longitude}&output=embed`
     : `https://maps.google.com/maps?q=${centre.latitude},${centre.longitude}&z=${zoom}&output=embed`;
-
-  useEffect(() => {
-    if (!pickupPoint || !destinationPoint) return;
-    const loop = Animated.loop(Animated.sequence([
-      Animated.timing(routeProgress, { toValue: 1, duration: 3_200, useNativeDriver: false }),
-      Animated.timing(routeProgress, { toValue: 0, duration: 0, useNativeDriver: false }),
-    ]));
-    loop.start();
-    return () => loop.stop();
-  }, [destinationPoint?.latitude, destinationPoint?.longitude, pickupPoint?.latitude, pickupPoint?.longitude, routeProgress]);
 
   return (
     <Card style={{ gap: compact ? 0 : theme.spacing.sm, padding: 0, overflow: 'hidden' }}>
@@ -89,9 +81,8 @@ export function TripMapPanel({
             <View style={{ height: 3, borderRadius: 2, backgroundColor: theme.colors.border }} />
             <View style={{ position: 'absolute', left: 2, width: 8, height: 8, borderRadius: 4, backgroundColor: theme.colors.primary }} />
             <View style={{ position: 'absolute', right: 2, width: 8, height: 8, borderRadius: 2, backgroundColor: theme.colors.textBrand }} />
-            <Animated.View style={{ position: 'absolute', left: routeProgress.interpolate({ inputRange: [0, 1], outputRange: ['5%', '92%'] }), width: 10, height: 10, borderRadius: 5, backgroundColor: theme.palette.brandBright, borderWidth: 2, borderColor: theme.colors.surface }} />
           </View>
-          <Text variant="caption" tone="faint" style={{ marginTop: 4 }}>Route preview · the moving marker is decorative, not a live driver location</Text>
+          <Text variant="caption" tone="faint" style={{ marginTop: 4 }}>Route preview · live driver location appears here after the trip starts</Text>
         </View>
       ) : null}
       {Platform.OS === 'android' && !extra?.mapsAndroidConfigured ? (
@@ -150,9 +141,7 @@ export function TripMapPanel({
         <View style={{ height, width: '100%', overflow: 'hidden', backgroundColor: theme.colors.surfaceMuted }}>
           {createElement('iframe', {
             title: title,
-            src: (driverPoint ?? customerPoint)
-              ? `https://maps.google.com/maps?q=${(driverPoint ?? customerPoint)!.latitude},${(driverPoint ?? customerPoint)!.longitude}&z=15&output=embed`
-              : webMapUrl,
+            src: webMapUrl,
             loading: 'lazy',
             allowFullScreen: true,
             referrerPolicy: 'no-referrer-when-downgrade',

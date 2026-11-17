@@ -60,6 +60,13 @@ service cloud.firestore {
       return hasRole('customer');
     }
 
+    function canReadNotification(data) {
+      return data.surface == 'all' ||
+        (data.surface == 'customer' && isCustomer()) ||
+        (data.surface == 'driver' && isDriver()) ||
+        (data.surface == 'admin' && isStaff());
+    }
+
     /** Fields that must not appear in the write's changed-key set. */
     function untouched(fields) {
       let touched = request.resource.data.diff(resource.data).affectedKeys();
@@ -120,7 +127,17 @@ service cloud.firestore {
      * support tickets being manufactured against someone else's trip.
      */
     function bookingBelongsToCaller(bookingId) {
-      return signedIn() && bookingDoc(bookingId).customerUid == uid();
+      let booking = bookingDoc(bookingId);
+      return signedIn() && isCustomer() && booking.customerUid == uid();
+    }
+
+    /** A support ticket may reference a trip owned by either participant. */
+    function supportBookingBelongsToCaller(bookingId) {
+      let booking = bookingDoc(bookingId);
+      return signedIn() && (
+        (isCustomer() && booking.customerUid == uid()) ||
+        (isDriver() && booking.assignedDriverUid == uid())
+      );
     }
 
     // ------------------------------------------------------------------ users
@@ -304,6 +321,14 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // ------------------------------------------------------ paymentFailures
+    // Signed Cashfree webhook attempts are server-written; operations staff
+    // can review daily failure counts without exposing payment activity to users.
+    match /paymentFailures/{failureId} {
+      allow read: if isStaff();
+      allow write: if false;
+    }
+
     // ----------------------------------------------------------------- refunds
     match /refunds/{refundId} {
       allow read: if isStaff() || isBookingCustomer(resource.data.bookingId);
@@ -362,28 +387,33 @@ service cloud.firestore {
     // while the collection keeps the name `notifications` for its collection-group
     // index and TTL override.
     match /users/{userId}/notifications/{notificationId} {
-      allow read: if signedIn() && uid() == userId;
+      allow read: if signedIn() && uid() == userId && canReadNotification(resource.data);
       // Only the read receipt is client-writable.
       allow update: if signedIn() && uid() == userId &&
-        onlyKeysAre(['readAtMs']);
-      allow delete: if signedIn() && uid() == userId;
+        canReadNotification(resource.data) && onlyKeysAre(['readAtMs']);
+      allow delete: if signedIn() && uid() == userId && canReadNotification(resource.data);
       allow create: if false;
     }
 
     // ----------------------------------------------------------- supportTickets
     match /supportTickets/{ticketId} {
       allow read: if isStaff() ||
-        (signedIn() && uid() == resource.data.openedByUid);
+        (signedIn() && uid() == resource.data.openedByUid &&
+          ((resource.data.forRole == 'customer' && isCustomer()) ||
+           (resource.data.forRole == 'driver' && isDriver())));
 
       allow create: if signedIn() &&
         request.resource.data.openedByUid == uid() &&
+        request.resource.data.forRole in ['customer', 'driver'] &&
+        ((request.resource.data.forRole == 'customer' && isCustomer()) ||
+         (request.resource.data.forRole == 'driver' && isDriver())) &&
         request.resource.data.status == 'open' &&
         request.resource.data.assignedAdminUid == null &&
         request.resource.data.priority in ['low', 'normal', 'high', 'urgent'] &&
         (
           !('bookingId' in request.resource.data) ||
           request.resource.data.bookingId == null ||
-          bookingBelongsToCaller(request.resource.data.bookingId)
+          supportBookingBelongsToCaller(request.resource.data.bookingId)
         );
 
       // The opener may append a reply while the ticket is unresolved; only
@@ -391,14 +421,47 @@ service cloud.firestore {
       allow update: if signedIn() && (
         (
           uid() == resource.data.openedByUid &&
-          resource.data.status != 'closed' &&
-          onlyKeysAre(['body', 'subject', 'lastCustomerReplyAtMs']) &&
+          ((resource.data.forRole == 'customer' && isCustomer()) ||
+           (resource.data.forRole == 'driver' && isDriver())) &&
+          resource.data.status in ['open', 'in_progress', 'awaiting_customer'] &&
+          onlyKeysAre(['body', 'subject', 'lastCustomerReplyAtMs', 'updatedAtMs']) &&
           untouched(['status', 'priority', 'assignedAdminUid', 'openedByUid', 'resolution'])
         ) ||
         isStaff()
       );
 
       allow delete: if isAdmin();
+
+      match /messages/{messageId} {
+        allow read: if isStaff() ||
+          (signedIn() &&
+            get(/databases/$(database)/documents/supportTickets/$(ticketId)).data.openedByUid == uid() &&
+            ((get(/databases/$(database)/documents/supportTickets/$(ticketId)).data.forRole == 'customer' && isCustomer()) ||
+             (get(/databases/$(database)/documents/supportTickets/$(ticketId)).data.forRole == 'driver' && isDriver())));
+
+        allow create: if signedIn() &&
+          request.resource.data.keys().hasOnly(['id', 'ticketId', 'authorUid', 'authorRole', 'body', 'createdAtMs']) &&
+          request.resource.data.id == messageId &&
+          request.resource.data.ticketId == ticketId &&
+          request.resource.data.authorUid == uid() &&
+          request.resource.data.body is string &&
+          request.resource.data.body.size() >= 2 &&
+          request.resource.data.body.size() <= 4000 &&
+          get(/databases/$(database)/documents/supportTickets/$(ticketId)).data.status in ['open', 'in_progress', 'awaiting_customer'] &&
+          (
+            (isStaff() && request.resource.data.authorRole in ['admin', 'ops']) ||
+            (
+              !isStaff() &&
+              get(/databases/$(database)/documents/supportTickets/$(ticketId)).data.openedByUid == uid() &&
+              ((get(/databases/$(database)/documents/supportTickets/$(ticketId)).data.forRole == 'customer' && isCustomer()) ||
+               (get(/databases/$(database)/documents/supportTickets/$(ticketId)).data.forRole == 'driver' && isDriver())) &&
+              request.resource.data.authorRole == get(/databases/$(database)/documents/supportTickets/$(ticketId)).data.forRole
+            )
+          );
+
+        // Conversation history is immutable once submitted.
+        allow update, delete: if false;
+      }
     }
 
     // ----------------------------------------------------------- adminAuditLogs

@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { View } from 'react-native';
-import { Linking } from 'react-native';
+import { Linking, View } from 'react-native';
 import { router } from 'expo-router';
 import {
   Button,
@@ -26,6 +25,7 @@ import {
 import { addressLine, dateTime, money, statusLabel, statusTone } from '../../features/customer/labels';
 import { BrandMark } from '../../components/BrandMark';
 import { TripMapPanel } from '../../features/customer/TripMapPanel';
+import { TripTrackingShare } from '../../features/customer/TripTrackingShare';
 import { useLiveCustomerFix, useLiveDriverFix } from '../../features/customer/liveLocation';
 
 /**
@@ -121,13 +121,33 @@ export default function DriverTrip() {
               Round trip — you come back with the customer, so the fare is the package of hours.
             </Text>
           ) : null}
-          {!started && view.estimate ? (
-            <Text variant="caption" tone="faint">
-              The map quoted {money(view.estimate.totalPaise)} for this route. The bill is priced from
-              your dial, not from that number.
+          {view.serviceTypeId === 'chauffeur_outstation' ? (
+            <Text variant="caption" tone="muted">
+              Outstation trip: the customer arranges your meals during the trip.
             </Text>
           ) : null}
         </Card>
+
+        {!started && view.estimate ? (
+          <Card tone="inset" style={{ gap: theme.spacing.sm }}>
+            <View style={{ gap: theme.spacing.xxs }}>
+              <Text variant="overline" tone="brand">CUSTOMER QUOTE</Text>
+              <Text variant="fare" tone="brand">{money(view.estimate.totalPaise)}</Text>
+              {view.estimatedDistanceMeters !== null ? (
+                <Text variant="caption" tone="muted">
+                  Estimated route · {(view.estimatedDistanceMeters / 1000).toFixed(1)} km
+                  {view.estimatedDurationSeconds !== null
+                    ? ` · ${Math.round(view.estimatedDurationSeconds / 60)} min`
+                    : ''}
+                </Text>
+              ) : null}
+            </View>
+            <FareLines fare={view.estimate} />
+            <Text variant="caption" tone="warning">
+              Estimate only. The final fare is priced from your opening and closing odometer readings.
+            </Text>
+          </Card>
+        ) : null}
 
         <Card style={{ gap: theme.spacing.sm }}>
           <Text variant="overline" tone="brand">Customer contact</Text>
@@ -157,6 +177,8 @@ export default function DriverTrip() {
           title="Pickup and drop-off"
         />
 
+        {started ? <TripTrackingShare bookingId={view.id} /> : null}
+
         {started ? <LiveMeter trip={view} /> : <StartForm trip={view} />}
 
         {started ? <CloseForm trip={view} /> : null}
@@ -180,6 +202,7 @@ function StartForm({ trip }: { trip: DriverTripView }) {
   const [code, setCode] = useState('');
   const [km, setKm] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
+  const pickupLocation = trip.pickup?.location ?? null;
 
   const submit = () => {
     const reading = Number(km);
@@ -204,6 +227,19 @@ function StartForm({ trip }: { trip: DriverTripView }) {
         <>
           <Text variant="subheading" tone="brand">On the way to pickup</Text>
           <Text variant="caption" tone="muted">Tell the customer when you begin travelling. They will get an in-app update and push notification if enabled. Enter the start OTP only when you have reached the pickup and are ready to begin the metered trip.</Text>
+          {pickupLocation ? (
+            <Button
+              label="Navigate to pickup"
+              appearance="secondary"
+              fullWidth
+              onPress={() => {
+                const { lat, lng } = pickupLocation;
+                const destination = `${lat},${lng}`;
+                const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}&travelmode=driving`;
+                void Linking.openURL(url).catch(() => setNotice('Could not open Maps. Check that a maps app is available.'));
+              }}
+            />
+          ) : null}
           <Button
             label={trip.status === 'driver_en_route' ? 'On the way · customer notified' : 'I’m on my way'}
             disabled={trip.status === 'driver_en_route'}
@@ -466,16 +502,14 @@ function FareLines({ fare, onBrand = false }: { fare: FareBreakdown; onBrand?: b
   return (
     <View style={{ gap: theme.spacing.xxs }}>
       {fare.items.map((item) => (
-        <View
-          key={item.key}
-          style={{ flexDirection: 'row', justifyContent: 'space-between', gap: theme.spacing.md }}
-        >
-          <Text variant="caption" tone={tone}>
-            {item.label}
-          </Text>
-          <Text variant="caption" tone={tone}>
-            {money(item.amountPaise)}
-          </Text>
+        <View key={item.key} style={{ gap: 2 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: theme.spacing.md }}>
+            <Text variant="caption" tone={tone}>{item.label}</Text>
+            <Text variant="caption" tone={tone}>{money(item.amountPaise)}</Text>
+          </View>
+          {item.detail ? (
+            <Text variant="caption" tone={onBrand ? 'onBrand' : 'faint'}>{item.detail}</Text>
+          ) : null}
         </View>
       ))}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: theme.spacing.md }}>

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Animated, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
@@ -14,6 +14,7 @@ import {
 } from '../../features/driver/profile';
 import { useDriverTrip } from '../../features/driver/trip-control';
 import { useDrivenTrips } from '../../features/driver/trips';
+import { useDriverDocuments } from '../../features/driver/documents';
 import { money, statusLabel } from '../../features/customer/labels';
 import { payDriverDue } from '../../features/driver/payments';
 import { RequireApproval } from '../../components/RequireApproval';
@@ -40,12 +41,13 @@ import {
  */
 export default function DriverHome() {
   const theme = useTheme();
-  const entrance = useRef(new Animated.Value(0)).current;
-  const livePulse = useRef(new Animated.Value(0.45)).current;
+  const [entrance] = useState(() => new Animated.Value(0));
+  const [livePulse] = useState(() => new Animated.Value(0.45));
   const { user } = useSession();
   const access = useDriverAccess();
   const { profile } = useDriverProfile();
   const dues = useDriverDues();
+  const documents = useDriverDocuments();
   const trips = useDrivenTrips();
   const trip = useDriverTrip();
   const offers = useDriverOffers();
@@ -133,6 +135,26 @@ export default function DriverHome() {
           fallback="Captain"
           role="driver"
         />
+
+        <Card style={{ gap: theme.spacing.sm }}>
+          <View style={{ gap: theme.spacing.xxs }}>
+            <Text variant="subheading" tone="brand">Today’s workday</Text>
+            <Text variant="caption" tone="muted">A quick check before you take your next booking.</Text>
+          </View>
+          {[
+            { label: 'Account', value: status.label, tone: status.tone === 'success' ? 'success' : status.tone === 'danger' ? 'danger' : 'warning' },
+            { label: 'Documents', value: documents.isPending ? 'Checking…' : `${documents.data?.filter((row) => row.hasFile).length ?? 0}/${documents.data?.length ?? 3} uploaded`, tone: documents.isError ? 'danger' : 'neutral' },
+            { label: 'Dues', value: dues.loading || dues.unreadable ? 'Checking balance…' : dues.outstandingPaise > 0 ? `${formatINR(dues.outstandingPaise)} to clear` : 'All clear', tone: dues.unreadable ? 'danger' : dues.outstandingPaise > 0 ? 'warning' : 'success' },
+            { label: 'Duty', value: online ? 'Online · ready for offers' : 'Offline · turn on when ready', tone: online ? 'success' : 'neutral' },
+            { label: 'Next trip', value: trip.data ? `${trip.data.reference}${trip.data.scheduledForMs ? ` · ${new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'short', timeStyle: 'short' }).format(trip.data.scheduledForMs)}` : ''}` : (offers.data?.length ?? 0) > 0 ? `${offers.data!.length} new offer${offers.data!.length === 1 ? '' : 's'} to review` : 'No trip assigned yet', tone: 'neutral' },
+          ].map((item) => (
+            <View key={item.label} style={{ minHeight: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacing.md, borderTopWidth: theme.borderWidth.hairline, borderTopColor: theme.colors.border, paddingTop: theme.spacing.xs }}>
+              <Text variant="caption" tone="muted">{item.label}</Text>
+              <Text variant="caption" tone="default" style={{ flex: 1, textAlign: 'right' }}>{item.value}</Text>
+            </View>
+          ))}
+          {trip.data?.scheduledForMs && trip.data.status === 'assigned' ? <Text variant="caption" tone="warning">Pickup reminder will arrive about 30 minutes before your scheduled trip.</Text> : null}
+        </Card>
 
         <Card style={{ gap: theme.spacing.md }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: theme.spacing.md }}>
@@ -254,8 +276,37 @@ export default function DriverHome() {
             <Text variant="overline" tone="primary">NEW TRIP · {offer.bookingReference}</Text>
             <Text variant="bodyStrong" tone="default">{offer.pickup} → {offer.destination}</Text>
             <Text variant="caption" tone="muted">
-              Estimate {offer.farePaise === null ? 'unavailable' : formatINR(offer.farePaise)} · {offer.distanceToPickupMeters === null ? 'nearby' : `${(offer.distanceToPickupMeters / 1000).toFixed(1)} km away`} · stays until accepted or declined
+              Pickup {offer.distanceToPickupMeters === null ? 'nearby' : `${(offer.distanceToPickupMeters / 1000).toFixed(1)} km away`} · offer stays open until accepted or declined
             </Text>
+            {offer.estimate ? (
+              <View style={{ borderRadius: theme.radius.md, backgroundColor: theme.colors.surfaceMuted, padding: theme.spacing.sm, gap: theme.spacing.xs }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: theme.spacing.sm }}>
+                  <Text variant="label" tone="brand">Customer fare estimate</Text>
+                  <Text variant="label" tone="brand">{formatINR(offer.estimate.totalPaise)}</Text>
+                </View>
+                {offer.estimatedDistanceMeters !== null ? (
+                  <Text variant="caption" tone="muted">
+                    Route estimate · {(offer.estimatedDistanceMeters / 1000).toFixed(1)} km{offer.estimatedDurationSeconds !== null ? ` · ${Math.round(offer.estimatedDurationSeconds / 60)} min` : ''}
+                  </Text>
+                ) : null}
+                {offer.estimate.items.map((item) => (
+                  <View key={`${item.key}-${item.label}`} style={{ gap: 2 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: theme.spacing.sm }}>
+                      <Text variant="caption" tone="muted">{item.label}</Text>
+                      <Text variant="caption" tone={item.amountPaise < 0 ? 'success' : 'default'}>{money(item.amountPaise)}</Text>
+                    </View>
+                    {item.detail ? <Text variant="caption" tone="faint">{item.detail}</Text> : null}
+                  </View>
+                ))}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: theme.spacing.sm }}>
+                  <Text variant="caption" tone="muted">Subtotal · tax</Text>
+                  <Text variant="caption" tone="muted">{money(offer.estimate.subtotalPaise)} · {money(offer.estimate.taxPaise)}</Text>
+                </View>
+                <Text variant="caption" tone="faint">Estimate only · final fare is based on the verified pickup and drop-off odometer readings.</Text>
+              </View>
+            ) : (
+              <Text variant="caption" tone="muted">Fare estimate is unavailable right now. Review the quote in the trip details before starting.</Text>
+            )}
             <Text variant="caption" tone="muted">
               Vehicle · {offer.vehicleDescription ? `${offer.vehicleDescription} · ` : ''}{offer.carType === 'either' ? 'Type not specified' : offer.carType} · {offer.transmission === 'either' ? 'Transmission not specified' : offer.transmission}
             </Text>

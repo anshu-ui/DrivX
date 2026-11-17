@@ -158,6 +158,20 @@ export default function DriverTrips() {
                   </Text>
                 )}
 
+                {trip.finalFare ? (
+                  <View style={{ gap: theme.spacing.xs }}>
+                    <Text variant="overline" tone="brand">FINAL FARE BREAKDOWN</Text>
+                    {trip.finalFare.items.map((item) => (
+                      <View key={item.key} style={{ gap: 2 }}>
+                        <Row label={item.label} value={money(item.amountPaise)} />
+                        {item.detail ? <Text variant="caption" tone="faint">{item.detail}</Text> : null}
+                      </View>
+                    ))}
+                    <Row label="Subtotal" value={money(trip.finalFare.subtotalPaise)} />
+                    <Row label="Tax" value={money(trip.finalFare.taxPaise)} />
+                  </View>
+                ) : null}
+
                 {trip.split ? (
                   <>
                     <Divider />

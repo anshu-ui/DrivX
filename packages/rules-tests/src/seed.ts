@@ -417,6 +417,7 @@ export async function seedFirestore(ctx: RulesTestContext): Promise<void> {
     put(['users', CUSTOMER_ONE, 'notifications', 'n-1'], {
       id: 'n-1',
       uid: CUSTOMER_ONE,
+      surface: 'customer',
       type: 'driver_arrived',
       title: 'Driver arrived',
       body: 'Rakesh has reached the pickup point.',

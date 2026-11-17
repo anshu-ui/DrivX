@@ -3,6 +3,7 @@ import { db, rtdb } from '../lib/admin';
 import { REGION } from '../lib/config';
 import { DISPATCH_LOCATION_MAX_AGE_MS, RTDB_RETENTION } from '@drivx/domain';
 import { offerTrip } from '../lib/dispatch';
+import { deliverInbox } from '../lib/notify';
 
 /**
  * Stale-location sweeper.
@@ -130,6 +131,40 @@ export const sweepExpiredDriverOffers = onSchedule(
     }
     if (advanced > 0) {
       console.log(JSON.stringify({ level: 'info', fn: 'sweepExpiredDriverOffers', advanced }));
+    }
+  },
+);
+
+/** Give a driver one timely reminder to review the pickup before a scheduled job. */
+export const remindDriverBeforePickup = onSchedule(
+  { region: REGION, schedule: 'every 5 minutes', memory: '256MiB' },
+  async () => {
+    const now = Date.now();
+    const start = now + 25 * 60_000;
+    const end = now + 30 * 60_000;
+    const upcoming = await db()
+      .collection('bookings')
+      .where('status', '==', 'assigned')
+      .where('scheduledForMs', '>=', start)
+      .where('scheduledForMs', '<', end)
+      .limit(200)
+      .get();
+
+    for (const row of upcoming.docs) {
+      const booking = row.data();
+      const driverUid = typeof booking.assignedDriverUid === 'string' ? booking.assignedDriverUid : null;
+      if (!driverUid) continue;
+      const reference = typeof booking.reference === 'string' ? booking.reference : row.id;
+      await deliverInbox({
+        uid: driverUid,
+        surface: 'driver',
+        id: `pickup_reminder_${row.id}`,
+        type: 'scheduled_booking_reminder',
+        title: 'Pickup in about 30 minutes',
+        body: `Trip ${reference} is coming up. Check the pickup address, route and customer notes, then start toward pickup on time.`,
+        route: '/trip',
+        bookingId: row.id,
+      });
     }
   },
 );

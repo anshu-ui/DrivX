@@ -43,7 +43,7 @@ type TripCodes = { bookingId: string; reference: string | null; start: string; e
  * that mints them.
  */
 export function useTripCodes(bookingId: string, enabled: boolean) {
-  const { user } = useSession();
+  const { user, surface } = useSession();
   const client = useQueryClient();
   return useQuery({
     queryKey: ['tripCodes', bookingId, user?.uid ?? null],
@@ -56,7 +56,7 @@ export function useTripCodes(bookingId: string, enabled: boolean) {
         // Minting writes an `otp_sent` line and an inbox message; both are read
         // elsewhere on this screen, so their caches move with it.
         await client.invalidateQueries({ queryKey: ['booking'] });
-        await client.invalidateQueries({ queryKey: ['notifications'] });
+        await client.invalidateQueries({ queryKey: ['notifications', user!.uid, surface] });
         return codes;
       } catch (error) {
         if (error instanceof FunctionCallError) throw new Error(error.message);

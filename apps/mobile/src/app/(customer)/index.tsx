@@ -232,7 +232,8 @@ export default function CustomerHome() {
   const [carType, setCarType] = useState<CarType>('either');
   const [transmission, setTransmission] = useState<Transmission>('either');
   const [vehicleDescription, setVehicleDescription] = useState('');
-  const [showFareDetails, setShowFareDetails] = useState(false);
+  // Customers see the full server quote immediately; they can still collapse it.
+  const [showFareDetails, setShowFareDetails] = useState(true);
   const [showTerms, setShowTerms] = useState(false);
   // One key per booking *attempt*, kept across retries so a request that times
   // out and is sent again cannot become two bookings.
@@ -702,12 +703,12 @@ export default function CustomerHome() {
                 {tripDirection === 'round_trip' ? (
                   <Text variant="caption" tone="faint">
                     {service?.id === 'chauffeur_outstation'
-                      ? 'This outstation round trip returns to pickup. Select a day package; kilometres are not billed separately.'
+                      ? 'This outstation round trip returns to pickup. Select a day package; kilometres are not billed separately. The customer arranges the driver’s meals.'
                       : 'The driver returns you to pickup. Fare is time-based; distance is not charged separately.'}
                   </Text>
                 ) : service?.id === 'chauffeur_outstation' ? (
                   <Text variant="caption" tone="faint">
-                    Outstation one-way packages follow the listed rates through 3,000 km; distance beyond the selected package is ₹10/km. A one-time night charge applies when scheduled pickup is between 10 PM and 6 AM, or the map-estimated trip overlaps those hours.
+                    Outstation one-way packages follow the listed rates through 3,000 km; distance beyond the selected package is ₹10/km. A one-time night charge applies when scheduled pickup is between 10 PM and 6 AM, or the map-estimated trip overlaps those hours. The customer arranges the driver’s meals.
                   </Text>
                 ) : null}
 

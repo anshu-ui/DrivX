@@ -172,11 +172,21 @@ const places = await fs.getDocs(
 );
 check('useSavedPlaces has at least two places, so the booking sheet works', places.size >= 2, `${places.size} places`);
 
-const notifications = await fs.getDocs(fs.query(fs.collection(db(), 'users', customer.uid, 'notifications'), fs.limit(25)));
+const notifications = await fs.getDocs(fs.query(
+  fs.collection(db(), 'users', customer.uid, 'notifications'),
+  fs.where('surface', 'in', ['customer', 'all']),
+  fs.limit(25),
+));
 check('useNotifications reads the inbox', notifications.size >= 1, `${notifications.size} rows`);
 
 const tickets = await fs.getDocs(
-  fs.query(fs.collection(db(), 'supportTickets'), fs.where('openedByUid', '==', customer.uid), fs.orderBy('createdAtMs', 'desc'), fs.limit(20)),
+  fs.query(
+    fs.collection(db(), 'supportTickets'),
+    fs.where('openedByUid', '==', customer.uid),
+    fs.where('forRole', '==', 'customer'),
+    fs.orderBy('createdAtMs', 'desc'),
+    fs.limit(20),
+  ),
 );
 check('useMyTickets lists only this customer’s tickets', tickets.size >= 1 && tickets.docs.every((row) => row.data().openedByUid === customer.uid),
   `${tickets.size} rows`);
@@ -200,8 +210,13 @@ await expectRefused('the same booking read as a stranger is denied',
   () => fs.getDoc(fs.doc(other.firestore, 'bookings', bookings.docs[0].id)));
 await expectRefused('bookings without the ownership filter are not served',
   () => fs.getDocs(fs.query(fs.collection(db(), 'bookings'), fs.limit(25))));
-await expectRefused('the driver profile behind a trip is not customer-readable',
-  () => fs.getDoc(fs.doc(db(), 'driverProfiles', bookings.docs[0].data().assignedDriverUid)));
+const assignedDriverUid = live?.data().assignedDriverUid;
+if (typeof assignedDriverUid === 'string' && assignedDriverUid) {
+  await expectRefused('the driver profile behind a trip is not customer-readable',
+    () => fs.getDoc(fs.doc(db(), 'driverProfiles', assignedDriverUid)));
+} else {
+  check('the driver profile behind a trip is not customer-readable', false, 'the seeded en-route trip has no assigned driver');
+}
 await expectRefused('the assignment record is not customer-readable',
   () => fs.getDoc(fs.doc(db(), 'bookings', bookings.docs[0].id, 'assignments', 'as-1')));
 await expectRefused('another customer’s saved places are invisible',

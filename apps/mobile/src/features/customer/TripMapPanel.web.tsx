@@ -1,4 +1,4 @@
-import { createElement, useEffect, useRef, useState } from 'react';
+import { createElement, useEffect, useMemo, useRef, useState } from 'react';
 import { View } from 'react-native';
 import { Card, Text, useTheme } from '@drivx/ui';
 import type { Place } from '@drivx/domain';
@@ -42,12 +42,6 @@ function loadMaps(key: string): Promise<MapsApi> {
   return mapsScript!;
 }
 
-function placePoint(place: Place | null | undefined): Point | null {
-  return place ? { lat: place.location.lat, lng: place.location.lng } : null;
-}
-function livePoint(fix: LiveDriverFix | null | undefined): Point | null {
-  return fix ? { lat: fix.lat, lng: fix.lng } : null;
-}
 function decodePolyline(encoded: string | null | undefined): Point[] {
   if (!encoded || encoded.length > 100_000) return [];
   const points: Point[] = [];
@@ -94,17 +88,25 @@ export function TripMapPanel({
   const theme = useTheme();
   const [host, setHost] = useState<HTMLElement | null>(null);
   const [mapError, setMapError] = useState(false);
-  const [mapReady, setMapReady] = useState(false);
+  const [mapVersion, setMapVersion] = useState(0);
   const mapRef = useRef<GoogleMap | null>(null);
   const markersRef = useRef<Record<string, MapMarker>>({});
   const routeRef = useRef<MapPolyline | null>(null);
-  const pickupPoint = placePoint(pickup);
-  const destinationPoint = placePoint(destination);
-  const driverPoint = livePoint(driverFix);
-  const customerPoint = livePoint(customerFix);
+  const pickupLat = pickup?.location.lat;
+  const pickupLng = pickup?.location.lng;
+  const destinationLat = destination?.location.lat;
+  const destinationLng = destination?.location.lng;
+  const driverLat = driverFix?.lat;
+  const driverLng = driverFix?.lng;
+  const customerLat = customerFix?.lat;
+  const customerLng = customerFix?.lng;
+  const pickupPoint = useMemo(() => pickupLat === undefined || pickupLng === undefined ? null : { lat: pickupLat, lng: pickupLng }, [pickupLat, pickupLng]);
+  const destinationPoint = useMemo(() => destinationLat === undefined || destinationLng === undefined ? null : { lat: destinationLat, lng: destinationLng }, [destinationLat, destinationLng]);
+  const driverPoint = useMemo(() => driverLat === undefined || driverLng === undefined ? null : { lat: driverLat, lng: driverLng }, [driverLat, driverLng]);
+  const customerPoint = useMemo(() => customerLat === undefined || customerLng === undefined ? null : { lat: customerLat, lng: customerLng }, [customerLat, customerLng]);
   const env = mobileEnv();
   const key = env.googleMapsWebKey;
-  const centre = driverPoint ?? customerPoint ?? pickupPoint ?? destinationPoint ?? { lat: 28.4595, lng: 77.0266 };
+  const centre = useMemo(() => pickupPoint ?? destinationPoint ?? { lat: 28.4595, lng: 77.0266 }, [pickupPoint, destinationPoint]);
   const fallbackUrl = pickupPoint && destinationPoint
     ? `https://maps.google.com/maps?saddr=${pickupPoint.lat},${pickupPoint.lng}&daddr=${destinationPoint.lat},${destinationPoint.lng}&output=embed`
     : `https://maps.google.com/maps?q=${centre.lat},${centre.lng}&z=14&output=embed`;
@@ -112,7 +114,6 @@ export function TripMapPanel({
   useEffect(() => {
     if (!host || !key) return;
     let cancelled = false;
-    setMapReady(false);
     void loadMaps(key).then((maps) => {
       if (cancelled) return;
       mapRef.current = new maps.Map(host, {
@@ -136,23 +137,46 @@ export function TripMapPanel({
         ],
       });
       setMapError(false);
-      setMapReady(true);
+      setMapVersion((version) => version + 1);
     }).catch(() => { if (!cancelled) setMapError(true); });
-    return () => { cancelled = true; mapRef.current = null; markersRef.current = {}; routeRef.current = null; setMapReady(false); };
-  }, [host, key]);
+    return () => { cancelled = true; mapRef.current = null; markersRef.current = {}; routeRef.current = null; };
+  }, [host, key, centre]);
 
+  // Draw/focus the planned route independently of live GPS. Re-fitting this
+  // bounds on every driver update caused the web map to jump around.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !window.google?.maps) return;
     const maps = window.google.maps;
-    const entries: Array<[string, Point | null, string, string]> = [
+    const bounds = new maps.LatLngBounds();
+    const route = decodePolyline(routePolyline);
+    let count = 0;
+    for (const point of [pickupPoint, destinationPoint, ...route]) {
+      if (!point) continue;
+      bounds.extend(point);
+      count += 1;
+    }
+    routeRef.current?.setMap(null);
+    routeRef.current = null;
+    if (route.length > 1) routeRef.current = new maps.Polyline({ map, path: route, strokeColor: '#315EE8', strokeOpacity: 0.88, strokeWeight: 5 });
+    if (count > 1) map.fitBounds(bounds, 36);
+    else {
+      const point = pickupPoint ?? destinationPoint;
+      if (point) { map.setCenter(point); map.setZoom(15); }
+    }
+  }, [mapVersion, pickupPoint, destinationPoint, routePolyline]);
+
+  // GPS updates move only the relevant pins; they never change map bounds.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !window.google?.maps) return;
+    const maps = window.google.maps;
+    const entries: [string, Point | null, string, string][] = [
       ['pickup', pickupPoint, 'Pickup', '#315EE8'],
       ['destination', destinationPoint, 'Drop-off', '#172033'],
       ['driver', driverPoint, driverFix?.stale ? `${driverTitle} · last update is old` : driverTitle, '#168A5B'],
       ['customer', customerPoint, customerFix?.stale ? 'Customer · last update is old' : 'Customer', '#B98525'],
     ];
-    const bounds = new maps.LatLngBounds();
-    let hasPoints = false;
     for (const [id, point, label, color] of entries) {
       let marker = markersRef.current[id];
       if (!point) { marker?.setMap(null); delete markersRef.current[id]; continue; }
@@ -163,20 +187,8 @@ export function TripMapPanel({
         marker.setMap(map);
         marker.setPosition(point);
       }
-      bounds.extend(point); hasPoints = true;
     }
-    routeRef.current?.setMap(null);
-    routeRef.current = null;
-    const route = decodePolyline(routePolyline);
-    if (route.length > 1) routeRef.current = new maps.Polyline({ map, path: route, strokeColor: '#315EE8', strokeOpacity: 0.88, strokeWeight: 5 });
-    if (hasPoints) {
-      if (entries.filter((entry) => entry[1] !== null).length > 1) map.fitBounds(bounds, 36);
-      else {
-        const point = entries.find((entry) => entry[1] !== null)?.[1];
-        if (point) { map.setCenter(point); map.setZoom(15); }
-      }
-    }
-  }, [mapReady, pickupPoint?.lat, pickupPoint?.lng, destinationPoint?.lat, destinationPoint?.lng, driverPoint?.lat, driverPoint?.lng, driverFix?.stale, customerPoint?.lat, customerPoint?.lng, customerFix?.stale, routePolyline, driverTitle]);
+  }, [mapVersion, pickupPoint, destinationPoint, driverPoint, driverFix?.stale, customerPoint, customerFix?.stale, driverTitle]);
 
   return (
     <Card style={{ gap: theme.spacing.sm, padding: 0, overflow: 'hidden' }}>

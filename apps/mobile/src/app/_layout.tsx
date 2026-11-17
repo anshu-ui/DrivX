@@ -40,7 +40,8 @@ const queryClient = new QueryClient({
 function RootStack() {
   const { status, user, surface, needsProfile, signOut } = useSession();
   const pathname = usePathname();
-  usePushRegistrationSync(status === 'signed_in' ? user : null);
+  const notificationSurface = surface ?? appSurface ?? 'customer';
+  usePushRegistrationSync(status === 'signed_in' ? user : null, notificationSurface);
   const stackKey = status === 'signed_in' ? `${user?.uid ?? 'anon'}:${surface}` : 'guest';
 
   useEffect(() => {
@@ -65,7 +66,7 @@ function RootStack() {
   );
 
   if (status === 'signed_in' && user && !needsProfile) {
-    return <PushPermissionGate user={user} onSignOut={signOut}>{stack}</PushPermissionGate>;
+    return <PushPermissionGate user={user} surface={notificationSurface} onSignOut={signOut}>{stack}</PushPermissionGate>;
   }
   return stack;
 }

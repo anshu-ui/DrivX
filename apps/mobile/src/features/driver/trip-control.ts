@@ -50,9 +50,12 @@ export type DriverTripView = {
   id: string;
   reference: string;
   status: BookingStatus;
+  serviceTypeId: string | null;
   pickup: Place | null;
   destination: Place | null;
   routePolyline: string | null;
+  estimatedDistanceMeters: number | null;
+  estimatedDurationSeconds: number | null;
   tripDirection: TripDirection | null;
   scheduledForMs: number | null;
   /** What the map quoted, what the dial has produced so far, and the receipt. */
@@ -79,9 +82,12 @@ function tripView(id: string, data: Record<string, unknown>): DriverTripView {
     id,
     reference: typeof data.reference === 'string' ? data.reference : id,
     status: (typeof data.status === 'string' ? data.status : 'unknown') as BookingStatus,
+    serviceTypeId: typeof data.serviceTypeId === 'string' ? data.serviceTypeId : null,
     pickup: placeOf(data.pickup),
     destination: placeOf(data.destination),
     routePolyline: typeof data.routePolyline === 'string' ? data.routePolyline : null,
+    estimatedDistanceMeters: numberOrNull(data.estimatedDistanceMeters),
+    estimatedDurationSeconds: numberOrNull(data.estimatedDurationSeconds),
     tripDirection:
       data.tripDirection === 'round_trip' || data.tripDirection === 'one_way'
         ? data.tripDirection

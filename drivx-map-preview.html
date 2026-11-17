@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f7fb">
+  <title>DrivX · Trip map design preview</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root{font-family:"Plus Jakarta Sans",Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#172033;background:#f5f7fb;font-synthesis:none;text-rendering:optimizeLegibility;--blue:#315ee8;--blue-deep:#244cca;--ink:#172033;--muted:#748096;--line:#e4e9f1;--green:#18855c;--shadow:0 16px 44px #253a6412}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 12% 0%,#eaf0ff 0,transparent 38%),#f5f7fb}button,a{font:inherit}button{cursor:pointer}.shell{max-width:1380px;margin:auto;padding:0 34px 42px}.topbar{height:78px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #dfe5ee}.brand{display:flex;align-items:center;gap:11px;font-weight:800;letter-spacing:-.04em;font-size:21px}.brand-icon{height:36px;width:36px;border-radius:12px;background:linear-gradient(140deg,#4776ff,#244cca);color:white;display:grid;place-items:center;box-shadow:0 7px 15px #315ee833}.preview-tag{font-size:11px;color:#5f6e87;border:1px solid #dfe6f0;background:#ffffffb8;border-radius:20px;padding:8px 12px;font-weight:700;letter-spacing:.07em;text-transform:uppercase}.intro{padding:30px 0 22px;display:flex;justify-content:space-between;align-items:end;gap:20px}.eyebrow{font-size:11px;font-weight:800;letter-spacing:.14em;color:var(--blue);text-transform:uppercase}.intro h1{font-size:clamp(27px,3.7vw,42px);line-height:1.08;letter-spacing:-.055em;margin:9px 0 9px}.intro p{max-width:650px;margin:0;color:var(--muted);line-height:1.65;font-size:14px}.mode-group{display:flex;gap:5px;background:#e9edf5;padding:5px;border-radius:14px;flex:none}.mode{border:0;color:#67748b;background:transparent;padding:11px 17px;border-radius:10px;font-size:13px;font-weight:700;transition:.2s}.mode.active{background:white;color:#203a7a;box-shadow:0 2px 10px #21345616}.layout{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(330px,.85fr);gap:20px;align-items:stretch}.map-card,.info-card{background:#fff;border:1px solid var(--line);border-radius:24px;box-shadow:var(--shadow);overflow:hidden}.map-head{height:64px;padding:0 18px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #edf0f5}.map-head-left{display:flex;align-items:center;gap:10px;font-size:13px;font-weight:800}.live-pill{display:inline-flex;align-items:center;gap:7px;padding:7px 10px;background:#eaf7f1;color:#14734f;border-radius:20px;font-size:10px;font-weight:800;letter-spacing:.03em}.dot{width:7px;height:7px;border-radius:50%;background:#18a56e;box-shadow:0 0 0 4px #18a56e20;animation:pulse 1.7s infinite}.sim-label{font-size:10px;font-weight:700;color:#748096}.map-area{height:clamp(390px,49vw,590px);min-height:390px;position:relative;background:#edf2f4;overflow:hidden}.map-svg{width:100%;height:100%;display:block}.map-controls{position:absolute;right:14px;top:14px;display:grid;gap:7px}.map-controls button,.locate{height:38px;width:38px;border:1px solid #e1e6ee;border-radius:12px;background:#ffffffed;color:#33425d;box-shadow:0 5px 12px #17203312;font-size:18px;font-weight:600}.locate{position:absolute;right:14px;bottom:54px;display:grid;place-items:center}.map-scale{position:absolute;left:16px;bottom:16px;border:1px solid #ffffffb8;border-radius:10px;background:#ffffffdc;padding:8px 10px;color:#4e5d74;font-size:10px;font-weight:700;backdrop-filter:blur(8px)}.map-attribution{position:absolute;right:16px;bottom:16px;font-size:9px;color:#68768c;background:#ffffffbd;border-radius:7px;padding:5px 7px}.map-bottom{height:52px;padding:0 16px;display:flex;align-items:center;justify-content:space-between;border-top:1px solid #edf0f5}.map-bottom span{display:flex;align-items:center;gap:7px;color:#65728a;font-size:10px;font-weight:700}.route-key{width:20px;height:4px;background:var(--blue);border-radius:5px}.map-bottom .gps-status{color:#16855c}.info-card{padding:23px;display:flex;flex-direction:column;gap:17px}.card-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.card-heading h2{font-size:20px;letter-spacing:-.04em;margin:0 0 6px}.card-heading p{margin:0;color:var(--muted);font-size:12px;line-height:1.5}.arrive{font-size:10px;color:#14734f;background:#eaf7f1;border-radius:20px;padding:7px 10px;font-weight:800;white-space:nowrap}.eta{background:linear-gradient(135deg,#f3f6ff,#f8faff);border:1px solid #e5ebfa;border-radius:17px;padding:15px;display:flex;align-items:center;justify-content:space-between}.eta strong{font-size:24px;color:#244cca;letter-spacing:-.06em}.eta span{display:block;color:#78849a;font-size:10px;margin-top:3px}.eta .eta-icon{height:43px;width:43px;border-radius:14px;background:#e5ecff;display:grid;place-items:center;color:#315ee8}.route-stops{display:grid;grid-template-columns:18px 1fr;gap:0 11px}.stop-line{display:flex;flex-direction:column;align-items:center;padding-top:4px}.stop-dot{height:10px;width:10px;border:3px solid #315ee8;background:#fff;border-radius:50%;z-index:1}.stop-dot.end{border-color:#172033;border-radius:3px}.stop-connector{width:2px;height:37px;background:repeating-linear-gradient(to bottom,#cbd5e6 0 4px,transparent 4px 8px)}.stop-copy{padding-bottom:16px}.stop-copy small{font-size:9px;letter-spacing:.1em;color:#8a95a8;font-weight:800}.stop-copy div{font-size:12px;font-weight:700;margin-top:3px;line-height:1.4}.captain{border-top:1px solid #edf0f5;border-bottom:1px solid #edf0f5;padding:14px 0;display:flex;align-items:center;gap:11px}.avatar{height:43px;width:43px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(145deg,#dce7ff,#eef3ff);color:#244cca;font-weight:800}.captain-info{flex:1}.captain-info strong{font-size:12px;display:block}.captain-info small{font-size:10px;color:#78849a;display:block;margin-top:4px}.rating{font-size:10px;font-weight:800;color:#9a6a0a}.actions{display:grid;grid-template-columns:1fr 1fr;gap:9px}.action{border:1px solid #dfe5ef;border-radius:12px;background:#fff;color:#24417e;padding:11px 10px;font-size:11px;font-weight:800;transition:.18s}.action:hover{transform:translateY(-2px);box-shadow:0 7px 18px #20396318}.action.primary{background:var(--blue);color:#fff;border-color:var(--blue)}.action.primary:hover{background:var(--blue-deep)}.disclosure{background:#f8f9fc;border-radius:12px;padding:11px;color:#78849a;font-size:10px;line-height:1.5}.disclosure b{color:#42516b}.timeline{display:flex;justify-content:space-between;position:relative;padding-top:2px}.timeline:before{content:"";position:absolute;left:8px;right:8px;top:8px;height:2px;background:#e7ebf2}.step{z-index:1;display:flex;align-items:center;gap:5px;flex-direction:column;color:#8994a7;font-size:9px;font-weight:700}.step i{width:14px;height:14px;border-radius:50%;background:#e1e6ee;border:3px solid white;box-shadow:0 0 0 1px #e1e6ee}.step.done{color:#315ee8}.step.done i{background:#315ee8;box-shadow:0 0 0 1px #315ee8}.step.current{color:#18855c}.step.current i{background:#18a56e;box-shadow:0 0 0 4px #18a56e22;animation:pulse 1.7s infinite}.notice{position:fixed;left:50%;bottom:22px;transform:translate(-50%,14px);background:#172033;color:#fff;padding:12px 16px;border-radius:12px;font-size:12px;font-weight:700;opacity:0;pointer-events:none;transition:.22s;box-shadow:0 10px 30px #0003;z-index:8}.notice.show{opacity:1;transform:translate(-50%,0)}.demo-banner{margin-top:14px;background:#fff;border:1px dashed #ced9ed;color:#6e7c94;border-radius:13px;padding:11px 14px;font-size:10px;line-height:1.5}.demo-banner b{color:#394d73}.journey-ended{display:none}.body-driver .customer-only{display:none}.body-driver .driver-only{display:block}.driver-only{display:none}.body-driver .map-head-title-customer{display:none}.map-head-title-driver{display:none}.body-driver .map-head-title-driver{display:inline}.map-head-title-customer{display:inline}.body-driver .status-copy-customer{display:none}.status-copy-driver{display:none}.body-driver .status-copy-driver{display:block}.body-driver .share-button{display:none}.body-driver .starttrip-button{display:block}.starttrip-button{display:none}.body-intrip .journey-prompt{display:none}.body-intrip .journey-ended{display:block}.body-intrip .route-stage{color:#16855c}.body-intrip .step:nth-child(3) i{background:#315ee8;box-shadow:0 0 0 1px #315ee8}.body-intrip .step:nth-child(3){color:#315ee8}
+    @keyframes pulse{50%{box-shadow:0 0 0 7px #18a56e00}}@keyframes markerGlow{0%,100%{filter:drop-shadow(0 2px 4px #315ee84a)}50%{filter:drop-shadow(0 4px 11px #315ee88a)}}@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}}
+    @media(max-width:900px){.shell{padding:0 18px 26px}.layout{grid-template-columns:1fr}.map-area{height:56vw;min-height:370px;max-height:500px}.info-card{display:grid;grid-template-columns:1fr 1fr;gap:14px}.card-heading,.timeline,.disclosure{grid-column:1/-1}.eta{align-self:start}.route-stops{align-self:center}.captain{border-top:0;padding:0}.actions{align-self:center}.demo-banner{margin-top:10px}}
+    @media(max-width:560px){.shell{padding:0 11px 24px}.topbar{height:62px}.brand{font-size:18px}.preview-tag{font-size:9px;padding:7px 9px}.intro{padding:23px 2px 16px;display:block}.intro h1{font-size:29px}.intro p{font-size:12px}.mode-group{margin-top:16px;width:100%}.mode{flex:1;padding:10px 7px;font-size:11px}.map-card,.info-card{border-radius:19px}.map-head{height:55px;padding:0 13px}.map-area{height:68vw;min-height:330px;max-height:440px}.info-card{padding:17px;display:flex;gap:14px}.card-heading h2{font-size:18px}.stop-copy div{font-size:11px}.captain{border-top:1px solid #edf0f5;padding:12px 0}.demo-banner{font-size:9px}}
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar"><div class="brand"><span class="brand-icon">D</span>DrivX</div><span class="preview-tag">Interactive map preview</span></header>
+    <section class="intro"><div><div class="eyebrow">Trip map · Customer & Captain</div><h1>A clearer view of every journey.</h1><p>Preview the planned route, pickup and drop pins, and where verified GPS updates appear during an active trip. Switch roles to see each view.</p></div><div class="mode-group" role="tablist" aria-label="Preview role"><button class="mode active" id="customerMode" role="tab" aria-selected="true">Customer view</button><button class="mode" id="driverMode" role="tab" aria-selected="false">Captain view</button></div></section>
+    <main class="layout">
+      <section class="map-card" aria-label="Trip map preview">
+        <div class="map-head"><div class="map-head-left"><span class="preview-tag">MAP PREVIEW</span><span class="sim-label">Sample route · Gurugram</span></div><span class="sim-label">Illustrative data</span></div>
+        <div class="map-area">
+          <svg class="map-svg" viewBox="0 0 1000 640" preserveAspectRatio="xMidYMid slice" aria-label="Illustrated Gurugram trip route">
+            <defs>
+              <pattern id="blocks" width="118" height="92" patternUnits="userSpaceOnUse"><path d="M8 8h42v27H8zM67 8h42v27H67zM8 48h42v35H8zM67 48h42v35H67z" fill="#e8edf0" stroke="#dce4e8" stroke-width="2" rx="6"/></pattern>
+              <filter id="pinShadow" x="-80%" y="-80%" width="260%" height="260%"><feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#25437a" flood-opacity=".22"/></filter>
+              <linearGradient id="routeGlow" x1="0" x2="1"><stop stop-color="#6c90ff" stop-opacity=".18"/><stop offset="1" stop-color="#315ee8" stop-opacity=".05"/></linearGradient>
+            </defs>
+            <rect width="1000" height="640" fill="#f0f4f5"/><rect width="1000" height="640" fill="url(#blocks)" opacity=".6"/>
+            <path d="M-25 115C92 137 148 92 244 118s135 112 241 94 149-99 260-70 156 88 279 52" fill="none" stroke="#d4e1e3" stroke-width="30"/>
+            <path d="M-25 115C92 137 148 92 244 118s135 112 241 94 149-99 260-70 156 88 279 52" fill="none" stroke="#fbffff" stroke-width="17"/>
+            <path d="M70-30C110 78 113 180 205 250s82 116 45 193 8 128 68 230M375-26c-35 89-17 155 56 220s98 108 79 190-45 133 2 285M730-30c-30 100-11 166 53 233s71 125 40 194 0 132 68 246" fill="none" stroke="#d6e0e3" stroke-width="25"/>
+            <path d="M70-30C110 78 113 180 205 250s82 116 45 193 8 128 68 230M375-26c-35 89-17 155 56 220s98 108 79 190-45 133 2 285M730-30c-30 100-11 166 53 233s71 125 40 194 0 132 68 246" fill="none" stroke="#fff" stroke-width="14"/>
+            <path d="M-40 465C88 421 151 445 270 405s187-79 272-38 161 85 244 55 139-78 254-45" fill="none" stroke="#d6e0e3" stroke-width="30"/><path d="M-40 465C88 421 151 445 270 405s187-79 272-38 161 85 244 55 139-78 254-45" fill="none" stroke="#fff" stroke-width="16"/>
+            <path d="M646 87c53-26 129-18 153 20 25 38-1 76-50 88-56 14-104-5-124-39-17-29-12-53 21-69Z" fill="#dff0e6" stroke="#c5e4d3" stroke-width="2"/><path d="M86 505c58-45 116-50 168-18 39 25 45 70 16 100-43 44-126 42-178 10-39-24-44-63-6-92Z" fill="#e3f2e8" stroke="#cae7d4" stroke-width="2"/>
+            <g fill="#9aa8aa" font-family="Plus Jakarta Sans, sans-serif" font-size="13" font-weight="700" letter-spacing="1.3"><text x="71" y="82">SECTOR 29</text><text x="294" y="158">IFFCO CHOWK</text><text x="612" y="169">MG ROAD</text><text x="746" y="271">SECTOR 43</text><text x="118" y="345">HERO HONDA CHOWK</text><text x="383" y="523">SECTOR 56</text><text x="791" y="507">GOLF COURSE RD</text></g>
+            <g fill="#8ca397" font-family="Plus Jakarta Sans, sans-serif" font-size="11" font-weight="700" letter-spacing="1"><text x="692" y="136">LEISURE VALLEY PARK</text><text x="102" y="563">GREEN BELT</text></g>
+            <g fill="#b5c0c2"><circle cx="229" cy="139" r="5"/><circle cx="523" cy="178" r="5"/><circle cx="802" cy="360" r="5"/><circle cx="452" cy="405" r="5"/><circle cx="325" cy="287" r="5"/></g>
+            <path id="routeHalo" d="M139 464 C202 432 248 397 307 358 S416 309 490 333 S603 365 661 307 S752 270 840 224" fill="none" stroke="url(#routeGlow)" stroke-width="28" stroke-linecap="round"/>
+            <path id="routeBase" d="M139 464 C202 432 248 397 307 358 S416 309 490 333 S603 365 661 307 S752 270 840 224" fill="none" stroke="#fff" stroke-width="15" stroke-linecap="round"/>
+            <path id="routePath" d="M139 464 C202 432 248 397 307 358 S416 309 490 333 S603 365 661 307 S752 270 840 224" fill="none" stroke="#315ee8" stroke-width="7" stroke-linecap="round"/>
+            <g id="pickupPin" transform="translate(139 464)" filter="url(#pinShadow)"><circle r="16" fill="#fff"/><circle r="11" fill="#315ee8"/><circle r="4" fill="#fff"/></g>
+            <g id="dropPin" transform="translate(840 224)" filter="url(#pinShadow)"><path d="M0-19c-11 0-19 8-19 18 0 13 19 33 19 33S19 12 19-1C19-11 11-19 0-19Z" fill="#172033"/><circle cy="-2" r="6" fill="#fff"/></g>
+            <g id="carMarker" transform="translate(490 333)" filter="url(#pinShadow)"><circle r="19" fill="#315ee81c"/><circle r="13" fill="#fff"/><rect x="-11" y="-7" width="22" height="14" rx="5" fill="#315ee8"/><path d="M-7-7-4-12H4L7-7" fill="#315ee8"/><rect x="-6" y="-5" width="12" height="6" rx="2" fill="#dce6ff"/><circle cx="-6" cy="7" r="2.1" fill="#172033"/><circle cx="6" cy="7" r="2.1" fill="#172033"/></g>
+            <g transform="translate(490 285)"><rect x="-65" y="-23" width="130" height="28" rx="14" fill="#fff" stroke="#e5eaf2"/><circle cx="-50" cy="-9" r="4" fill="#8090aa"/><text x="-40" y="-5" fill="#33415a" font-family="Plus Jakarta Sans, sans-serif" font-size="10" font-weight="800">SAMPLE CAPTAIN</text></g>
+            <g transform="translate(843 177)"><rect x="-50" y="-22" width="100" height="27" rx="13" fill="#fff" stroke="#e5eaf2"/><text x="-36" y="-4" fill="#33415a" font-family="Plus Jakarta Sans, sans-serif" font-size="10" font-weight="800">PICKUP · 7:30</text></g>
+          </svg>
+          <div class="map-controls"><button aria-label="Zoom in" data-toast="Map zoom preview">+</button><button aria-label="Zoom out" data-toast="Map zoom preview">−</button></div>
+          <button class="locate" aria-label="Center map" data-toast="Map center is illustrative in this preview">◎</button>
+          <span class="map-scale">GURUGRAM · DELHI NCR</span><span class="map-attribution">Map preview · illustrative streets</span>
+        </div>
+        <div class="map-bottom"><span><i class="route-key"></i> Planned route</span><span class="gps-status"><i class="dot" style="animation:none;background:#8090aa;box-shadow:none"></i><span>Illustrative pins · no live GPS</span></span></div>
+      </section>
+      <aside class="info-card">
+        <div class="card-heading"><div><h2 class="status-copy-customer">Trip map preview</h2><h2 class="status-copy-driver">Pickup map preview</h2><p class="customer-only">Sample customer view · live status comes from the active trip.</p><p class="driver-only">Sample captain view · live status comes from the active trip.</p></div><span class="arrive" id="arrivePill">SAMPLE</span></div>
+        <div class="eta"><div><strong id="etaValue">—</strong><span id="etaCaption">Live ETA needs active trip GPS</span></div><span class="eta-icon" aria-hidden="true">➜</span></div>
+        <div class="route-stops"><div class="stop-line"><i class="stop-dot"></i><i class="stop-connector"></i><i class="stop-dot end"></i></div><div><div class="stop-copy"><small>PICKUP</small><div>Gurgaon - Delhi Expy, Sector 29</div></div><div class="stop-copy"><small>DESTINATION</small><div>Cyber Hub, DLF Phase 2</div></div></div></div>
+        <div class="captain"><div class="avatar">S</div><div class="captain-info"><strong>Sample captain <span class="rating">★ —</span></strong><small>Driver, rating and vehicle show after assignment</small></div><button class="action" style="padding:8px 10px" data-toast="Calling is not connected in this preview">Call</button></div>
+        <div class="timeline" aria-label="Trip status timeline"><span class="step done"><i></i>Booked</span><span class="step done"><i></i>Assigned</span><span class="step current" id="routeStage"><i></i><span class="customer-only">On the way</span><span class="driver-only">Pickup</span></span><span class="step"><i></i>Started</span><span class="step"><i></i>Complete</span></div>
+        <div class="actions"><button class="action share-button" id="shareTrip">↗ &nbsp; Share live trip</button><button class="action" id="openMaps">⌁ &nbsp; Open navigation</button><button class="action primary starttrip-button" id="startTrip">Start trip</button><button class="action journey-prompt" id="detailsButton">Trip details</button><button class="action journey-ended" id="endTrip">End trip</button></div>
+        <div class="disclosure customer-only"><b>Live tracking:</b> real pins and share links require an assigned booking, an active trip, GPS permission and a working device token.</div>
+        <div class="disclosure driver-only"><b>Captain reminder:</b> the live app shows its booked pickup time and any enabled late-start penalty for that trip.</div>
+      </aside>
+    </main>
+    <div class="demo-banner"><b>Design preview only:</b> the route, pickup/drop points and captain marker are illustrative. This page does not use live GPS, send notifications, start or end trips, or create a share link. The app map uses actual trip GPS only when an active trip and location permissions are available.</div>
+  </div>
+  <div class="notice" id="notice" role="status" aria-live="polite"></div>
+  <script>
+    const body = document.body;
+    const customerMode = document.getElementById('customerMode');
+    const driverMode = document.getElementById('driverMode');
+    const notice = document.getElementById('notice');
+    let noticeTimer;
+    function toast(message) {
+      notice.textContent = message;
+      notice.classList.add('show');
+      clearTimeout(noticeTimer);
+      noticeTimer = setTimeout(() => notice.classList.remove('show'), 2400);
+    }
+    customerMode.addEventListener('click', () => {
+      body.classList.remove('body-driver');
+      customerMode.classList.add('active');
+      driverMode.classList.remove('active');
+      customerMode.setAttribute('aria-selected', 'true');
+      driverMode.setAttribute('aria-selected', 'false');
+    });
+    driverMode.addEventListener('click', () => {
+      body.classList.add('body-driver');
+      driverMode.classList.add('active');
+      customerMode.classList.remove('active');
+      driverMode.setAttribute('aria-selected', 'true');
+      customerMode.setAttribute('aria-selected', 'false');
+    });
+    document.querySelectorAll('[data-toast]').forEach((button) => button.addEventListener('click', () => toast(button.dataset.toast)));
+    for (const id of ['shareTrip', 'openMaps', 'startTrip', 'endTrip', 'detailsButton']) {
+      document.getElementById(id)?.addEventListener('click', (event) => {
+        event.preventDefault();
+        toast('This is a visual preview. Trip actions are not connected.');
+      });
+    }
+  </script>
+</body>
+</html>

@@ -1,12 +1,12 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Linking, Platform, Text, TouchableOpacity, View } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { User } from 'firebase/auth';
 import { getPermissionsAsync } from 'expo-notifications';
-import { enablePushNotifications } from '../features/customer/pushNotifications';
+import { enablePushNotifications, pushPreferenceEnabled } from '../features/customer/pushNotifications';
 import { mobileTheme } from '../features/mobileTheme';
+import type { AppSurface } from '../lib/appSurface';
 
-const preferenceKey = (uid: string) => `drivx.push.enabled.${uid}`;
+type NotificationSurface = Exclude<AppSurface, null>;
 const { colors, radius } = mobileTheme;
 const fontFamily = mobileTheme.fontFamily as typeof mobileTheme.fontFamily & {
   textSemiBold: string;
@@ -23,10 +23,12 @@ function hasWebPushKey() {
 /** Holds customer, driver and admin sessions at an explicit push opt-in step. */
 export function PushPermissionGate({
   user,
+  surface,
   onSignOut,
   children,
 }: {
   user: User;
+  surface: NotificationSurface;
   onSignOut: () => Promise<void>;
   children: ReactNode;
 }) {
@@ -39,7 +41,7 @@ export function PushPermissionGate({
   useEffect(() => {
     let active = true;
     void (async () => {
-      const optedIn = await AsyncStorage.getItem(preferenceKey(user.uid)) === 'true';
+      const optedIn = await pushPreferenceEnabled(user.uid, surface);
       let permissionGranted = false;
       try {
         permissionGranted = Platform.OS === 'web'
@@ -52,7 +54,7 @@ export function PushPermissionGate({
       }
     })().catch(() => { if (active) setReady(true); });
     return () => { active = false; };
-  }, [user.uid]);
+  }, [user.uid, surface]);
 
   if (enabled || dismissed) return <>{children}</>;
 
@@ -67,7 +69,9 @@ export function PushPermissionGate({
           Turn on DrivX notifications
         </Text>
         <Text style={{ color: colors.textMuted, fontFamily: fontFamily.text, fontSize: 15, lineHeight: 23 }}>
-          Get driver offers, booking confirmations, trip status and payment updates. You can continue using DrivX without notifications and enable them later in settings.
+          {surface === 'driver'
+            ? 'Get trip offers, pickup reminders, trip status and dues when DrivX is closed. You can browse without alerts, but must enable push notifications before going online.'
+            : 'Get booking confirmations, driver arrival and trip status when DrivX is closed. You can continue using DrivX without notifications and enable them later in settings.'}
         </Text>
         {missingWebKey ? (
           <Text accessibilityRole="alert" style={{ color: colors.danger, fontFamily: fontFamily.text, fontSize: 14, lineHeight: 21 }}>
@@ -85,7 +89,7 @@ export function PushPermissionGate({
             onPress={() => {
               setBusy(true);
               setError('');
-              void enablePushNotifications(user)
+              void enablePushNotifications(user, surface)
                 .then(() => setEnabled(true))
                 .catch((reason) => setError(reason instanceof Error ? reason.message : 'Notifications could not be enabled.'))
                 .finally(() => setBusy(false));

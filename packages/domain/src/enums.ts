@@ -294,6 +294,7 @@ export const NOTIFICATION_TYPES = [
   'payment_update',
   'support_reply',
   'safety_alert',
+  'announcement',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
@@ -335,6 +336,8 @@ export const AUDIT_ACTIONS = [
   'pricing_rule_updated',
   'service_type_toggled',
   'support_ticket_resolved',
+  'support_ticket_replied',
+  'support_ticket_status_changed',
   'account_deleted',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { deflateSync, inflateSync } from 'node:zlib';
 import { bucket, db, serverTimestamp } from './admin';
 import { RESEND_API_KEY, RESEND_FROM_EMAIL, PUBLIC_ORIGIN } from './config';
+import { CUSTOMER_CARE_CONTACTS } from '@drivx/domain';
 
 type Data = Record<string, unknown>;
 
@@ -163,6 +164,16 @@ type BookingPdfInput = {
   reference: string; driverName: string; driverPhone: string; driverId: string;
   vehicle: string; rating: string; pickup: string; destination: string; time: string;
   direction: string; fare: string;
+  receipt?: {
+    lines: Array<{ label: string; amount: string; amountPaise: number }>;
+    subtotal: string;
+    tax: string;
+    total: string;
+    distance: string;
+    duration: string;
+    odometer: string;
+    payment: string;
+  };
 };
 
 function makePdf(input: BookingPdfInput, photo?: Buffer): Buffer {
@@ -271,15 +282,15 @@ function makePdf(input: BookingPdfInput, photo?: Buffer): Buffer {
   roundRect(40, 28, 30, 30, 9, 'blue');
   drawText('D', 49, 50, 19, true, 'white');
   drawText('DrivX', 79, 51, 18, true, 'navy');
-  drawText('CUSTOMER TRIP CONFIRMATION', 414, 48, 7, true, 'muted');
-  drawText('Your trip details', 40, 101, 23, true, 'ink');
-  drawText('Booking confirmation - Keep this for your journey.', 40, 120, 8, false, 'muted');
-  pill('CONFIRMED', 466, 88, 88, 'greenPale', 'green');
+  drawText(input.receipt ? 'CUSTOMER TRIP RECEIPT' : 'CUSTOMER TRIP CONFIRMATION', 414, 48, 7, true, 'muted');
+  drawText(input.receipt ? 'Trip completion invoice' : 'Your trip details', 40, 101, 23, true, 'ink');
+  drawText(input.receipt ? 'Final fare and trip record for your completed journey.' : 'Booking confirmation - Keep this for your journey.', 40, 120, 8, false, 'muted');
+  pill(input.receipt ? 'COMPLETED' : 'CONFIRMED', input.receipt ? 458 : 466, 88, input.receipt ? 96 : 88, 'greenPale', 'green');
 
   roundRect(40, 138, 515, 56, 12, 'white', 'border');
   drawText('BOOKING REFERENCE', 56, 158, 6.5, true, 'muted');
   drawText(input.reference, 56, 179, 14, true, 'navy');
-  drawText('Confirmed', 492, 169, 8, true, 'green');
+  drawText(input.receipt ? 'Completed' : 'Confirmed', 484, 169, 8, true, 'green');
 
   roundRect(40, 208, 250, 146, 12, 'white', 'border');
   drawText('YOUR DRIVER', 56, 229, 7, true, 'muted');
@@ -315,33 +326,62 @@ function makePdf(input: BookingPdfInput, photo?: Buffer): Buffer {
   drawText('Driver and vehicle details are in this confirmation', 397, 521, 6.2, false, 'muted');
 
   roundRect(40, 555, 250, 132, 12, 'white', 'border');
-  drawText('ESTIMATED FARE', 56, 576, 7, true, 'muted');
-  drawText(input.direction, 56, 599, 7, false, 'muted');
-  drawText(input.fare, 231, 601, 10, true, 'ink');
-  content.push(`${colors.border} RG 0.6 w 56 ${pageHeight - 613} m 274 ${pageHeight - 613} l S`);
-  drawText('Payable fare', 56, 633, 7.5, true, 'ink');
-  drawText('Final fare in app', 204, 633, 7, true, 'blue');
-  drawWrapped('This is an estimate. The final fare follows the completed trip record and applicable fare rules.', 56, 652, 216, 6.6, 'muted', 3);
+  if (input.receipt) {
+    drawText('FINAL FARE BREAKDOWN', 56, 576, 7, true, 'muted');
+    const lines = input.receipt.lines.slice(0, 3);
+    lines.forEach((line, index) => {
+      const y = 596 + index * 14;
+      drawWrapped(line.label, 56, y, 150, 6.5, 'ink', 1);
+      drawText(line.amount, 215, y, 6.5, false, 'ink');
+    });
+    if (input.receipt.lines.length > 3) {
+      const otherPaise = input.receipt.lines.slice(3).reduce((sum, line) => sum + Number(line.amountPaise ?? 0), 0);
+      drawText('Other fare items', 56, 638, 6.5, false, 'ink');
+      drawText(amountInr(otherPaise), 215, 638, 6.5, false, 'ink');
+    }
+    content.push(`${colors.border} RG 0.6 w 56 ${pageHeight - 648} m 274 ${pageHeight - 648} l S`);
+    drawText('Subtotal', 56, 660, 6.5, false, 'muted');
+    drawText(input.receipt.subtotal, 215, 660, 6.5, false, 'muted');
+    drawText('GST', 56, 672, 6.5, false, 'muted');
+    drawText(input.receipt.tax, 215, 672, 6.5, false, 'muted');
+    drawText('TOTAL', 56, 684, 7, true, 'ink');
+    drawText(input.receipt.total, 205, 684, 8, true, 'blue');
 
-  roundRect(304, 555, 251, 132, 12, 'white', 'border');
-  drawText('BEFORE PICKUP', 320, 576, 7, true, 'muted');
-  const reminders = [
-    'Be ready at the pickup point at the scheduled time',
-    'Confirm the driver and vehicle details',
-    'Share the start OTP only at pickup',
-    'Use the app to follow trip updates',
-  ];
-  reminders.forEach((reminder, index) => {
-    const y = 599 + index * 19;
-    content.push(`${colors.bluePale} rg 321 ${pageHeight - y - 3} 6 6 re f`);
-    drawWrapped(reminder, 335, y + 3, 202, 6.5, 'ink', 1);
-  });
+    roundRect(304, 555, 251, 132, 12, 'white', 'border');
+    drawText('TRIP SUMMARY', 320, 576, 7, true, 'muted');
+    drawText(`Actual distance  ${input.receipt.distance}`, 320, 599, 7, false, 'ink');
+    drawText(`Duration  ${input.receipt.duration}`, 320, 617, 7, false, 'ink');
+    drawWrapped(`Odometer  ${input.receipt.odometer}`, 320, 635, 216, 6.5, 'ink', 2);
+    drawWrapped(`Payment  ${input.receipt.payment}`, 320, 660, 216, 6.5, 'ink', 2);
+  } else {
+    drawText('ESTIMATED FARE', 56, 576, 7, true, 'muted');
+    drawText(input.direction, 56, 599, 7, false, 'muted');
+    drawText(input.fare, 231, 601, 10, true, 'ink');
+    content.push(`${colors.border} RG 0.6 w 56 ${pageHeight - 613} m 274 ${pageHeight - 613} l S`);
+    drawText('Payable fare', 56, 633, 7.5, true, 'ink');
+    drawText('Final fare in app', 204, 633, 7, true, 'blue');
+    drawWrapped('This is an estimate. The final fare follows the completed trip record and applicable fare rules.', 56, 652, 216, 6.6, 'muted', 3);
+
+    roundRect(304, 555, 251, 132, 12, 'white', 'border');
+    drawText('BEFORE PICKUP', 320, 576, 7, true, 'muted');
+    const reminders = [
+      'Be ready at the pickup point at the scheduled time',
+      'Confirm the driver and vehicle details',
+      'Share the start OTP only at pickup',
+      'Use the app to follow trip updates',
+    ];
+    reminders.forEach((reminder, index) => {
+      const y = 599 + index * 19;
+      content.push(`${colors.bluePale} rg 321 ${pageHeight - y - 3} 6 6 re f`);
+      drawWrapped(reminder, 335, y + 3, 202, 6.5, 'ink', 1);
+    });
+  }
 
   roundRect(40, 701, 515, 48, 10, 'soft');
   drawText('YOUR PRIVACY', 55, 720, 6.5, true, 'muted');
   drawWrapped('Only trip-relevant driver profile details are included. Government ID scans and full ID numbers remain private with authorised verification staff.', 55, 737, 480, 6.7, 'muted', 2);
   content.push(`${colors.border} RG 0.6 w 40 ${pageHeight - 769} m 555 ${pageHeight - 769} l S`);
-  drawText('DrivX Support  |  customersupport@drivx.in  |  +91 87085 06508  |  +91 98130 51505', 40, 788, 7, false, 'muted');
+  drawText(`DrivX Support  |  ${CUSTOMER_CARE_CONTACTS.email}  |  ${CUSTOMER_CARE_CONTACTS.phones.map((phone) => phone.label).join('  |  ')}`, 40, 788, 7, false, 'muted');
   drawText('Please keep this confirmation for your trip.', 40, 805, 6.5, false, 'muted');
   const stream = Buffer.from(content.join('\n'), 'binary');
   const contentObject = objects.length + 1;
@@ -405,7 +445,7 @@ function emailHtml(input: {
         <div style="padding:17px 0 0;"><div style="font-size:10px;letter-spacing:.5px;color:#737b86;font-weight:bold;">FARE &amp; PAYMENT</div><p style="font-size:13px;line-height:1.55;color:#30343c;margin:7px 0 14px;">Estimated fare <b style="color:#1b2b5b;font-size:17px;">${html(input.fare)}</b>. No charge is made now; the final fare is confirmed from the completed trip record and applicable fare rules. Any changes will be shown in your app.</p></div>
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin-top:5px;"><tr><td width="40%" valign="middle"><a href="${html(input.tripUrl)}" style="display:inline-block;background:#2563eb;border-radius:22px;padding:13px 19px;color:#fff;text-decoration:none;font-size:12px;font-weight:bold;">Open your trip</a></td><td valign="middle" style="border:1px solid #e1ded8;border-radius:14px;padding:10px 14px;font-size:11px;color:#333943;"><b style="color:#2563eb;">PDF</b>&nbsp;&nbsp; Trip confirmation &middot; ${html(input.reference)}<br><span style="font-size:9px;color:#818894;">1 page attached</span></td></tr></table>
       </td></tr>
-      <tr><td style="padding:18px 18px 0;"><p style="font-size:13px;line-height:1.5;color:#272b32;margin:0 0 5px;"><b>Thanks for riding with DrivX.</b></p><p style="font-size:11px;line-height:1.6;color:#737b86;margin:0;">Need help? <a href="mailto:customersupport@drivx.in" style="color:#2563eb;text-decoration:none;">customersupport@drivx.in</a> &nbsp;|&nbsp; +91 87085 06508 &nbsp;|&nbsp; +91 98130 51505</p><p style="font-size:10px;line-height:1.5;color:#858b95;margin:12px 0 0;"><a href="${html(`${PUBLIC_ORIGIN}/privacy-policy.html`)}" style="color:#737b86;">Privacy Policy</a> &nbsp;|&nbsp; DrivX &middot; Your car. Your rules.</p></td></tr>
+      <tr><td style="padding:18px 18px 0;"><p style="font-size:13px;line-height:1.5;color:#272b32;margin:0 0 5px;"><b>Thanks for riding with DrivX.</b></p><p style="font-size:11px;line-height:1.6;color:#737b86;margin:0;">Need help? <a href="mailto:${html(CUSTOMER_CARE_CONTACTS.email)}" style="color:#2563eb;text-decoration:none;">${html(CUSTOMER_CARE_CONTACTS.email)}</a> &nbsp;|&nbsp; ${CUSTOMER_CARE_CONTACTS.phones.map((phone) => html(phone.label)).join(' &nbsp;|&nbsp; ')}</p><p style="font-size:10px;line-height:1.5;color:#858b95;margin:12px 0 0;"><a href="${html(`${PUBLIC_ORIGIN}/privacy-policy.html`)}" style="color:#737b86;">Privacy Policy</a> &nbsp;|&nbsp; DrivX &middot; Your car. Your rules.</p></td></tr>
     </table>
   </td></tr></table></body></html>`;
 }
@@ -507,7 +547,7 @@ export async function sendCustomerAssignmentEmail(bookingId: string, booking: Da
     '', 'Your driver identity has been verified by DrivX. Private identity document scans are not shared.',
     'The fare shown is an estimate. Any approved extra distance or time will appear in the final trip details. Payment is due after the trip is completed.',
     '', `View trip: ${tripUrl}`, '',
-    'Thanks again for riding with DrivX. Need help? customersupport@drivx.in | +91 87085 06508 | +91 98130 51505',
+    `Thanks again for riding with DrivX. Need help? ${CUSTOMER_CARE_CONTACTS.email} | ${CUSTOMER_CARE_CONTACTS.phones.map((phone) => phone.label).join(' | ')}`,
   ].join('\n');
 
   const response = await fetch('https://api.resend.com/emails', {
@@ -520,7 +560,7 @@ export async function sendCustomerAssignmentEmail(bookingId: string, booking: Da
     body: JSON.stringify({
       from,
       to: [email],
-      reply_to: 'customersupport@drivx.in',
+      reply_to: CUSTOMER_CARE_CONTACTS.email,
       subject,
       html: emailHtml({ customerName, reference, pickup, destination, time, fare, driverName, driverPhone, driverId, vehicle: vehicleLabel, rating, photoUrl, tripUrl, direction }),
       text: bodyText,
@@ -538,4 +578,148 @@ export async function sendCustomerAssignmentEmail(bookingId: string, booking: Da
     bookingId, customerUid, driverUid, recipient: email, status: 'sent', provider: 'resend',
     providerEmailId: value(result.id) || null, updatedAt: serverTimestamp(),
   }, { merge: true });
+}
+
+function completionEmailHtml(input: {
+  name: string; reference: string; bookingId: string; pickup: string; destination: string;
+  completedAt: string; distance: string; duration: string; fare: string;
+  fareLines: Array<{ label: string; amount: string }>; tripUrl: string;
+}): string {
+  const rows = input.fareLines.map((line) => `<tr><td style="padding:8px 0;border-bottom:1px solid #ece9e4;color:#545d69;font-size:12px;">${html(line.label)}</td><td align="right" style="padding:8px 0;border-bottom:1px solid #ece9e4;color:#202838;font-size:12px;">${html(line.amount)}</td></tr>`).join('');
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Your DrivX trip receipt</title></head><body style="margin:0;background:#f5f2ed;color:#17191e;font-family:Arial,Helvetica,sans-serif;padding:24px 12px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center"><table role="presentation" width="640" cellspacing="0" cellpadding="0" style="max-width:640px;width:100%;border-collapse:separate;border-spacing:0"><tr><td style="padding:0 0 18px;font-size:22px;font-weight:bold;color:#1b2b5b">DrivX <span style="float:right;font-size:10px;letter-spacing:1px;color:#737b86">TRIP RECEIPT</span></td></tr><tr><td style="background:#fff;border:1px solid #e1ded8;border-radius:20px;padding:24px"><div style="display:inline-block;background:#e9f7ee;color:#15803d;border-radius:20px;padding:6px 12px;font-size:10px;font-weight:bold">TRIP COMPLETED</div><h1 style="font-size:23px;line-height:1.25;margin:16px 0 8px">Your DrivX receipt is ready</h1><p style="font-size:14px;line-height:1.6;color:#596273;margin:0 0 18px">Hi ${html(input.name)}, thank you for riding with DrivX. Your final trip record and invoice are attached.</p><div style="background:#f5f2ed;border-radius:15px;padding:16px;margin-bottom:16px"><p style="margin:0 0 10px;font-size:11px;color:#697384"><b>BOOKING</b> &nbsp; ${html(input.reference)}<br><span style="font-size:10px">ID ${html(input.bookingId)}</span></p><p style="margin:0 0 8px;font-size:12px"><b>Pickup</b><br>${html(input.pickup)}</p><p style="margin:0 0 12px;font-size:12px"><b>Drop-off</b><br>${html(input.destination)}</p><p style="margin:0;border-top:1px solid #dfdcd6;padding-top:10px;font-size:11px;color:#596273">Completed ${html(input.completedAt)} · ${html(input.distance)} · ${html(input.duration)}</p></div><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse"><tr><td colspan="2" style="padding:0 0 8px;color:#1b2b5b;font-size:11px;font-weight:bold;letter-spacing:.6px">FINAL FARE</td></tr>${rows}<tr><td style="padding:12px 0 0;color:#17191e;font-size:14px;font-weight:bold">Amount recorded</td><td align="right" style="padding:12px 0 0;color:#20309a;font-size:18px;font-weight:bold">${html(input.fare)}</td></tr></table><p style="font-size:12px;line-height:1.6;color:#667085;margin:18px 0">The attached PDF includes the final fare breakdown and trip readings. The same final amount is available in your DrivX trip screen.</p><a href="${html(input.tripUrl)}" style="display:inline-block;background:#2563eb;color:#fff;border-radius:24px;padding:12px 20px;text-decoration:none;font-weight:bold;font-size:13px">View completed trip</a><p style="font-size:11px;line-height:1.6;color:#737b86;margin:22px 0 0">Need help? <a href="mailto:${html(CUSTOMER_CARE_CONTACTS.email)}" style="color:#2563eb">${html(CUSTOMER_CARE_CONTACTS.email)}</a> · ${CUSTOMER_CARE_CONTACTS.phones.map((phone) => html(phone.label)).join(' · ')}</p></td></tr><tr><td style="padding:16px 4px;font-size:10px;color:#858b95">DrivX · Your car. Your rules. Driver profile details are included where relevant; private identity document scans are not attached.</td></tr></table></td></tr></table></body></html>`;
+}
+
+/** Sends an idempotent final invoice after the server records the completed trip. */
+export async function sendCustomerCompletionEmail(bookingId: string, booking: Data): Promise<void> {
+  if (booking.status !== 'completed' || !booking.finalFare || typeof booking.finalFare !== 'object') return;
+  const customerUid = value(booking.customerUid);
+  const driverUid = value(booking.assignedDriverUid);
+  if (!customerUid) return;
+  const [profileSnapshot, userSnapshot] = await Promise.all([
+    db().doc(`customerProfiles/${customerUid}`).get(),
+    db().doc(`users/${customerUid}`).get(),
+  ]);
+  const profile = (profileSnapshot.data() ?? {}) as Data;
+  const user = (userSnapshot.data() ?? {}) as Data;
+  const email = value(profile.email, value(user.email)).toLowerCase();
+  if (!email || !email.includes('@')) return;
+
+  const reference = value(booking.reference, bookingId);
+  const completedAtMs = Number(booking.completedAtMs ?? Date.now());
+  const deliveryId = createHash('sha256').update(`completion:${bookingId}:${completedAtMs}`).digest('hex');
+  const deliveryRef = db().doc(`emailDeliveryEvents/${deliveryId}`);
+  if ((await deliveryRef.get()).get('status') === 'sent') return;
+  const apiKey = RESEND_API_KEY.value();
+  const from = RESEND_FROM_EMAIL.value();
+  if (!apiKey || !from) throw new Error('Resend is not configured for the completed-trip receipt.');
+
+  const finalFare = booking.finalFare as Data;
+  const estimate = booking.estimate && typeof booking.estimate === 'object' ? booking.estimate as Data : {};
+  const items = Array.isArray(finalFare.items) ? finalFare.items as Data[] : [];
+  const fareLines = items.map((item) => ({
+    label: value(item.label, value(item.key, 'Fare item')),
+    amountPaise: Number(item.amountPaise ?? 0),
+    amount: amountInr(item.amountPaise),
+  }));
+  const finalTotal = Number(finalFare.totalPaise ?? 0);
+  const total = amountInr(finalTotal);
+  const subtotal = amountInr(finalFare.subtotalPaise);
+  const tax = amountInr(finalFare.taxPaise);
+  const pickup = placeLabel(booking.pickup);
+  const destination = placeLabel(booking.destination);
+  const scheduled = readableDate(booking.scheduledForMs);
+  const completedAt = readableDate(completedAtMs);
+  const distanceMeters = Number(booking.actualDistanceMeters ?? 0);
+  const distance = distanceMeters > 0 ? `${(distanceMeters / 1000).toFixed(1)} km actual distance` : 'Distance unavailable';
+  const durationSeconds = Number(booking.actualDurationSeconds ?? 0);
+  const duration = durationSeconds > 0 ? `${Math.floor(durationSeconds / 60)} min` : 'Duration unavailable';
+  const startOdometer = Number(booking.startOdometerKm ?? 0);
+  const endOdometer = Number(booking.endOdometerKm ?? 0);
+  const odometer = typeof booking.startOdometerKm === 'number' && typeof booking.endOdometerKm === 'number'
+    ? `${startOdometer} km → ${endOdometer} km`
+    : 'Odometer readings unavailable';
+  const payment = booking.paymentStatus === 'cash_collected' ? 'Cash collected by driver' : value(booking.paymentStatus, 'Recorded in your DrivX trip');
+  const driver = (booking.driver && typeof booking.driver === 'object' ? booking.driver : {}) as Data;
+  const vehicle = (driver.vehicle && typeof driver.vehicle === 'object' ? driver.vehicle : {}) as Data;
+  const driverName = value(driver.fullName, 'Your DrivX driver');
+  const driverPhone = value(driver.phoneE164, 'Phone number unavailable');
+  const driverId = value(driver.driverId, 'Available in the trip screen');
+  const vehicleLabel = [vehicle.make, vehicle.model, vehicle.plate].map((part) => value(part)).filter(Boolean).join(' · ') || 'Vehicle details available in your trip';
+  const ratingAverage = Number(driver.ratingAverage ?? 0);
+  const rating = ratingAverage > 0 ? `${ratingAverage.toFixed(1)} (${Number(driver.ratingCount ?? 0)} ratings)` : 'New driver';
+  const tripDirection = booking.tripDirection === 'round_trip' ? 'Round trip' : 'One way';
+  const serviceType = value(booking.serviceTypeId);
+  const direction = serviceType === 'chauffeur_outstation' ? `Outstation · ${tripDirection}` : serviceType === 'chauffeur_hourly' ? 'Hourly package' : `In-city · ${tripDirection}`;
+  const customerName = value(profile.fullName, value(user.displayName, 'there'));
+  const tripUrl = `${PUBLIC_ORIGIN}/customer/trips?bookingId=${encodeURIComponent(bookingId)}`;
+
+  let photoBytes: Buffer | undefined;
+  const photoPath = value(driver.photoPath);
+  if (driverUid && photoPath.startsWith(`avatars/${driverUid}/`)) {
+    try {
+      const file = bucket().file(photoPath);
+      const [metadata] = await file.getMetadata();
+      const contentType = value(metadata.contentType).toLowerCase();
+      const size = Number(metadata.size ?? 0);
+      if ((contentType === 'image/jpeg' || contentType === 'image/png') && size > 0 && size <= 2_000_000) {
+        [photoBytes] = await file.download();
+      }
+    } catch (error) {
+      console.warn(JSON.stringify({ level: 'warn', fn: 'sendCustomerCompletionEmail', bookingId, outcome: 'driver_photo_unavailable', code: (error as { code?: unknown }).code ?? 'unknown' }));
+    }
+  }
+
+  const pdf = makePdf({
+    reference, driverName, driverPhone, driverId, vehicle: vehicleLabel, rating,
+    pickup, destination, time: scheduled, direction, fare: total,
+    receipt: {
+      lines: fareLines,
+      subtotal, tax, total,
+      distance,
+      duration,
+      odometer,
+      payment,
+    },
+  }, photoBytes);
+  if (pdf.length > 5_000_000) throw new Error('DrivX final invoice PDF exceeded the email attachment limit.');
+  const htmlRows = [
+    ...fareLines.map((line) => ({ label: line.label, amount: line.amount })),
+    { label: 'Subtotal', amount: subtotal },
+    { label: 'GST', amount: tax },
+  ];
+  const text = [
+    `Hi ${customerName},`, '',
+    'Thank you for riding with DrivX. Your trip is complete and the final invoice PDF is attached.', '',
+    `Booking reference: ${reference}`, `Booking ID: ${bookingId}`,
+    `Pickup: ${pickup}`, `Drop-off: ${destination}`, `Scheduled: ${scheduled}`, `Completed: ${completedAt}`,
+    `${distance}; ${duration}; Odometer: ${odometer}`, `Payment: ${payment}`, '',
+    ...fareLines.map((line) => `${line.label}: ${line.amount}`),
+    `Subtotal: ${subtotal}`, `GST: ${tax}`, `Final fare: ${total}`, '',
+    `Driver: ${driverName} · ${driverPhone} · ${driverId}`, `Vehicle: ${vehicleLabel}`, `Rating: ${rating}`,
+    `Original estimate: ${amountInr(estimate.totalPaise)}`, '',
+    `View trip: ${tripUrl}`,
+    `Support: ${CUSTOMER_CARE_CONTACTS.email} · ${CUSTOMER_CARE_CONTACTS.phones.map((phone) => phone.label).join(' · ')}`,
+    'Driver profile details are included where relevant. Private identity document scans are not attached.',
+  ].join('\n');
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json', 'Idempotency-Key': `drivx-trip-completed-${deliveryId}` },
+    body: JSON.stringify({
+      from,
+      to: [email],
+      reply_to: CUSTOMER_CARE_CONTACTS.email,
+      subject: `Your DrivX trip receipt · ${reference} · ${total}`,
+      html: completionEmailHtml({ name: customerName, reference, bookingId, pickup, destination, completedAt, distance, duration, fare: total, fareLines: htmlRows, tripUrl }),
+      text,
+      attachments: [{ filename: `DrivX-${reference.replace(/[^a-zA-Z0-9_-]/g, '-')}-final-invoice.pdf`, content: pdf.toString('base64'), content_type: 'application/pdf' }],
+      tags: [{ name: 'event', value: 'trip-completed' }, { name: 'booking', value: deliveryId.slice(0, 32) }],
+    }),
+  });
+  const result = await response.json().catch(() => ({})) as Data;
+  if (!response.ok) {
+    const errorName = value(result.name, `http_${response.status}`);
+    await deliveryRef.set({ bookingId, customerUid, recipient: email, status: 'failed', error: errorName, updatedAt: serverTimestamp() }, { merge: true });
+    throw new Error(`Resend rejected DrivX completion invoice (${errorName}).`);
+  }
+  await deliveryRef.set({ bookingId, customerUid, recipient: email, status: 'sent', provider: 'resend', providerEmailId: value(result.id) || null, updatedAt: serverTimestamp() }, { merge: true });
 }

@@ -11,46 +11,96 @@ import {
   Text,
   useTheme,
 } from '@drivx/ui';
-import { SUPPORT_CATEGORIES, type SupportCategory } from '@drivx/domain';
-import { useMyTickets } from '../customer/queries';
+import { CUSTOMER_CARE_CONTACTS, SUPPORT_CATEGORIES, type SupportCategory } from '@drivx/domain';
+import { useMyTickets, useTicketMessages, type TicketView } from '../customer/queries';
 import { useCreateTicket, useReplyTicket } from '../customer/mutations';
 import { SUPPORT_CATEGORY_LABEL, dateTime } from '../customer/labels';
+import { useSession } from '../auth/AuthProvider';
 import type { LegalRole } from '../legal/documents';
 
 const TICKET_TONE: Record<string, 'info' | 'warning' | 'success' | 'neutral'> = {
-  open: 'warning',
-  in_progress: 'info',
-  awaiting_customer: 'warning',
-  resolved: 'success',
-  closed: 'neutral',
+  open: 'warning', in_progress: 'info', awaiting_customer: 'warning', resolved: 'success', closed: 'neutral',
 };
 
-const SUPPORT_EMAIL = 'customersupport@drivx.in';
-const SUPPORT_PHONES = [
-  { label: '87085 06508', uri: 'tel:+918708506508' },
-  { label: '98130 51505', uri: 'tel:+919813051505' },
-];
+function TicketConversation({ ticket, role, expanded, onToggle }: {
+  ticket: TicketView;
+  role: LegalRole;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const theme = useTheme();
+  const { user } = useSession();
+  const ticketRole = role === 'driver' ? 'driver' : 'customer';
+  const messages = useTicketMessages(expanded ? ticket.id : null, ticketRole);
+  const reply = useReplyTicket(role);
+  const [draft, setDraft] = useState('');
+  const [feedback, setFeedback] = useState<string | null>(null);
 
-/**
- * The ticket desk, shared by both apps.
- *
- * One component rather than two screens because the rules behind it are
- * role-blind: `supportTickets` refuses a create whose `openedByUid` is not the
- * caller and whose `status` is not `open`, so whoever signs in may open a ticket
- * about their own trips and nothing else. What differs is only the closing
- * sentence, which says who writes the outcome.
- */
+  function sendReply() {
+    setFeedback(null);
+    reply.mutate({ id: ticket.id, body: draft }, {
+      onSuccess: () => setDraft(''),
+      onError: (error) => setFeedback(error instanceof Error ? error.message : 'Could not send your reply.'),
+    });
+  }
+
+  return (
+    <Card tone="flat" style={{ gap: theme.spacing.xs }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: theme.spacing.md }}>
+        <View style={{ flex: 1, gap: theme.spacing.xxs }}>
+          <Text variant="heading" tone="brand">{ticket.subject}</Text>
+          <Text variant="caption" tone="faint">
+            {SUPPORT_CATEGORY_LABEL[ticket.category as SupportCategory] ?? ticket.category ?? 'Support'} · {dateTime(ticket.createdAtMs)}
+          </Text>
+        </View>
+        <StatusPill label={ticket.status.replace(/_/g, ' ')} tone={TICKET_TONE[ticket.status] ?? 'neutral'} />
+      </View>
+      <Text variant="caption">{ticket.body}</Text>
+      <Text variant="caption" tone="faint">
+            Ticket {ticket.id}{ticket.bookingReference ? ` · Booking ${ticket.bookingReference}` : ticket.bookingId ? ` · Booking ${ticket.bookingId}` : ''}
+      </Text>
+      {ticket.resolution ? <Text variant="caption" tone="success">Resolution: {ticket.resolution}</Text> : null}
+      <Button
+        label={expanded ? 'Hide conversation' : 'View conversation'}
+        appearance="ghost"
+        size="sm"
+        onPress={onToggle}
+      />
+      {expanded ? (
+        <View style={{ gap: theme.spacing.sm, borderTopWidth: theme.borderWidth.hairline, borderTopColor: theme.colors.border, paddingTop: theme.spacing.sm }}>
+          {messages.isPending ? <Text variant="caption" tone="muted">Loading replies…</Text> : null}
+          {messages.isError ? <Text variant="caption" tone="danger">Could not load the ticket conversation.</Text> : null}
+          {(messages.data ?? []).map((message) => (
+            <View key={message.id} style={{ alignSelf: message.authorUid === user?.uid ? 'flex-end' : 'flex-start', maxWidth: '92%', borderRadius: theme.radius.md, backgroundColor: message.authorUid === user?.uid ? theme.colors.primarySoft : theme.colors.surfaceMuted, padding: theme.spacing.sm, gap: 3 }}>
+              <Text variant="overline" tone={message.authorUid === user?.uid ? 'primary' : 'muted'}>
+                {message.authorUid === user?.uid ? 'You' : message.authorRole === 'admin' || message.authorRole === 'ops' ? 'DrivX support' : message.authorRole === 'driver' ? 'Driver' : 'Customer'}
+                {message.createdAtMs ? ` · ${dateTime(message.createdAtMs)}` : ''}
+              </Text>
+              <Text variant="caption">{message.body}</Text>
+            </View>
+          ))}
+          {ticket.status !== 'closed' && ticket.status !== 'resolved' ? (
+            <>
+              <Field label="Reply to support" value={draft} onChangeText={setDraft} multiline />
+              <Button label="Send reply" size="sm" loading={reply.isPending} disabled={draft.trim().length < 2} onPress={sendReply} />
+            </>
+          ) : <Text variant="caption" tone="muted">This ticket is closed. Open a new ticket if you still need help.</Text>}
+          {feedback ? <Text variant="caption" tone="danger">{feedback}</Text> : null}
+        </View>
+      ) : null}
+    </Card>
+  );
+}
+
 export function SupportCenter({ role }: { role: LegalRole }) {
   const theme = useTheme();
-  const tickets = useMyTickets();
-  const create = useCreateTicket();
-  const reply = useReplyTicket();
-
+  const ticketRole = role === 'driver' ? 'driver' : 'customer';
+  const tickets = useMyTickets(ticketRole);
+  const create = useCreateTicket(ticketRole);
   const [category, setCategory] = useState<SupportCategory>('trip_issue');
-  const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
-  const [replyTo, setReplyTo] = useState<string | null>(null);
-  const [replyBody, setReplyBody] = useState('');
+  const [bookingReference, setBookingReference] = useState('');
+  const [expandedTicket, setExpandedTicket] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const faq = role === 'driver'
@@ -64,114 +114,56 @@ export function SupportCenter({ role }: { role: LegalRole }) {
         ['How is the fare estimated?', 'DrivX uses the selected service, route distance or hourly package, and a one-time night charge when the scheduled pickup or map-estimated trip overlaps the configured night window. The estimate is shown before you confirm.'],
         ['How do I pay for a trip?', 'Trip fare is paid directly to the driver in cash at the end of the trip. The current Cashfree checkout is only for driver onboarding and driver dues.'],
         ['Can the final fare change?', 'For a metered trip, the server uses the trip odometer reading and the agreed quote snapshot to calculate eligible extra distance or time. The receipt shows the calculation.'],
-        ['How do I contact support?', 'Open a ticket here with your booking number and a short description. Do not include OTPs, passwords or payment card details.'],
+        ['How do I contact support?', 'Open a ticket here with your booking reference and a short description. Do not include OTPs, passwords or payment card details.'],
       ];
 
-  const submitTicket = () => {
+  function submitTicket() {
     setFeedback(null);
-    create.mutate(
-      { subject: subject.trim(), body: body.trim(), category },
-      {
-        onSuccess: () => {
-          setSubject('');
-          setBody('');
-        },
-        onError: (error) =>
-          setFeedback(error instanceof Error ? error.message : 'Could not open that ticket.'),
-      },
-    );
-  };
-
-  const submitReply = (id: string) => {
-    setFeedback(null);
-    reply.mutate(
-      { id, body: replyBody },
-      {
-        onSuccess: () => {
-          setReplyTo(null);
-          setReplyBody('');
-        },
-        onError: (error) =>
-          setFeedback(error instanceof Error ? error.message : 'Could not add that reply.'),
-      },
-    );
-  };
+    create.mutate({ subject: SUPPORT_CATEGORY_LABEL[category], body: body.trim(), category, bookingId: bookingReference.trim() || null }, {
+      onSuccess: () => { setBody(''); setBookingReference(''); },
+      onError: (error) => setFeedback(error instanceof Error ? error.message : 'Could not open that ticket.'),
+    });
+  }
 
   return (
     <Screen>
       <View style={{ gap: theme.spacing.lg }}>
-        <ScreenHeader
-          title="Support"
-          subtitle="Talk to the DrivX team or send a message about your trip."
-        />
+        <ScreenHeader title="Support" subtitle="Contact DrivX or follow your ticket replies here." />
 
         <Card tone="flat" style={{ gap: theme.spacing.sm }}>
-          <Text variant="overline" tone="muted">DRIVX CUSTOMER CARE</Text>
-          <Text variant="heading" tone="brand">We’re here to help</Text>
-          <Text variant="caption" tone="muted">
-            Call either support number, email us, or send a ticket below and follow the reply here.
-          </Text>
+          <Text variant="overline" tone="muted">DRIVX SUPPORT · {ticketRole.toUpperCase()} ACCOUNT</Text>
+          <Text variant="heading" tone="brand">Need a hand?</Text>
+          <Text variant="caption" tone="muted">Call or email us, or send a quick message. Replies stay in this {ticketRole} account.</Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
-            {SUPPORT_PHONES.map((phone) => (
-              <Pressable
-                key={phone.uri}
-                accessibilityRole="link"
-                accessibilityLabel={`Call DrivX support at ${phone.label}`}
-                onPress={() => {
-                  setFeedback(null);
-                  void Linking.openURL(phone.uri).catch(() =>
-                    setFeedback(`Could not open your phone app. Call ${phone.label}.`),
-                  );
-                }}
-                style={{
-                  minHeight: 48,
-                  minWidth: 150,
-                  flexGrow: 1,
-                  justifyContent: 'center',
-                  paddingHorizontal: theme.spacing.md,
-                  borderRadius: theme.radius.md,
-                  backgroundColor: theme.colors.surface,
-                  borderWidth: theme.borderWidth.hairline,
-                  borderColor: theme.colors.border,
-                }}
-              >
-                <Text variant="bodyStrong" tone="brand">Call {phone.label}  ↗</Text>
+            {CUSTOMER_CARE_CONTACTS.phones.map((phone) => (
+              <Pressable key={phone.e164} accessibilityRole="link" accessibilityLabel={`Call DrivX support at ${phone.label}`} onPress={() => void Linking.openURL(`tel:${phone.e164}`).catch(() => setFeedback(`Could not open your phone app. Call ${phone.label}.`))} style={{ minHeight: 48, minWidth: 150, flexGrow: 1, justifyContent: 'center', paddingHorizontal: theme.spacing.md, borderRadius: theme.radius.md, backgroundColor: theme.colors.surface, borderWidth: theme.borderWidth.hairline, borderColor: theme.colors.border }}>
+                <Text variant="bodyStrong" tone="brand">Call {phone.label} ↗</Text>
               </Pressable>
             ))}
           </View>
-          <Pressable
-            accessibilityRole="link"
-            accessibilityLabel={`Email DrivX support at ${SUPPORT_EMAIL}`}
-            onPress={() => {
-              setFeedback(null);
-              void Linking.openURL(`mailto:${SUPPORT_EMAIL}`).catch(() =>
-                setFeedback(`Could not open your email app. Write to ${SUPPORT_EMAIL}.`),
-              );
-            }}
-            style={{
-              minHeight: 48,
-              justifyContent: 'center',
-              paddingHorizontal: theme.spacing.md,
-              borderRadius: theme.radius.md,
-              backgroundColor: theme.colors.surface,
-              borderWidth: theme.borderWidth.hairline,
-              borderColor: theme.colors.border,
-            }}
-          >
-            <Text variant="bodyStrong" tone="brand">{SUPPORT_EMAIL}  ↗</Text>
+          <Pressable accessibilityRole="link" accessibilityLabel={`Email DrivX support at ${CUSTOMER_CARE_CONTACTS.email}`} onPress={() => void Linking.openURL(`mailto:${CUSTOMER_CARE_CONTACTS.email}`).catch(() => setFeedback(`Could not open your email app. Write to ${CUSTOMER_CARE_CONTACTS.email}.`))} style={{ minHeight: 48, justifyContent: 'center', paddingHorizontal: theme.spacing.md, borderRadius: theme.radius.md, backgroundColor: theme.colors.surface, borderWidth: theme.borderWidth.hairline, borderColor: theme.colors.border }}>
+            <Text variant="bodyStrong" tone="brand">{CUSTOMER_CARE_CONTACTS.email} ↗</Text>
           </Pressable>
+        </Card>
+
+        <Card style={{ gap: theme.spacing.sm }}>
+          <Text variant="subheading" tone="brand">Send a quick support request</Text>
+          <View style={{ gap: theme.spacing.xs }}>
+            <Text variant="label" tone="brand">Choose a topic</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
+              {SUPPORT_CATEGORIES.map((option) => <Button key={option} label={SUPPORT_CATEGORY_LABEL[option]} size="sm" appearance="secondary" selected={category === option} onPress={() => setCategory(option)} />)}
+            </View>
+          </View>
+          <Field label="Booking reference (optional)" value={bookingReference} onChangeText={setBookingReference} autoCapitalize="characters" autoCorrect={false} />
+          <Field label="Tell us what happened" value={body} onChangeText={setBody} multiline helper="Never include an OTP, password or card details." />
+          <Button label="Send to DrivX support" onPress={submitTicket} loading={create.isPending} fullWidth disabled={body.trim().length < 2} />
         </Card>
 
         <Card tone="flat" style={{ gap: theme.spacing.xs }}>
           <Text variant="subheading" tone="brand">Frequently asked questions</Text>
           {faq.map(([question, answer], index) => (
             <View key={question} style={{ borderTopWidth: theme.borderWidth.hairline, borderTopColor: theme.colors.border }}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={{ expanded: openFaq === index }}
-                onPress={() => setOpenFaq(openFaq === index ? null : index)}
-                style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacing.sm }}
-              >
+              <Pressable accessibilityRole="button" accessibilityState={{ expanded: openFaq === index }} onPress={() => setOpenFaq(openFaq === index ? null : index)} style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacing.sm }}>
                 <Text variant="bodyStrong" tone="default" style={{ flex: 1 }}>{question}</Text>
                 <Text variant="bodyStrong" tone="brand">{openFaq === index ? '−' : '+'}</Text>
               </Pressable>
@@ -180,135 +172,15 @@ export function SupportCenter({ role }: { role: LegalRole }) {
           ))}
         </Card>
 
-        {tickets.isError ? (
-          <StateView
-            kind="permission_denied"
-            title="Could not read your tickets"
-            message={tickets.error instanceof Error ? tickets.error.message : 'Firestore refused.'}
-          />
-        ) : null}
-
+        {tickets.isError ? <StateView kind="permission_denied" title="Could not read your tickets" message={tickets.error instanceof Error ? tickets.error.message : 'Firestore refused.'} /> : null}
         {(tickets.data ?? []).length > 0 ? (
           <View style={{ gap: theme.spacing.sm }}>
-            {tickets.data!.map((ticket) => (
-              <Card key={ticket.id} tone="flat" style={{ gap: theme.spacing.xs }}>
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    justifyContent: 'space-between',
-                    gap: theme.spacing.md,
-                  }}
-                >
-                  <Text variant="heading" tone="brand">
-                    {ticket.subject}
-                  </Text>
-                  <StatusPill
-                    label={ticket.status.replace(/_/g, ' ')}
-                    tone={TICKET_TONE[ticket.status] ?? 'neutral'}
-                  />
-                </View>
-                <Text variant="caption" tone="faint">
-                  {SUPPORT_CATEGORY_LABEL[ticket.category as SupportCategory] ?? ticket.category} ·{' '}
-                  {dateTime(ticket.createdAtMs)}
-                </Text>
-                <Text variant="caption">{ticket.body}</Text>
-                {ticket.resolution ? (
-                  <Text variant="caption" tone="success">
-                    Resolution: {ticket.resolution}
-                  </Text>
-                ) : null}
-
-                {ticket.status !== 'closed' && ticket.status !== 'resolved' ? (
-                  replyTo === ticket.id ? (
-                    <View style={{ gap: theme.spacing.sm }}>
-                      <Field
-                        label="Your reply"
-                        value={replyBody}
-                        onChangeText={setReplyBody}
-                        multiline
-                        accessibilityLabel="Reply text"
-                      />
-                      <Button
-                        label="Send reply"
-                        size="sm"
-                        loading={reply.isPending}
-                        onPress={() => submitReply(ticket.id)}
-                      />
-                    </View>
-                  ) : (
-                    <Button
-                      label="Add a reply"
-                      size="sm"
-                      appearance="ghost"
-                      onPress={() => {
-                        setReplyTo(ticket.id);
-                        setReplyBody('');
-                      }}
-                    />
-                  )
-                ) : null}
-              </Card>
-            ))}
+            <Text variant="subheading" tone="brand">Your tickets</Text>
+            {tickets.data!.map((ticket) => <TicketConversation key={ticket.id} ticket={ticket} role={role} expanded={expandedTicket === ticket.id} onToggle={() => setExpandedTicket(expandedTicket === ticket.id ? null : ticket.id)} />)}
           </View>
-        ) : (
-          !tickets.isPending && (
-            <StateView kind="empty" title="No tickets" message="Nothing needs our attention yet." />
-          )
-        )}
+        ) : (!tickets.isPending ? <StateView kind="empty" title="No tickets" message="Nothing needs our attention yet." /> : null)}
 
-        <Card style={{ gap: theme.spacing.md }}>
-          <Text variant="subheading" tone="brand">
-            Send us a message
-          </Text>
-          <View style={{ gap: theme.spacing.xs }}>
-            <Text variant="label" tone="brand">
-              Category
-            </Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
-              {SUPPORT_CATEGORIES.map((option) => (
-                <Button
-                  key={option}
-                  label={SUPPORT_CATEGORY_LABEL[option]}
-                  size="sm"
-                  appearance="secondary"
-                  selected={category === option}
-                  onPress={() => setCategory(option)}
-                />
-              ))}
-            </View>
-          </View>
-          <Field
-            label="Subject"
-            value={subject}
-            onChangeText={setSubject}
-            accessibilityLabel="Subject"
-          />
-          <Field
-            label="What happened"
-            value={body}
-            onChangeText={setBody}
-            multiline
-            helper="Ten characters at least. Do not include card details or passwords."
-            accessibilityLabel="Description"
-          />
-          <Button
-            label="Send to the support team"
-            onPress={submitTicket}
-            loading={create.isPending}
-            fullWidth
-          />
-          <Text variant="caption" tone="faint">
-            {role === 'driver'
-              ? 'Tickets open at normal priority with no case owner. Assignment, escalation and the resolution are written by staff — you can add replies and read the outcome, and the rules refuse a driver changing a status or a due from here.'
-              : 'Tickets open at normal priority with no case owner. Assignment, escalation and resolution are written by staff, and the rules refuse a customer changing them.'}
-          </Text>
-        </Card>
-
-        {feedback ? (
-          <Text variant="caption" tone="danger" accessibilityRole="alert">
-            {feedback}
-          </Text>
-        ) : null}
+        {feedback ? <Text variant="caption" tone="danger" accessibilityRole="alert">{feedback}</Text> : null}
       </View>
     </Screen>
   );

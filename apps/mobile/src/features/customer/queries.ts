@@ -42,11 +42,14 @@ export type BookingView = {
   reference: string;
   status: BookingStatus;
   paymentStatus: string;
+  serviceTypeId: string | null;
   createdAtMs: number | null;
   scheduledForMs: number | null;
   pickup: Place | null;
   destination: Place | null;
   routePolyline: string | null;
+  estimatedDistanceMeters: number | null;
+  estimatedDurationSeconds: number | null;
   etaMinutes: number | null;
   /** Null on a booking written before the trip type was recorded — not a guess at one way. */
   tripDirection: TripDirection | null;
@@ -143,9 +146,18 @@ export type TicketView = {
   status: SupportTicketStatus;
   category: string | null;
   bookingId: string | null;
+  bookingReference: string | null;
   createdAtMs: number | null;
   resolvedAtMs: number | null;
   resolution: string | null;
+};
+
+export type TicketMessageView = {
+  id: string;
+  authorUid: string;
+  authorRole: 'customer' | 'driver' | 'admin' | 'ops';
+  body: string;
+  createdAtMs: number | null;
 };
 
 function text(value: unknown): string | null {
@@ -242,11 +254,14 @@ function bookingView(snap: QueryDocumentSnapshot): BookingView {
     reference: text(data.reference) ?? snap.id,
     status: (text(data.status) ?? 'unknown') as BookingStatus,
     paymentStatus: text(data.paymentStatus) ?? 'unknown',
+    serviceTypeId: text(data.serviceTypeId),
     createdAtMs: toEpochMs(data.createdAtMs),
     scheduledForMs: toEpochMs(data.scheduledForMs),
     pickup: placeOf(data.pickup),
     destination: placeOf(data.destination),
     routePolyline: typeof data.routePolyline === 'string' ? data.routePolyline : null,
+    estimatedDistanceMeters: typeof data.estimatedDistanceMeters === 'number' ? data.estimatedDistanceMeters : null,
+    estimatedDurationSeconds: typeof data.estimatedDurationSeconds === 'number' ? data.estimatedDurationSeconds : null,
     etaMinutes: typeof eta?.minutes === 'number' ? eta.minutes : null,
     tripDirection:
       data.tripDirection === 'round_trip' || data.tripDirection === 'one_way'
@@ -294,7 +309,7 @@ export function useMyBookings() {
       changed,
       changed,
     );
-  }, [user?.uid, client, queryKey]);
+  }, [user, client, queryKey]);
 
   return useQuery({
     queryKey,
@@ -435,10 +450,10 @@ export function useSavedPlaces() {
   });
 }
 
-export function useNotifications() {
+export function useNotifications(surface: 'customer' | 'driver' | 'admin') {
   const { user } = useSession();
   return useQuery({
-    queryKey: ['notifications', user?.uid ?? 'anon'],
+    queryKey: ['notifications', user?.uid ?? 'anon', surface],
     enabled: Boolean(user),
     queryFn: async () => {
       const snap = await getDocs(
@@ -449,6 +464,7 @@ export function useNotifications() {
             user!.uid,
             SUBCOLLECTIONS.notifications,
           ),
+          where('surface', 'in', [surface, 'all']),
           limit(25),
         ),
       );
@@ -469,16 +485,17 @@ export function useNotifications() {
   });
 }
 
-export function useMyTickets() {
+export function useMyTickets(role: 'customer' | 'driver') {
   const { user } = useSession();
   return useQuery({
-    queryKey: ['supportTickets', user?.uid ?? 'anon'],
+    queryKey: ['supportTickets', user?.uid ?? 'anon', role],
     enabled: Boolean(user),
     queryFn: async () => {
       const snap = await getDocs(
         query(
           collection(firebase().firestore, COLLECTIONS.supportTickets),
           where('openedByUid', '==', user!.uid),
+          where('forRole', '==', role),
           orderBy('createdAtMs', 'desc'),
           limit(20),
         ),
@@ -492,10 +509,37 @@ export function useMyTickets() {
           status: (text(data.status) ?? 'open') as SupportTicketStatus,
           category: text(data.category),
           bookingId: text(data.bookingId),
+          bookingReference: text(data.bookingReference),
           createdAtMs: toEpochMs(data.createdAtMs),
           resolvedAtMs: toEpochMs(data.resolvedAtMs),
           resolution: text(data.resolution),
         } satisfies TicketView;
+      });
+    },
+  });
+}
+
+export function useTicketMessages(ticketId: string | null, role: 'customer' | 'driver') {
+  const { user } = useSession();
+  return useQuery<TicketMessageView[]>({
+    queryKey: ['supportTicketMessages', user?.uid ?? 'anon', role, ticketId ?? 'none'],
+    enabled: Boolean(user && ticketId),
+    queryFn: async () => {
+      const snap = await getDocs(query(
+        collection(firebase().firestore, COLLECTIONS.supportTickets, ticketId!, SUBCOLLECTIONS.supportMessages),
+        orderBy('createdAtMs', 'asc'),
+        limit(100),
+      ));
+      return snap.docs.map((row) => {
+        const data = row.data() as Record<string, unknown>;
+        const authorRole = text(data.authorRole);
+        return {
+          id: row.id,
+          authorUid: text(data.authorUid) ?? '',
+          authorRole: (authorRole === 'driver' || authorRole === 'admin' || authorRole === 'ops' ? authorRole : 'customer') as TicketMessageView['authorRole'],
+          body: text(data.body) ?? '',
+          createdAtMs: toEpochMs(data.createdAtMs),
+        } satisfies TicketMessageView;
       });
     },
   });

@@ -1,9 +1,15 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
+  collection,
   doc,
+  getDocs,
+  limit,
+  query,
   serverTimestamp,
   setDoc,
   updateDoc,
+  where,
+  writeBatch,
 } from 'firebase/firestore';
 import {
   COLLECTIONS,
@@ -336,7 +342,7 @@ export function useUpdateProfile() {
   });
 }
 
-export function useMarkNotificationRead() {
+export function useMarkNotificationRead(surface: 'customer' | 'driver' | 'admin') {
   const { user } = useSession();
   const queryClient = useQueryClient();
 
@@ -348,12 +354,12 @@ export function useMarkNotificationRead() {
         doc(firebase().firestore, COLLECTIONS.users, user.uid, SUBCOLLECTIONS.notifications, id),
         { readAtMs: serverTimestamp() },
       );
-      await queryClient.invalidateQueries({ queryKey: ['notifications', user.uid] });
+      await queryClient.invalidateQueries({ queryKey: ['notifications', user.uid, surface] });
     },
   });
 }
 
-export function useCreateTicket() {
+export function useCreateTicket(role: 'customer' | 'driver') {
   const { user } = useSession();
   const queryClient = useQueryClient();
 
@@ -373,12 +379,28 @@ export function useCreateTicket() {
       }
       if (!user) throw new Error('Sign in first.');
 
+      let bookingId = parsed.data.bookingId ?? null;
+      if (bookingId) {
+        // Resolve the public reference to the private document id through a
+        // query constrained to this account's own bookings. The rules reject
+        // attempts to attach another person's trip.
+        const ownBookingField = role === 'driver' ? 'assignedDriverUid' : 'customerUid';
+        const matches = await getDocs(query(
+          collection(firebase().firestore, COLLECTIONS.bookings),
+          where(ownBookingField, '==', user.uid),
+          where('reference', '==', bookingId.trim().toUpperCase()),
+          limit(1),
+        ));
+        if (matches.empty) throw new Error('We could not find that booking on your account. Check the booking reference.');
+        bookingId = matches.docs[0]!.id;
+      }
       const id = `tk-${newIdempotencyKey().slice(0, 8)}`;
       await setDoc(doc(firebase().firestore, COLLECTIONS.supportTickets, id), {
         id,
         openedByUid: user.uid,
-        forRole: 'customer',
-        bookingId: parsed.data.bookingId ?? null,
+        forRole: role,
+        bookingId,
+        bookingReference: bookingId ? parsed.data.bookingId?.trim().toUpperCase() ?? null : null,
         category: parsed.data.category,
         // Escalation is a staff decision, so a customer opens at normal.
         priority: 'normal',
@@ -392,7 +414,7 @@ export function useCreateTicket() {
         createdAtMs: serverTimestamp(),
         updatedAtMs: serverTimestamp(),
       });
-      await queryClient.invalidateQueries({ queryKey: ['supportTickets', user.uid] });
+      await queryClient.invalidateQueries({ queryKey: ['supportTickets', user.uid, role] });
       return id;
     },
   });
@@ -403,19 +425,32 @@ export function useCreateTicket() {
  * `lastCustomerReplyAtMs` to change, and only while the ticket is not closed —
  * status, priority and assignment belong to staff.
  */
-export function useReplyTicket() {
+export function useReplyTicket(role: 'customer' | 'driver') {
   const { user } = useSession();
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (input: { id: string; body: string }) => {
       if (!user) throw new Error('Sign in first.');
-      if (input.body.trim().length < 10) throw new Error('Add a little more detail.');
-      await updateDoc(doc(firebase().firestore, COLLECTIONS.supportTickets, input.id), {
+      if (input.body.trim().length < 2) throw new Error('Add a little more detail.');
+      const ticket = doc(firebase().firestore, COLLECTIONS.supportTickets, input.id);
+      const message = doc(collection(ticket, SUBCOLLECTIONS.supportMessages), `msg-${newIdempotencyKey().slice(0, 12)}`);
+      const batch = writeBatch(firebase().firestore);
+      batch.set(message, {
+        id: message.id,
+        ticketId: input.id,
+        authorUid: user.uid,
+        authorRole: role,
         body: input.body.trim(),
-        lastCustomerReplyAtMs: serverTimestamp(),
+        createdAtMs: serverTimestamp(),
       });
-      await queryClient.invalidateQueries({ queryKey: ['supportTickets', user.uid] });
+      batch.update(ticket, {
+        lastCustomerReplyAtMs: serverTimestamp(),
+        updatedAtMs: serverTimestamp(),
+      });
+      await batch.commit();
+      await queryClient.invalidateQueries({ queryKey: ['supportTickets', user.uid, role] });
+      await queryClient.invalidateQueries({ queryKey: ['supportTicketMessages', user.uid, role, input.id] });
     },
   });
 }

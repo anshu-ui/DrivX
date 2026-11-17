@@ -39,9 +39,9 @@ export default function CustomerAccount() {
   const theme = useTheme();
   const { user, claims, signOut } = useSession();
   const profile = useCustomerProfile();
-  const notifications = useNotifications();
+  const notifications = useNotifications('customer');
   const updateProfile = useUpdateProfile();
-  const markRead = useMarkNotificationRead();
+  const markRead = useMarkNotificationRead('customer');
 
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');

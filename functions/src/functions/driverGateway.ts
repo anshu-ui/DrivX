@@ -10,6 +10,9 @@ import { customerContactForAssignedDriverCaller, tripCodesForCustomer } from './
 import { rateTripForCaller } from './ratings';
 import { resolvePlaceForCaller, reverseGeocodeForCaller, searchPlacesForCaller } from './places';
 import { claimDriverReferralCodeForCaller, claimReferralCodeForCaller, getRewardsForCaller, manageRewardsAdminForCaller, requestDriverRewardPayoutForCaller } from './rewards';
+import { createTripTrackingShareForCaller, readPublicTripTracking, trackingSharePage } from './tripTrackingShare';
+import { manageAdminAnnouncementsForCaller } from './adminAnnouncements';
+import { getAdminDriverEarningsReportForCaller, getDriverEarningsSummaryForCaller } from './driverEarnings';
 
 const handlers = {
   acceptDutyTerms: async (uid: string, claims: Record<string, unknown>, data: unknown) =>
@@ -52,19 +55,27 @@ const handlers = {
     claimDriverReferralCodeForCaller(callerFromVerifiedToken(uid, claims), data),
   manageRewardsAdmin: async (uid: string, claims: Record<string, unknown>, data: unknown) =>
     manageRewardsAdminForCaller(requireAdminCaller(callerFromVerifiedToken(uid, claims)), data),
+  manageAdminAnnouncements: async (uid: string, claims: Record<string, unknown>, data: unknown) =>
+    manageAdminAnnouncementsForCaller(requireAdminCaller(callerFromVerifiedToken(uid, claims)), data),
   requestDriverRewardPayout: async (uid: string, claims: Record<string, unknown>, data: unknown) =>
     requestDriverRewardPayoutForCaller(requireDriverCaller(callerFromVerifiedToken(uid, claims)), data),
+  getDriverEarningsSummary: async (uid: string, claims: Record<string, unknown>) =>
+    getDriverEarningsSummaryForCaller(requireDriverCaller(callerFromVerifiedToken(uid, claims))),
+  getAdminDriverEarningsReport: async (uid: string, claims: Record<string, unknown>, data: unknown) =>
+    getAdminDriverEarningsReportForCaller(requireAdminCaller(callerFromVerifiedToken(uid, claims)), data),
+  createTripTrackingShare: async (uid: string, claims: Record<string, unknown>, data: unknown) =>
+    createTripTrackingShareForCaller(callerFromVerifiedToken(uid, claims), data),
 };
 
 const customerActions = new Set([
   'cancelBooking', 'previewCoupon', 'tripCodes', 'publishCustomerLocation', 'rateTrip',
   'searchPlaces', 'resolvePlace', 'reverseGeocode', 'claimReferralCode',
 ]);
-const driverActions = new Set(['claimDriverReferralCode', 'requestDriverRewardPayout']);
-const adminActions = new Set(['manageRewardsAdmin']);
+const driverActions = new Set(['claimDriverReferralCode', 'requestDriverRewardPayout', 'getDriverEarningsSummary']);
+const adminActions = new Set(['manageRewardsAdmin', 'manageAdminAnnouncements', 'getAdminDriverEarningsReport']);
 // Device-token operations need a valid Firebase identity but are available to
 // both customer and driver accounts. Helpers scope writes to that token's uid.
-const selfServiceActions = new Set(['registerDeviceToken', 'unregisterDeviceToken']);
+const selfServiceActions = new Set(['registerDeviceToken', 'unregisterDeviceToken', 'createTripTrackingShare']);
 
 const httpStatus: Record<string, number> = {
   'invalid-argument': 400,
@@ -95,6 +106,41 @@ export const driverGateway = onRequest(
     invoker: 'public',
   },
   async (request, response) => {
+    // The public share page and its narrowly scoped location poll use an
+    // unguessable 256-bit token. The bearer never appears in paths or logs.
+    const forwardedPaths = [
+      request.path,
+      request.originalUrl,
+      request.url,
+      request.get('x-forwarded-uri'),
+      request.get('x-original-url'),
+    ].filter((value): value is string => typeof value === 'string' && value.length > 0);
+    const isShareRoute = forwardedPaths.some((value) => {
+      try { return new URL(value, 'https://drivx.in').pathname.replace(/\/$/, '').endsWith('/tripTrackingShare'); }
+      catch { return value.split(/[?#]/)[0]?.replace(/\/$/, '').endsWith('/tripTrackingShare') ?? false; }
+    });
+    if (isShareRoute && request.method === 'GET') {
+      response
+        .set('Content-Type', 'text/html; charset=utf-8')
+        .set('Cache-Control', 'no-store, max-age=0')
+        .set('Referrer-Policy', 'no-referrer')
+        .set('X-Content-Type-Options', 'nosniff')
+        .set('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline' https://unpkg.com; script-src 'unsafe-inline' https://unpkg.com; img-src data: https://*.tile.openstreetmap.org; connect-src 'self'; font-src https://unpkg.com; base-uri 'none'; frame-ancestors 'none'")
+        .status(200)
+        .send(trackingSharePage());
+      return;
+    }
+    if (isShareRoute && request.method === 'POST') {
+      try {
+        const body = request.body as { data?: unknown } | undefined;
+        const result = await readPublicTripTracking(body?.data);
+        response.set('Cache-Control', 'no-store, max-age=0').set('Referrer-Policy', 'no-referrer').status(200).json({ result });
+      } catch {
+        // Do not reveal whether a token was malformed, expired, or absent.
+        response.set('Cache-Control', 'no-store, max-age=0').status(200).json({ result: { active: false, reason: 'This share link is invalid or has expired.' } });
+      }
+      return;
+    }
     if (request.method !== 'POST') {
       response.set('Allow', 'POST, OPTIONS').status(405).json({ error: { status: 'INVALID_ARGUMENT', message: 'POST required.' } });
       return;
@@ -105,13 +151,6 @@ export const driverGateway = onRequest(
     // Find the known action in any forwarded path instead of assuming path's
     // final segment survived the proxy unchanged.
     const actionNames = Object.keys(handlers);
-    const forwardedPaths = [
-      request.path,
-      request.originalUrl,
-      request.url,
-      request.get('x-forwarded-uri'),
-      request.get('x-original-url'),
-    ].filter((value): value is string => typeof value === 'string' && value.length > 0);
     const pathSegments = forwardedPaths.flatMap((value) => {
       try {
         return new URL(value, 'https://drivx.in').pathname.split('/').filter(Boolean);

@@ -311,7 +311,7 @@ describe('profile — useCustomerProfile, useUpdateProfile', () => {
 describe('notifications — useNotifications, useMarkNotificationRead', () => {
   it('lists the owner’s inbox', async () => {
     const rows = await expectAllowed(
-      getDocs(query(collection(customer(), 'users', CUSTOMER_ONE, 'notifications'), limit(25))),
+      getDocs(query(collection(customer(), 'users', CUSTOMER_ONE, 'notifications'), where('surface', 'in', ['customer', 'all']), limit(25))),
     );
     expect(rows.size).toBe(1);
     expect(rows.docs[0]!.data().readAtMs).toBeNull();
@@ -319,7 +319,7 @@ describe('notifications — useNotifications, useMarkNotificationRead', () => {
 
   it('cannot see anyone else’s inbox', async () => {
     await expectDenied(
-      getDocs(query(collection(otherCustomer(), 'users', CUSTOMER_ONE, 'notifications'), limit(25))),
+      getDocs(query(collection(otherCustomer(), 'users', CUSTOMER_ONE, 'notifications'), where('surface', 'in', ['customer', 'all']), limit(25))),
     );
   });
 
@@ -351,6 +351,7 @@ describe('support — useMyTickets, useCreateTicket, useReplyTicket', () => {
         query(
           collection(customer(), 'supportTickets'),
           where('openedByUid', '==', CUSTOMER_ONE),
+          where('forRole', '==', 'customer'),
           orderBy('createdAtMs', 'desc'),
           limit(20),
         ),

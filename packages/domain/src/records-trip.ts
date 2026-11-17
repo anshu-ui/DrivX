@@ -361,6 +361,16 @@ export type SupportTicketRecord = {
   updatedAtMs: EpochMs | null;
 };
 
+/** supportTickets/{ticketId}/messages/{messageId} — append-only conversation. */
+export type SupportTicketMessageRecord = {
+  id: string;
+  ticketId: string;
+  authorUid: string;
+  authorRole: 'customer' | 'driver' | 'admin' | 'ops';
+  body: string;
+  createdAtMs: EpochMs | null;
+};
+
 /** users/{uid}/notifications/{notificationId} */
 export type NotificationRecord = {
   id: string;

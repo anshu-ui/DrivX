@@ -1,6 +1,8 @@
 import { useEffect, useMemo } from 'react';
 import { Accuracy, requestBackgroundPermissionsAsync, requestForegroundPermissionsAsync, getCurrentPositionAsync } from 'expo-location';
+import { getPermissionsAsync } from 'expo-notifications';
 import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   collectionGroup,
@@ -16,6 +18,7 @@ import {
   COLLECTIONS,
   DUTY_TERMS,
   SUBCOLLECTIONS,
+  type FareBreakdown,
 } from '@drivx/domain';
 import { callFunction, FunctionCallError, type FirebaseClients } from '@drivx/firebase-client';
 import { useSession } from '../auth/AuthProvider';
@@ -28,7 +31,9 @@ export type DriverOffer = {
   bookingReference: string;
   pickup: string;
   destination: string;
-  farePaise: number | null;
+  estimate: FareBreakdown | null;
+  estimatedDistanceMeters: number | null;
+  estimatedDurationSeconds: number | null;
   customerNotes: string | null;
   vehicleDescription: string | null;
   carType: string;
@@ -64,8 +69,9 @@ async function readOffers(clients: FirebaseClients, uid: string): Promise<Driver
       if (trip.assignedDriverUid != null || !['requested', 'searching_driver'].includes(String(trip.status))) return null;
       const pickup = trip.pickup as { label?: unknown } | null;
       const destination = trip.destination as { label?: unknown } | null;
-      const estimate = (trip.estimate ?? null) as { totalPaise?: unknown } | null;
-      const farePaise = Number(estimate?.totalPaise);
+      const estimate = (trip.estimate ?? null) as FareBreakdown | null;
+      const estimatedDistanceMeters = Number(trip.estimatedDistanceMeters);
+      const estimatedDurationSeconds = Number(trip.estimatedDurationSeconds);
       const distanceToPickupMeters = Number(data.distanceToPickupMeters);
       const notes = (trip.customerPreferences as { notes?: unknown } | null)?.notes;
       const preferences = (trip.customerPreferences ?? null) as { vehicleDescription?: unknown; carType?: unknown; transmission?: unknown } | null;
@@ -75,7 +81,9 @@ async function readOffers(clients: FirebaseClients, uid: string): Promise<Driver
         bookingReference: typeof trip.reference === 'string' ? trip.reference : bookingId,
         pickup: typeof pickup?.label === 'string' ? pickup.label : 'Pickup details unavailable',
         destination: typeof destination?.label === 'string' ? destination.label : 'Drop-off details unavailable',
-        farePaise: Number.isFinite(farePaise) ? farePaise : null,
+        estimate,
+        estimatedDistanceMeters: Number.isFinite(estimatedDistanceMeters) ? estimatedDistanceMeters : null,
+        estimatedDurationSeconds: Number.isFinite(estimatedDurationSeconds) ? estimatedDurationSeconds : null,
         customerNotes: typeof notes === 'string' ? notes : null,
         vehicleDescription: typeof preferences?.vehicleDescription === 'string' ? preferences.vehicleDescription : null,
         carType: typeof preferences?.carType === 'string' ? preferences.carType : 'either',
@@ -152,6 +160,14 @@ export function useSetDriverAvailability() {
         return callFunction(firebase(), 'setAvailability', { state });
       }
       if (user) await user.getIdToken(true);
+      if (!user) throw new Error('Sign in to DrivX Captain before going online.');
+      const pushEnabled = await AsyncStorage.getItem(`drivx.push.enabled.driver.${user.uid}`) === 'true';
+      const pushGranted = Platform.OS === 'web'
+        ? typeof Notification !== 'undefined' && Notification.permission === 'granted'
+        : (await getPermissionsAsync()).granted;
+      if (!pushEnabled || !pushGranted) {
+        throw new Error('Enable trip push alerts in Account first. Driver offers and trip updates must be able to reach you when DrivX is closed.');
+      }
       const permission = await requestForegroundPermissionsAsync();
       if (permission.status !== 'granted') {
         throw new Error('Location permission is required to go online and receive nearby trips.');

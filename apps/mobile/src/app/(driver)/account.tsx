@@ -107,8 +107,8 @@ export default function DriverAccount() {
   const dues = useDriverDues();
   const documents = useDriverDocuments();
   const ratings = useDriverRatings();
-  const notifications = useNotifications();
-  const markRead = useMarkNotificationRead();
+  const notifications = useNotifications('driver');
+  const markRead = useMarkNotificationRead('driver');
   const updateProfile = useUpdateDriverProfile();
 
   const [fullName, setFullName] = useState('');

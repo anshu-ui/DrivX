@@ -45,7 +45,11 @@ export default function RewardsAdminPage() {
       setData(result); setRules({ ...DEFAULT_RULES, ...result.rules });
     } catch (caught) { setError(describe(caught)); }
   }, []);
-  useEffect(() => { if (reviewer?.admin) void refresh(); }, [reviewer?.admin, refresh]);
+  useEffect(() => {
+    if (!reviewer?.admin) return;
+    const timer = window.setTimeout(() => { void refresh(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [reviewer?.admin, refresh]);
 
   async function act<T extends Record<string, unknown>>(payload: T, success: string) {
     setBusy(true); setMessage(null); setError(null);

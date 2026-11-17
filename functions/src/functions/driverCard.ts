@@ -88,6 +88,7 @@ async function publish(bookingId: string, booking: Record<string, unknown> | und
     : 'Their car details will show on the trip screen.';
   await deliverInbox({
     uid: customerUid,
+    surface: 'customer',
     id: `driver_${bookingId}`,
     type: 'driver_assigned',
     title: `${card.fullName} is your driver`,

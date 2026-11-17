@@ -1,7 +1,7 @@
 import { onDocumentCreated, onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import { REGION, RESEND_API_KEY, RESEND_FROM_EMAIL } from '../lib/config';
 import { deliverInbox } from '../lib/notify';
-import { sendCustomerAssignmentEmail } from '../lib/bookingAssignmentEmail';
+import { sendCustomerAssignmentEmail, sendCustomerCompletionEmail } from '../lib/bookingAssignmentEmail';
 
 function text(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
@@ -17,6 +17,7 @@ export const notifyBookingCreated = onDocumentCreated(
     const reference = text(booking.reference) ?? event.params.bookingId;
     await deliverInbox({
       uid,
+      surface: 'customer',
       id: `booking_confirmed_${event.params.bookingId}`,
       type: 'booking_confirmed',
       title: 'Booking request received',
@@ -40,11 +41,18 @@ export const notifyBookingStateChanged = onDocumentUpdated(
     if (!before || !after) return;
     const statusChanged = before.status !== after.status;
     const assignmentChanged = before.assignedDriverUid !== after.assignedDriverUid;
+    const beforeEta = before.driverEnRouteEta as { minutes?: unknown } | null;
+    const afterEta = after.driverEnRouteEta as { minutes?: unknown } | null;
+    const beforeEtaMinutes = Number(beforeEta?.minutes);
+    const afterEtaMinutes = Number(afterEta?.minutes);
+    const etaChanged = Number.isFinite(afterEtaMinutes) &&
+      (!Number.isFinite(beforeEtaMinutes) || Math.abs(afterEtaMinutes - beforeEtaMinutes) >= 5 ||
+        ((beforeEtaMinutes <= 15) !== (afterEtaMinutes <= 15)));
     const driverUid = text(after.assignedDriverUid);
     const beforeCardUid = text((before.driver as { uid?: unknown } | null)?.uid);
     const afterCardUid = text((after.driver as { uid?: unknown } | null)?.uid);
     const assignmentCardChanged = beforeCardUid !== afterCardUid;
-    if (!statusChanged && !assignmentChanged && !assignmentCardChanged) return;
+    if (!statusChanged && !assignmentChanged && !assignmentCardChanged && !etaChanged) return;
     const bookingId = event.params.bookingId;
     const status = String(after.status ?? '');
     const reference = text(after.reference) ?? bookingId;
@@ -63,6 +71,10 @@ export const notifyBookingStateChanged = onDocumentUpdated(
       await sendCustomerAssignmentEmail(bookingId, after as Record<string, unknown>);
     }
 
+    if (status === 'completed' && before.status !== 'completed') {
+      await sendCustomerCompletionEmail(bookingId, after as Record<string, unknown>);
+    }
+
     if (statusChanged && customerUid) {
       const driver = after.driver as { fullName?: unknown; phoneE164?: unknown } | null;
       const driverName = text(driver?.fullName);
@@ -78,7 +90,27 @@ export const notifyBookingStateChanged = onDocumentUpdated(
         cancelled: { type: 'booking_cancelled', title: 'Booking cancelled', body: `Booking ${reference} was cancelled.` },
       };
       const message = customerMessage[status];
-      if (message) await deliverInbox({ uid: customerUid, id: `booking_${status}_${bookingId}_${version}`, ...message, route, bookingId });
+      // The assigned-driver-card trigger sends the richer assignment alert.
+      // If the card is already present in this write, send a single fallback.
+      if (message && (status !== 'assigned' || afterCardUid === driverUid)) {
+        await deliverInbox({ uid: customerUid, id: `booking_${status}_${bookingId}_${version}`, surface: 'customer', ...message, route, bookingId });
+      }
+    }
+
+    if (etaChanged && customerUid && status === 'driver_en_route') {
+      const calculatedAt = Number((after.driverEnRouteEta as { calculatedAtMs?: unknown } | null)?.calculatedAtMs ?? Date.now());
+      await deliverInbox({
+        uid: customerUid,
+        surface: 'customer',
+        id: `booking_eta_${bookingId}_${calculatedAt}`,
+        type: 'driver_assigned',
+        title: afterEtaMinutes <= 15 ? 'Pickup ETA updated' : 'Your driver may be delayed',
+        body: afterEtaMinutes <= 15
+          ? `Your driver is now about ${afterEtaMinutes} min from pickup for ${reference}.`
+          : `The latest road estimate is about ${afterEtaMinutes} min to pickup for ${reference}. If that timing no longer works, contact support or cancel and choose a later pickup time.`,
+        route,
+        bookingId,
+      });
     }
 
     if (!statusChanged) return;
@@ -95,6 +127,7 @@ export const notifyBookingStateChanged = onDocumentUpdated(
     if (driverUid && driverMessageForStatus) {
       await deliverInbox({
         uid: driverUid,
+        surface: 'driver',
         id: `driver_booking_${status}_${bookingId}_${version}`,
         ...driverMessageForStatus,
         bookingId,
@@ -113,6 +146,7 @@ export const notifyDriverDueCreated = onDocumentCreated(
     const amount = (Number(due.totalPaise ?? 0) / 100).toFixed(2);
     await deliverInbox({
       uid: event.params.driverUid,
+      surface: 'driver',
       id: `due_created_${event.params.dueId}`,
       type: 'payment_update',
       title: onboarding ? 'Onboarding fee ready' : due.kind === 'late_arrival_penalty' ? 'Late start penalty added' : 'Trip commission added',
@@ -131,6 +165,7 @@ export const notifyDriverDueSettled = onDocumentUpdated(
     if (!before || !after || before.status === 'paid' || after.status !== 'paid') return;
     await deliverInbox({
       uid: event.params.driverUid,
+      surface: 'driver',
       id: `due_paid_${event.params.dueId}`,
       type: 'payment_update',
       title: 'Payment successful',
@@ -157,6 +192,7 @@ export const notifyDriverVerification = onDocumentUpdated(
         : 'Your paid application and documents are with the Admin team for review.';
     await deliverInbox({
       uid: event.params.driverUid,
+      surface: 'driver',
       id: `verification_${status}_${event.id}`,
       type: 'verification_update', title, body, route: '/', bookingId: null,
     });

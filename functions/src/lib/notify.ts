@@ -1,5 +1,4 @@
 import { notificationPath, type NotificationType } from '@drivx/domain';
-import { createHash } from 'node:crypto';
 import { getMessaging } from 'firebase-admin/messaging';
 import { db, serverTimestamp } from './admin';
 
@@ -18,8 +17,13 @@ export async function deliverInbox(input: {
   uid: string;
   id: string;
   type: NotificationType;
+  /** Keep same-UID customer and driver sessions on their own inbox/device. */
+  surface: 'customer' | 'driver' | 'admin' | 'all';
   title: string;
   body: string;
+  /** Optional lock-screen-safe copy; the complete message remains in DrivX inbox. */
+  pushTitle?: string;
+  pushBody?: string;
   route: string | null;
   bookingId: string | null;
   data?: Record<string, string> | null;
@@ -29,6 +33,7 @@ export async function deliverInbox(input: {
       id: input.id,
       uid: input.uid,
       type: input.type,
+      surface: input.surface,
       title: input.title,
       body: input.body,
       route: input.route,
@@ -43,18 +48,29 @@ export async function deliverInbox(input: {
       accountRef.get(),
       accountRef.collection('deviceTokens').get(),
     ]);
-    const tokens = new Set<string>();
+    const tokens = new Map<string, string | null>();
     const legacyToken = account.get('fcmToken');
-    if (typeof legacyToken === 'string' && legacyToken.length > 20) tokens.add(legacyToken);
+    // Old single-token accounts have no role tag. Keep them only for
+    // announcements sent to every surface; otherwise one app could receive the
+    // other app's trip/OTP alert on a shared phone account.
+    if (input.surface === 'all' && typeof legacyToken === 'string' && legacyToken.length > 20) tokens.set(legacyToken, null);
     for (const device of devices.docs) {
       const token = device.get('token');
-      if (typeof token === 'string' && token.length > 20) tokens.add(token);
+      const surface = device.get('surface');
+      if (
+        typeof token === 'string' && token.length > 20 &&
+        (input.surface === 'all' || surface === input.surface)
+      ) tokens.set(token, device.id);
     }
     if (tokens.size) {
       try {
+        const tokenList = [...tokens.keys()];
         const response = await getMessaging().sendEachForMulticast({
-          tokens: [...tokens],
-          notification: { title: input.title, body: input.body },
+          tokens: tokenList,
+          notification: {
+            title: input.pushTitle ?? input.title,
+            body: input.pushBody ?? input.body,
+          },
           data: {
             notificationId: input.id,
             ...(input.route ? { route: input.route } : {}),
@@ -66,14 +82,13 @@ export async function deliverInbox(input: {
         const stale = response.responses.flatMap((result, index) => {
           const code = result.error?.code;
           return code === 'messaging/registration-token-not-registered' || code === 'messaging/invalid-registration-token'
-            ? [[...tokens][index] as string]
+            ? [[tokenList[index] as string, tokens.get(tokenList[index] as string)]]
             : [];
         });
         if (stale.length) {
           const batch = db().batch();
-          for (const token of stale) {
-            const tokenId = createHash('sha256').update(token).digest('hex');
-            batch.delete(accountRef.collection('deviceTokens').doc(tokenId));
+          for (const [token, deviceId] of stale) {
+            if (deviceId) batch.delete(accountRef.collection('deviceTokens').doc(deviceId));
             if (legacyToken === token) batch.update(accountRef, { fcmToken: null, fcmPlatform: null });
           }
           await batch.commit();

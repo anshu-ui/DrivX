@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Button, Card, Text } from '@drivx/ui';
 import { useSession } from '../features/auth/AuthProvider';
-import { disablePushNotifications, enablePushNotifications } from '../features/customer/pushNotifications';
+import { disablePushNotifications, enablePushNotifications, pushPreferenceEnabled } from '../features/customer/pushNotifications';
 
 export function PushNotificationsCard() {
-  const { user } = useSession();
+  const { user, surface } = useSession();
   const [enabled, setEnabled] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -18,12 +17,12 @@ export function PushNotificationsCard() {
   useEffect(() => {
     let active = true;
     if (user) {
-      void AsyncStorage.getItem(`drivx.push.enabled.${user.uid}`).then((value) => {
-        if (active) setEnabled(value === 'true');
+      void pushPreferenceEnabled(user.uid, surface).then((value) => {
+        if (active) setEnabled(value);
       });
     }
     return () => { active = false; };
-  }, [user]);
+  }, [user, surface]);
 
   if (!user) return null;
   return (
@@ -48,7 +47,7 @@ export function PushNotificationsCard() {
         onPress={() => {
           setBusy(true);
           setMessage(null);
-          const action = enabled ? disablePushNotifications(user) : enablePushNotifications(user);
+          const action = enabled ? disablePushNotifications(user, surface) : enablePushNotifications(user, surface);
           void action.then(() => setEnabled(!enabled)).catch((error) => {
             setMessage(error instanceof Error ? error.message : 'Push notification settings could not be saved.');
           }).finally(() => setBusy(false));

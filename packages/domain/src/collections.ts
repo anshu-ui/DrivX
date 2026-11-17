@@ -47,6 +47,7 @@ export const SUBCOLLECTIONS = {
   driverAssignments: 'assignments',
   savedPlaces: 'places',
   notifications: 'notifications',
+  supportMessages: 'messages',
 } as const;
 
 /** Public booking reference shown to customers, e.g. DRX-7K3QD2. */

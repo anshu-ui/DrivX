@@ -339,6 +339,7 @@ export async function offerTrip(bookingId: string): Promise<OfferOutcome> {
     const customerNotes = (booking.customerPreferences as { notes?: unknown } | null)?.notes;
     await deliverInbox({
       uid: profile.uid,
+      surface: 'driver',
       // Every dispatch attempt gets its own inbox id. A manual re-offer for
       // this booking must not collide with an earlier driver's notification.
       id: `offer_${offer.assignmentId}`,

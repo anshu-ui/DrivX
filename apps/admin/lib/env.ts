@@ -14,6 +14,7 @@ import { buildClientEnv, type ClientEnv } from '@drivx/firebase-client';
  * load-bearing: add a new value by writing it out, never by looping over names.
  */
 function source(): Record<string, string | undefined> {
+  const localHost = typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname);
   return {
     FIREBASE_API_KEY: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
     FIREBASE_PROJECT_ID: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
@@ -31,7 +32,12 @@ function source(): Record<string, string | undefined> {
     STORAGE_EMULATOR_PORT: process.env.NEXT_PUBLIC_STORAGE_EMULATOR_PORT,
     FIREBASE_FUNCTIONS_REGION: process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_REGION,
     GOOGLE_MAPS_WEB_API_KEY: process.env.NEXT_PUBLIC_GOOGLE_MAPS_WEB_API_KEY,
-    FUNCTIONS_BASE_URL: process.env.NEXT_PUBLIC_FUNCTIONS_BASE_URL,
+    // The static Admin app is served by Firebase Hosting, where the public
+    // callable gateway lives under /api. A relative-to-origin default keeps
+    // production builds working when no build-time env var is supplied while
+    // leaving local emulator/dev calls on the normal Functions SDK endpoint.
+    FUNCTIONS_BASE_URL: process.env.NEXT_PUBLIC_FUNCTIONS_BASE_URL ??
+      (typeof window !== 'undefined' && !localHost ? `${window.location.origin}/api` : undefined),
   };
 }
 

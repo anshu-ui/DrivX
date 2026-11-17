@@ -140,6 +140,12 @@ export function ConsoleHeader({
   links: ConsoleLink[];
 }) {
   const pathname = usePathname();
+  const withSupport = links.some((link) => link.href === '/support')
+    ? links
+    : [...links, { href: '/support', label: 'Support inbox' }];
+  const navLinks = reviewer?.admin && !withSupport.some((link) => link.href === '/announcements')
+    ? [...withSupport.filter((link) => link.href !== '/'), { href: '/announcements', label: 'Push notifications' }]
+    : withSupport.filter((link) => link.href !== '/');
   return (
     <>
       <aside className="console-sidebar" aria-label="DrivX admin navigation">
@@ -150,9 +156,9 @@ export function ConsoleHeader({
         <p className="console-section-label">WORKSPACE</p>
         <nav aria-label="Operations" className="console-nav">
           <Link href="/" aria-current={pathname === '/' ? 'page' : undefined} className={`console-nav-link ${pathname === '/' ? 'is-active' : ''}`}><span className="console-nav-icon">◫</span><span>Overview</span></Link>
-          {links.filter((link) => link.href !== '/').map((link) => {
+          {navLinks.map((link) => {
             const active = pathname === link.href;
-            const icon = link.href === '/bookings' ? '↗' : link.href === '/verification' ? '✓' : '₹';
+            const icon = link.href === '/bookings' ? '↗' : link.href === '/verification' ? '✓' : link.href === '/announcements' ? '◉' : link.href === '/support' ? '✉' : '₹';
             return <Link key={link.href} href={link.href} aria-current={active ? 'page' : undefined} className={`console-nav-link ${active ? 'is-active' : ''}`}><span className="console-nav-icon">{icon}</span><span>{link.label}</span>{active ? <span className="ml-auto h-1.5 w-1.5 rounded-full bg-accent" /> : null}</Link>;
           })}
         </nav>

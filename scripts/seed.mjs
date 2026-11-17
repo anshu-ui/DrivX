@@ -745,6 +745,7 @@ const ALL_REFERENCE_DATA = [
   ['users/cust-1/notifications/n-1', {
     id: 'n-1',
     uid: 'cust-1',
+    surface: 'customer',
     type: 'driver_assigned',
     title: 'Rakesh is on the way',
     body: 'Your chauffeur is about 7 minutes from Sector 56.',
@@ -1189,6 +1190,14 @@ const ALL_REFERENCE_DATA = [
   ['appConfig/commission', {
     rate: COMMISSION_TERMS.rate,
     gstRate: COMMISSION_TERMS.gstRate,
+    updatedByUid: 'admin-1',
+    updatedAtMs: stamp(-1),
+  }],
+  // Mirror the server fallback so fresh onboarding fixtures stay at the fee
+  // shown to drivers until the operator changes it in the Admin console.
+  ['appConfig/onboardingFee', {
+    basePaise: 50_000,
+    gstRate: 0.05,
     updatedByUid: 'admin-1',
     updatedAtMs: stamp(-1),
   }],

@@ -1,5 +1,17 @@
 import type { GeofenceKind } from './enums';
 
+/** Public DrivX customer-care contact details shared by app and email copy. */
+export const CUSTOMER_CARE_CONTACTS = {
+  email: 'customersupport@drivx.in',
+  phones: [
+    { label: '+91 92090 69483', e164: '+919209069483' },
+    { label: '+91 87085 06508', e164: '+918708506508' },
+  ],
+} as const;
+
+/** Operations inbox that receives app-created support requests. */
+export const SUPPORT_TICKET_INBOX = 'customer@drivx.in';
+
 /**
  * Firestore timestamps are converted to epoch milliseconds at every read
  * boundary, so domain consumers never have to import the Firestore SDK.

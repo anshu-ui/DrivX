@@ -8,6 +8,8 @@
  */
 export { bookingOptions, cancelBooking, createBooking, dispatchNewBooking, previewCoupon, quoteFare, registerDeviceToken, unregisterDeviceToken } from './functions/bookings';
 export { notifyBookingCreated, notifyBookingStateChanged, notifyDriverDueCreated, notifyDriverDueSettled, notifyDriverVerification } from './functions/activityNotifications';
+export { notifySupportTicketCreated, notifySupportTicketMessage, notifySupportTicketStatusChanged } from './functions/supportTickets';
+export { adminAnnouncementCreated } from './functions/adminAnnouncements';
 export { setDriverVerification } from './functions/driverVerification';
 export { adminManageBooking, adminSetDriverAccountStatus, resetDriverOnboarding } from './functions/adminOperations';
 export {
@@ -23,7 +25,7 @@ export { beginDriverOnboarding, provisionNewAccount, provisionSelf, submitDriver
 export { createPaymentOrder, paymentWebhook } from './functions/payments';
 export { resolvePlace, reverseGeocode, searchPlaces } from './functions/places';
 export { rateTrip } from './functions/ratings';
-export { sweepExpiredDriverOffers, sweepStaleDispatchPins, sweepStaleLocationData } from './functions/scheduled';
+export { remindDriverBeforePickup, sweepExpiredDriverOffers, sweepStaleDispatchPins, sweepStaleLocationData } from './functions/scheduled';
 export { setRole } from './functions/roles';
 export { chargeCommissionOnCompletion, chargeCommissionOnImportedTrip } from './functions/tripCommission';
 export { claimDriverReferralCode, claimReferralCode, getRewards, manageRewardsAdmin, requestDriverRewardPayout, settleRewardsOnTripCompletion } from './functions/rewards';

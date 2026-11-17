@@ -9,6 +9,7 @@ import {
   couponPreviewInputSchema,
   createBookingInputSchema,
   fareQuoteInputSchema,
+  holdsRole,
   isActiveTrip,
   isCancellable,
   RTDB_PATHS,
@@ -30,6 +31,7 @@ import {
 import { db, epochMs, rtdb, serverTimestamp } from '../lib/admin';
 import { CALLABLE_OPTIONS, RATE_LIMITS } from '../lib/config';
 import { offerTrip } from '../lib/dispatch';
+import { deliverInbox } from '../lib/notify';
 import { configuredCommissionTerms } from '../lib/dues';
 import { failedPrecondition, parseInput, permissionDenied, resourceExhausted } from '../lib/errors';
 import { requireAuth, requireCustomer, requireCustomerCaller, type Caller } from '../lib/guards';
@@ -53,16 +55,21 @@ const registerTokenInput = z.object({
   /** FCM registration token for this device. */
   token: z.string().min(20).max(600),
   platform: z.enum(['ios', 'android', 'web']),
+  surface: z.enum(['customer', 'driver', 'admin']),
 });
 
 /** Shared by the callable and authenticated HTTP gateway. */
 export async function registerDeviceTokenForCaller(caller: Caller, rawInput: unknown) {
   if (!caller.uid) throw new HttpsError('unauthenticated', 'Sign-in required.');
   const input = parseInput(registerTokenInput, rawInput);
-  const tokenId = createHash('sha256').update(input.token).digest('hex');
+  if (input.surface === 'customer' && !holdsRole(caller.claims, 'customer')) throw permissionDenied('Customer role required for this notification surface.');
+  if (input.surface === 'driver' && !holdsRole(caller.claims, 'driver')) throw permissionDenied('Driver role required for this notification surface.');
+  if (input.surface === 'admin' && !caller.claims.admin && !caller.claims.ops) throw permissionDenied('Staff role required for this notification surface.');
+  const tokenId = createHash('sha256').update(`${input.surface}:${input.token}`).digest('hex');
   await db().collection('users').doc(caller.uid).collection('deviceTokens').doc(tokenId).set({
     token: input.token,
     platform: input.platform,
+    surface: input.surface,
     updatedAtMs: serverTimestamp(),
   }, { merge: true });
   return { registered: true };
@@ -71,9 +78,15 @@ export async function registerDeviceTokenForCaller(caller: Caller, rawInput: unk
 /** Revoke only the caller's own device token. */
 export async function unregisterDeviceTokenForCaller(caller: Caller, rawInput: unknown) {
   if (!caller.uid) throw new HttpsError('unauthenticated', 'Sign-in required.');
-  const parsed = z.object({ token: z.string().min(20).max(600) }).safeParse(rawInput);
+  const parsed = z.object({
+    token: z.string().min(20).max(600),
+    surface: z.enum(['customer', 'driver', 'admin']),
+  }).safeParse(rawInput);
   if (!parsed.success) throw new HttpsError('invalid-argument', 'A device token is required.');
-  const tokenId = createHash('sha256').update(parsed.data.token).digest('hex');
+  if (parsed.data.surface === 'customer' && !holdsRole(caller.claims, 'customer')) throw permissionDenied('Customer role required for this notification surface.');
+  if (parsed.data.surface === 'driver' && !holdsRole(caller.claims, 'driver')) throw permissionDenied('Driver role required for this notification surface.');
+  if (parsed.data.surface === 'admin' && !caller.claims.admin && !caller.claims.ops) throw permissionDenied('Staff role required for this notification surface.');
+  const tokenId = createHash('sha256').update(`${parsed.data.surface}:${parsed.data.token}`).digest('hex');
   await db().collection('users').doc(caller.uid).collection('deviceTokens').doc(tokenId).delete();
   return { unregistered: true };
 }
@@ -413,6 +426,14 @@ export const createBooking = onCall(CALLABLE_OPTIONS, async (request) => {
 
   const nowMs = Date.now();
   const departAtMs = input.scheduledForMs ?? nowMs;
+  // Older clients may omit optional reward fields. Keep the server response
+  // finite even when an old payload bypasses a client-side default.
+  const requestedWalletPaise = Number.isFinite(input.redeemWalletPaise)
+    ? Math.max(0, Math.trunc(input.redeemWalletPaise))
+    : 0;
+  const requestedMilesPoints = Number.isFinite(input.redeemMilesPoints)
+    ? Math.max(0, Math.trunc(input.redeemMilesPoints))
+    : 0;
 
   const recent = await db()
     .collection('bookings')
@@ -503,9 +524,9 @@ export const createBooking = onCall(CALLABLE_OPTIONS, async (request) => {
         return sum + amount;
       }, 0);
     } else walletBalance = 0;
-    let walletRedeemed = cfg.walletRedemptionEnabled !== false ? Math.min(Math.max(0, input.redeemWalletPaise), Math.max(0, walletBalance), Math.max(0, breakdown.totalPaise - couponDiscount)) : 0;
+    let walletRedeemed = cfg.walletRedemptionEnabled !== false ? Math.min(requestedWalletPaise, Math.max(0, walletBalance), Math.max(0, breakdown.totalPaise - couponDiscount)) : 0;
     const pointsBalance = rewardsEnabled && cfg.milesRedemptionEnabled !== false && cfg.milesEnabled !== false ? Math.max(0, Number(acct.milesPoints ?? 0)) : 0;
-    const milesPoints = Math.min(Math.max(0, input.redeemMilesPoints), pointsBalance);
+    const milesPoints = Math.min(requestedMilesPoints, pointsBalance);
     const milesRate = Number(cfg.milesPaisePer100Points ?? 2_000);
     const milesDiscount = Math.min(Math.max(0, breakdown.totalPaise - couponDiscount - walletRedeemed), Math.floor(milesPoints * milesRate / 100));
     const actualMilesPoints = milesRate > 0 ? Math.min(milesPoints, Math.floor(milesDiscount * 100 / milesRate)) : 0;
@@ -684,6 +705,23 @@ export const dispatchNewBooking = onDocumentCreated(
     const bookingId = event.params.bookingId;
     try {
       const result = await offerTrip(bookingId);
+      if (!result.offered) {
+        const booking = await db().doc(`bookings/${bookingId}`).get();
+        const customerUid = booking.get('customerUid');
+        const reference = booking.get('reference') ?? bookingId;
+        if (typeof customerUid === 'string' && customerUid) {
+          await deliverInbox({
+            uid: customerUid,
+            surface: 'customer',
+            id: `booking_recovery_no_driver_${bookingId}`,
+            type: 'booking_confirmed',
+            title: 'No driver has accepted yet',
+            body: `We are still looking for a driver for ${reference}. Your request is safe. If your time is flexible, try a later pickup; a nearby main-road pickup can also improve availability.`,
+            route: `/trips/${bookingId}`,
+            bookingId,
+          });
+        }
+      }
       console.log(JSON.stringify({
         level: 'info',
         fn: 'dispatchNewBooking',

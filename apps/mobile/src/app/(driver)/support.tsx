@@ -1,7 +1,7 @@
 import { SupportCenter } from '../../features/support/SupportCenter';
 
 /**
- * The driver's ticket desk, opened from Account.
+ * Driver support is also a persistent bottom tab, including before approval.
  *
  * Reachable before approval as well as after it: a driver whose documents were
  * sent back, or whose onboarding payment is recorded wrongly, needs a way to say so that does

@@ -1,4 +1,5 @@
 import { onCall, onRequest } from 'firebase-functions/v2/https';
+import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { SUBCOLLECTIONS, driverDuePath, formatINR } from '@drivx/domain';
 import { parseInput, unavailable, failedPrecondition, notFound } from '../lib/errors';
@@ -64,13 +65,6 @@ export const createPaymentOrder = onCall(
   // and refuses to rewrite the amount underneath an existing Cashfree order.
   if (input.dueId === 'onboarding_fee') await ensureOnboardingDue(caller.uid);
 
-  const credentials = cashfreeCredentials();
-  if (!credentials) {
-    throw unavailable(
-      'Payments are not configured. Set CASHFREE_APP_ID and CASHFREE_SECRET_KEY, then verify the merchant account.',
-    );
-  }
-
   const path = driverDuePath(caller.uid, input.dueId);
   const due = await readDoc(path);
   if (!due) {
@@ -88,6 +82,16 @@ export const createPaymentOrder = onCall(
   if (!Number.isInteger(amountPaise) || amountPaise <= 0) {
     throw failedPrecondition(
       `This charge has no amount we can bill (${due.totalPaise}), so the gateway was not asked for anything.`,
+    );
+  }
+
+  // Reject unknown, settled or malformed ledger entries before checking the
+  // gateway configuration. A driver can never probe Cashfree with an invented
+  // due id, even when checkout has not yet been configured in this environment.
+  const credentials = cashfreeCredentials();
+  if (!credentials) {
+    throw unavailable(
+      'Payments are not configured. Set CASHFREE_APP_ID and CASHFREE_SECRET_KEY, then verify the merchant account.',
     );
   }
 
@@ -263,6 +267,50 @@ export const paymentWebhook = onRequest(
   await dueDoc.ref.update({ providerOrderStatus: order.orderStatus, updatedAtMs: serverTimestamp() });
 
   if (order.orderStatus !== 'PAID') {
+    const paymentPayload = (data.payment ?? {}) as Record<string, unknown>;
+    const webhookPaymentStatus = String(paymentPayload.payment_status ?? '').toUpperCase();
+    const attempts = new Map<string, { status: string; amountPaise: number | null }>();
+    const addFailure = (paymentId: unknown, status: unknown, amount: unknown) => {
+      const id = String(paymentId ?? '').trim();
+      const state = String(status ?? '').trim().toUpperCase();
+      if (!id || !['FAILED', 'USER_DROPPED', 'CANCELLED', 'DECLINED'].includes(state)) return;
+      const amountPaise = amount !== null && amount !== undefined && amount !== '' && Number.isFinite(Number(amount))
+        ? Math.round(Number(amount) * 100)
+        : null;
+      attempts.set(id, { status: state, amountPaise });
+    };
+    addFailure(paymentPayload.cf_payment_id ?? paymentPayload.payment_id, webhookPaymentStatus, paymentPayload.payment_amount);
+    try {
+      const payments = await fetchCashfreeOrderPayments(credentials, orderId);
+      for (const payment of payments) addFailure(payment.paymentId, payment.status, payment.amountPaise == null ? null : payment.amountPaise / 100);
+    } catch (error) {
+      // A signed failure webhook remains useful when Cashfree's read API is
+      // briefly unavailable; never fail the callback only because analytics
+      // enrichment could not be fetched.
+      console.warn(JSON.stringify({ level: 'warn', fn: 'paymentWebhook', outcome: 'failure_details_unavailable', orderId, reason: String((error as Error).message).slice(0, 160) }));
+    }
+    for (const [paymentId, attempt] of attempts) {
+      const failureId = createHash('sha256').update(`${orderId}:${paymentId}`).digest('hex');
+      try {
+        await db().doc(`paymentFailures/${failureId}`).create({
+          orderId,
+          paymentId,
+          dueId: dueDoc.id,
+          driverUid,
+          status: attempt.status,
+          amountPaise: attempt.amountPaise,
+          eventType: event,
+          createdAtMs: Date.now(),
+        });
+      } catch (error) {
+        // Cashfree retries webhooks. A deterministic document id makes each
+        // actual payment attempt count once without losing callback delivery.
+        const code = String((error as { code?: number | string }).code ?? '');
+        if (code !== '6' && code !== 'already-exists') {
+          console.error(JSON.stringify({ level: 'error', fn: 'paymentWebhook', outcome: 'failure_record_write_failed', orderId, paymentId, reason: String((error as Error).message).slice(0, 160) }));
+        }
+      }
+    }
     console.log(
       JSON.stringify({
         level: 'info',

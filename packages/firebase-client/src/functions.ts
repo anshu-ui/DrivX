@@ -62,7 +62,11 @@ const hostingCallableNames = new Set([
   'claimReferralCode',
   'claimDriverReferralCode',
   'manageRewardsAdmin',
+  'manageAdminAnnouncements',
   'requestDriverRewardPayout',
+  'createTripTrackingShare',
+  'getDriverEarningsSummary',
+  'getAdminDriverEarningsReport',
 ]);
 
 /**

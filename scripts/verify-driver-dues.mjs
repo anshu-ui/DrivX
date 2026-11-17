@@ -248,6 +248,13 @@ function bookingBody(id, reference, trip, status, driverField, extra = {}) {
 const throwawayDrivers = [];
 /** The office's own cut, as the seed left it, so the finally can put it back. */
 let commissionConfig = null;
+commissionConfig = (await db.doc('appConfig/commission').get()).data() ?? null;
+// Exercise the configured 5% GST on the office share without changing the
+// repository's default commission config or any production pricing.
+await db.doc('appConfig/commission').set(
+  { rate: 0.13, gstRate: 0.05, updatedByUid: 'verify-dues', updatedAtMs: Date.now() },
+  { merge: true },
+);
 
 /**
  * A verified driver with nothing billed yet and a session signed in as them.
@@ -286,6 +293,8 @@ async function makeDriver(label) {
     verificationStatus: 'approved',
     driverId: `DRV-${label.toUpperCase()}-${tag.toUpperCase()}`,
     availabilityState: 'offline',
+    dutyTermsVersion: 'drivx-duty-v1',
+    dutyTermsAcceptedAtMs: Date.now(),
     zoneId: 'zone-ggn-1',
     ratingAverage: 4.8,
     ratingCount: 12,
@@ -416,7 +425,10 @@ try {
   console.log('\n4. New work is held while a row is unpaid');
 
   const owedPaise = TRIP_ONE.commissionTotal + TRIP_TWO.commissionTotal;
-  const online = await callFailure(callable(driver, 'setAvailability', { state: 'online' }));
+  const onlinePayload = () => ({
+    state: 'online', lat: 28.4595, lng: 77.0266, accuracyMeters: 12, fixTimeMs: Date.now(),
+  });
+  const online = await callFailure(callable(driver, 'setAvailability', onlinePayload()));
   check('going online is refused', online.code === 'failed-precondition', `${online.code}: ${online.message.slice(0, 120)}`);
   check('the refusal names the amount and that it is commission',
     /172\.67/.test(online.message) && /commission/i.test(online.message), online.message.slice(0, 140));
@@ -431,13 +443,12 @@ try {
   check('and refusing an offer is held too, so a driver cannot sit on a queue they cannot work',
     decline.code === 'failed-precondition', decline.code);
 
-  const offline = await callFailure(callable(driver, 'setAvailability', { state: 'offline' }));
-  check('stopping work is never held over money', offline.code === 'unimplemented',
-    `${offline.code}: ${offline.message.slice(0, 90)}`);
+  const offline = await callable(driver, 'setAvailability', { state: 'offline' });
+  check('stopping work is never held over money', offline.data.state === 'offline', offline.data.state);
 
   const tracking = await callFailure(
     callable(driver, 'publishDriverLocation', {
-      bookingId: bookingTwo,
+      bookingId: bookingOngoing,
       lat: 28.4595,
       lng: 77.0266,
       accuracyMeters: 12,
@@ -445,7 +456,17 @@ try {
     }),
   );
   check('a trip already being carried is never cut off over money',
-    tracking.code === 'unimplemented', `${tracking.code}: ${tracking.message.slice(0, 90)}`);
+    tracking.code === 'no error' && tracking.result.data.published === true,
+    `${tracking.code}: ${tracking.result?.data?.tracking ?? tracking.message}`);
+
+  // The next online check must isolate dues from the active-trip gate. Close
+  // the tracking fixture without assigning its completion to this driver.
+  await db.doc(`bookings/${bookingOngoing}`).update({
+    status: 'completed',
+    assignedDriverUid: null,
+    updatedAtMs: Date.now(),
+  });
+  await sleep(500);
 
   console.log('\n5. What it takes to clear a row');
 
@@ -492,13 +513,14 @@ try {
 
   console.log('\n6. The hold lifts, and a paid trip does not come back');
 
-  const onlineAgain = await callFailure(callable(driver, 'setAvailability', { state: 'online' }));
+  const onlineAgain = await callFailure(callable(driver, 'setAvailability', onlinePayload()));
   check('going online now reaches Phase 3 instead of the money refusal',
-    onlineAgain.code === 'unimplemented', `${onlineAgain.code}: ${onlineAgain.message.slice(0, 90)}`);
+    onlineAgain.code === 'no error' && onlineAgain.result.data.state === 'online',
+    `${onlineAgain.code}: ${onlineAgain.result?.data?.state ?? onlineAgain.message.slice(0, 90)}`);
   const acceptAgain = await callFailure(
     callable(driver, 'respondToAssignment', { bookingId: bookingOne, decision: 'accept' }),
   );
-  check('and so does answering an offer', acceptAgain.code === 'unimplemented', acceptAgain.code);
+  check('and a missing offer is rejected by id rather than a due hold', acceptAgain.code === 'not-found', acceptAgain.code);
 
   // Re-running the billing event after collection: the derived id collides with
   // the paid row, so a completed trip can never be charged a second time.
@@ -510,8 +532,10 @@ try {
   check('a cleared trip is not billed again by a later event',
     afterRebill.data?.status === 'paid' && rowCount === 2, `${afterRebill.data?.status}, ${rowCount} rows`);
 
-  const owedNow = await callFailure(callable(driver, 'setAvailability', { state: 'online' }));
-  check('with nothing owed the driver stays allowed to work', owedNow.code === 'unimplemented', owedNow.code);
+  const owedNow = await callFailure(callable(driver, 'setAvailability', onlinePayload()));
+  check('with nothing owed the driver stays allowed to work',
+    owedNow.code === 'no error' && owedNow.result.data.state === 'online',
+    `${owedNow.code}: ${owedNow.result?.data?.state ?? owedNow.message}`);
 
   console.log(`\n(both trips together came to ₹${(owedPaise / 100).toFixed(2)})`);
 
@@ -521,7 +545,6 @@ try {
   // held driver owes while the hold above is still being read.
   const rateDriver = await makeDriver('rate');
   const billedTo = (bookingId) => waitForDue(`driverProfiles/${rateDriver.uid}/dues/commission_${bookingId}`);
-  commissionConfig = (await db.doc('appConfig/commission').get()).data() ?? null;
   check('the office’s cut is a document the ledger reads, seeded at 13%',
     commissionConfig?.rate === 0.13, `${commissionConfig?.rate}`);
 
