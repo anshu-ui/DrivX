@@ -172,7 +172,8 @@ export default function DriverTrip() {
           destination={view.destination}
           driverFix={driverFix}
           customerFix={customerFix}
-          routePolyline={view.routePolyline}
+          routeMode={view.status === 'driver_en_route' ? 'pickup' : 'trip'}
+          routePolyline={view.status === 'driver_en_route' ? view.pickupRoutePolyline : view.routePolyline}
           driverTitle="Your live location"
           title="Pickup and drop-off"
         />
@@ -227,6 +228,11 @@ function StartForm({ trip }: { trip: DriverTripView }) {
         <>
           <Text variant="subheading" tone="brand">On the way to pickup</Text>
           <Text variant="caption" tone="muted">Tell the customer when you begin travelling. They will get an in-app update and push notification if enabled. Enter the start OTP only when you have reached the pickup and are ready to begin the metered trip.</Text>
+          {trip.status === 'driver_en_route' && trip.pickupEtaMinutes !== null ? (
+            <Text variant="bodyStrong" tone="brand">
+              Pickup ETA · {trip.pickupDistanceMeters !== null ? `${(trip.pickupDistanceMeters / 1000).toFixed(1)} km · ` : ''}{trip.pickupEtaMinutes} min
+            </Text>
+          ) : null}
           {pickupLocation ? (
             <Button
               label="Navigate to pickup"

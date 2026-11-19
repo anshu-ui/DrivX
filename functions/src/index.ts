@@ -8,6 +8,8 @@
  */
 export { bookingOptions, cancelBooking, createBooking, dispatchNewBooking, previewCoupon, quoteFare, registerDeviceToken, unregisterDeviceToken } from './functions/bookings';
 export { notifyBookingCreated, notifyBookingStateChanged, notifyDriverDueCreated, notifyDriverDueSettled, notifyDriverVerification } from './functions/activityNotifications';
+export { deliverNotificationPush } from './functions/pushNotifications';
+export { getDriverEarningsSummary } from './functions/driverEarnings';
 export { notifySupportTicketCreated, notifySupportTicketMessage, notifySupportTicketStatusChanged } from './functions/supportTickets';
 export { adminAnnouncementCreated } from './functions/adminAnnouncements';
 export { setDriverVerification } from './functions/driverVerification';
@@ -18,7 +20,7 @@ export {
 } from './functions/driverCard';
 export { recordDriverDuePayment } from './functions/driverDues';
 export { flagDriverOnFirstUpload, flagDriverOnResubmission } from './functions/driverReview';
-export { manualAssign, publishDriverLocation, respondToAssignment, setAvailability } from './functions/dispatch';
+export { manualAssign, publishDriverLocation, respondToAssignment, setAvailability, startTripApproach } from './functions/dispatch';
 export { acceptDutyTerms } from './functions/duty';
 export { driverGateway } from './functions/driverGateway';
 export { beginDriverOnboarding, provisionNewAccount, provisionSelf, submitDriverApplication } from './functions/identity';

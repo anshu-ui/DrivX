@@ -118,7 +118,7 @@ function mailHtml(title: string, greeting: string, body: string, ticketId: strin
 
 /** Every new ticket reaches the operations inbox and is kept in the live Admin queue. */
 export const notifySupportTicketCreated = onDocumentCreated(
-  { region: REGION, document: 'supportTickets/{ticketId}', secrets: [RESEND_API_KEY, RESEND_FROM_EMAIL], retry: true },
+  { region: REGION, document: 'supportTickets/{ticketId}', secrets: [RESEND_API_KEY, RESEND_FROM_EMAIL], retry: true, cpu: 'gcf_gen1', memory: '256MiB', maxInstances: 1 },
   async (event) => {
     const ticket = event.data?.data() as Data | undefined;
     if (!ticket) return;
@@ -168,7 +168,7 @@ export const notifySupportTicketCreated = onDocumentCreated(
 
 /** App replies go to the support inbox; Admin replies return to the user by email and app inbox. */
 export const notifySupportTicketMessage = onDocumentCreated(
-  { region: REGION, document: 'supportTickets/{ticketId}/messages/{messageId}', secrets: [RESEND_API_KEY, RESEND_FROM_EMAIL], retry: true },
+  { region: REGION, document: 'supportTickets/{ticketId}/messages/{messageId}', secrets: [RESEND_API_KEY, RESEND_FROM_EMAIL], retry: true, cpu: 'gcf_gen1', memory: '256MiB', maxInstances: 1 },
   async (event) => {
     const message = event.data?.data() as Data | undefined;
     if (!message) return;
@@ -211,7 +211,7 @@ export const notifySupportTicketMessage = onDocumentCreated(
 
 /** Status changes are visible in the app; closing/resolving also sends one email update. */
 export const notifySupportTicketStatusChanged = onDocumentUpdated(
-  { region: REGION, document: 'supportTickets/{ticketId}', secrets: [RESEND_API_KEY, RESEND_FROM_EMAIL], retry: true },
+  { region: REGION, document: 'supportTickets/{ticketId}', secrets: [RESEND_API_KEY, RESEND_FROM_EMAIL], retry: true, cpu: 'gcf_gen1', memory: '256MiB', maxInstances: 1 },
   async (event) => {
     const before = event.data?.before.data() as Data | undefined;
     const after = event.data?.after.data() as Data | undefined;

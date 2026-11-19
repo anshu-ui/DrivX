@@ -343,6 +343,12 @@
       "fieldPath": "expiresAtMs",
       "ttl": true,
       "indexes": []
+    },
+    {
+      "collectionGroup": "notificationPushOutbox",
+      "fieldPath": "expiresAtMs",
+      "ttl": true,
+      "indexes": []
     }
   ]
 }

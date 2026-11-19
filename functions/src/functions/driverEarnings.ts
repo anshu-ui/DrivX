@@ -1,8 +1,10 @@
 import { driverTripSplitFor, readCommissionSnapshot } from '@drivx/domain';
+import { onCall } from 'firebase-functions/v2/https';
+import { CALLABLE_OPTIONS } from '../lib/config';
 import type { Caller } from '../lib/guards';
 import { db, epochMs } from '../lib/admin';
 import { failedPrecondition, parseInput } from '../lib/errors';
-import { requireAdminCaller } from '../lib/guards';
+import { requireAdminCaller, requireDriver } from '../lib/guards';
 import { z } from 'zod';
 
 export type EarningsTotals = { trips: number; pricedTrips: number; grossPaise: number; commissionPaise: number; netPaise: number };
@@ -85,6 +87,11 @@ export async function getDriverEarningsSummaryForCaller(caller: Caller): Promise
     limited: rows.size > 500,
   };
 }
+
+/** Callable fallback for local/emulator clients without the Hosting gateway. */
+export const getDriverEarningsSummary = onCall(CALLABLE_OPTIONS, async (request) =>
+  getDriverEarningsSummaryForCaller(requireDriver(request)),
+);
 
 export type AdminDriverReport = {
   driver: { uid: string; name: string; driverId: string | null; phone: string | null };

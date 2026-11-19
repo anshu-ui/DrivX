@@ -16,6 +16,7 @@ export function TripMapPanel({
   driverFix,
   customerFix,
   routePolyline,
+  routeMode = 'trip',
   driverTitle = 'Your driver',
   title = 'Trip map',
   height = 230,
@@ -26,6 +27,8 @@ export function TripMapPanel({
   driverFix?: LiveDriverFix | null;
   customerFix?: LiveDriverFix | null;
   routePolyline?: string | null;
+  /** Focus the current driver-to-pickup route before the trip begins. */
+  routeMode?: 'pickup' | 'trip';
   driverTitle?: string;
   title?: string;
   height?: number;
@@ -41,19 +44,26 @@ export function TripMapPanel({
   const polylines = routeCoordinates.length > 1
     ? [{ id: 'trip-route', coordinates: routeCoordinates, color: theme.colors.primary, width: 6 }]
     : [];
-  // Keep the camera fitted to the booked route. Driver/customer GPS fixes are
-  // markers only; using them as the camera centre made the map jump on every
-  // location refresh.
-  const points = [pickupPoint, destinationPoint, ...routeCoordinates].filter((point) => point !== null);
+  // While the driver is travelling to pickup, frame that road route. Including
+  // the trip destination here zoomed the customer out to the entire journey and
+  // made the live driver-to-pickup preview unreadable.
+  const routeBounds = routeMode === 'pickup'
+    ? [...routeCoordinates, pickupPoint].filter((point) => point !== null)
+    : [pickupPoint, destinationPoint, ...routeCoordinates].filter((point) => point !== null);
+  const points = routeBounds.length > 1 ? routeBounds : [pickupPoint, destinationPoint].filter((point) => point !== null);
 
   // The first booking frame still shows a usable city map before the customer
   // chooses an address. This is only the launch-area camera centre; no pin or
   // current-location claim is rendered until we have a real coordinate.
-  const centre = pickupPoint ?? destinationPoint ?? points[0] ?? { latitude: 28.4595, longitude: 77.0266 };
-  const latitudeSpread = points.length ? Math.max(...points.map((point) => Math.abs(point.latitude - centre.latitude))) : 0;
-  const longitudeSpread = points.length ? Math.max(...points.map((point) => Math.abs(point.longitude - centre.longitude))) : 0;
+  const latitudes = points.map((point) => point.latitude);
+  const longitudes = points.map((point) => point.longitude);
+  const latitudeSpread = latitudes.length ? Math.max(...latitudes) - Math.min(...latitudes) : 0;
+  const longitudeSpread = longitudes.length ? Math.max(...longitudes) - Math.min(...longitudes) : 0;
+  const centre = points.length
+    ? { latitude: (Math.max(...latitudes) + Math.min(...latitudes)) / 2, longitude: (Math.max(...longitudes) + Math.min(...longitudes)) / 2 }
+    : { latitude: 28.4595, longitude: 77.0266 };
   const spread = Math.max(latitudeSpread, longitudeSpread);
-  const zoom = spread < 0.015 ? 15 : spread < 0.08 ? 12 : spread < 0.4 ? 9 : 6;
+  const zoom = spread < 0.012 ? 15 : spread < 0.04 ? 13 : spread < 0.12 ? 11 : spread < 0.5 ? 8 : 6;
   const extra = Constants.expoConfig?.extra as { mapsAndroidConfigured?: boolean } | undefined;
   const webMapUrl = pickupPoint && destinationPoint
     ? `https://maps.google.com/maps?saddr=${pickupPoint.latitude},${pickupPoint.longitude}&daddr=${destinationPoint.latitude},${destinationPoint.longitude}&output=embed`
@@ -71,20 +81,6 @@ export function TripMapPanel({
             : 'Pickup and destination on the map. Driver position appears after they share a live fix.'}
         </Text>
       </View> : null}
-      {!compact && pickupPoint && destinationPoint ? (
-          <View accessibilityLabel="Route preview from pickup to destination" style={{ marginHorizontal: theme.spacing.md, marginBottom: theme.spacing.xs, padding: theme.spacing.sm, borderRadius: theme.radius.md, backgroundColor: theme.colors.surfaceMuted, overflow: 'hidden' }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 7 }}>
-            <Text variant="caption" tone="brand" numberOfLines={1}>PICKUP · {pickup?.label ?? 'Starting point'}</Text>
-            <Text variant="caption" tone="brand" numberOfLines={1}>DROP · {destination?.label ?? 'Destination'}</Text>
-          </View>
-          <View style={{ height: 12, justifyContent: 'center' }}>
-            <View style={{ height: 3, borderRadius: 2, backgroundColor: theme.colors.border }} />
-            <View style={{ position: 'absolute', left: 2, width: 8, height: 8, borderRadius: 4, backgroundColor: theme.colors.primary }} />
-            <View style={{ position: 'absolute', right: 2, width: 8, height: 8, borderRadius: 2, backgroundColor: theme.colors.textBrand }} />
-          </View>
-          <Text variant="caption" tone="faint" style={{ marginTop: 4 }}>Route preview · live driver location appears here after the trip starts</Text>
-        </View>
-      ) : null}
       {Platform.OS === 'android' && !extra?.mapsAndroidConfigured ? (
         <View style={{ height, backgroundColor: theme.colors.surfaceMuted, padding: theme.spacing.md, justifyContent: 'center', gap: theme.spacing.xs }}>
           <Text variant="label" tone="brand">Map key required on Android</Text>
@@ -98,7 +94,7 @@ export function TripMapPanel({
           cameraPosition={{ coordinates: centre, zoom }}
           markers={[
             ...(pickupPoint ? [{ id: 'pickup', coordinates: pickupPoint, title: 'Pickup', tintColor: theme.colors.primary }] : []),
-            ...(destinationPoint ? [{ id: 'destination', coordinates: destinationPoint, title: 'Destination', tintColor: theme.colors.primaryInk }] : []),
+            ...(routeMode === 'trip' && destinationPoint ? [{ id: 'destination', coordinates: destinationPoint, title: 'Destination', tintColor: theme.colors.primaryInk }] : []),
             ...(driverPoint ? [{ id: 'driver', coordinates: driverPoint, title: driverFix?.stale ? `${driverTitle} · last update is stale` : driverTitle, tintColor: theme.colors.primaryInk, systemImage: 'car.fill' }] : []),
             ...(customerPoint ? [{ id: 'customer', coordinates: customerPoint, title: customerFix?.stale ? 'Customer · last update is stale' : 'Customer', tintColor: theme.colors.primaryInk, systemImage: 'figure.walk' }] : []),
           ]}
@@ -111,7 +107,7 @@ export function TripMapPanel({
           cameraPosition={{ coordinates: centre, zoom }}
           markers={[
             ...(pickupPoint ? [{ id: 'pickup', coordinates: pickupPoint, title: 'Pickup', snippet: pickup?.label ?? '' }] : []),
-            ...(destinationPoint ? [{ id: 'destination', coordinates: destinationPoint, title: 'Destination', snippet: destination?.label ?? '' }] : []),
+            ...(routeMode === 'trip' && destinationPoint ? [{ id: 'destination', coordinates: destinationPoint, title: 'Destination', snippet: destination?.label ?? '' }] : []),
             ...(driverPoint ? [{ id: 'driver', coordinates: driverPoint, title: driverFix?.stale ? `${driverTitle} · last update is stale` : driverTitle, snippet: 'Live booking location' }] : []),
             ...(customerPoint ? [{ id: 'customer', coordinates: customerPoint, title: customerFix?.stale ? 'Customer · last update is stale' : 'Customer', snippet: 'Live customer location' }] : []),
           ]}

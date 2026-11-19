@@ -124,7 +124,13 @@ export function buildClientEnv(source: Record<string, string | undefined> = {}):
     useEmulators: wantEmulators,
     region: get('FIREBASE_FUNCTIONS_REGION') ?? 'asia-south1',
     googleMapsWebKey: get('GOOGLE_MAPS_WEB_API_KEY') ?? null,
-    functionsBaseURL: get('FUNCTIONS_BASE_URL') ?? null,
+    // Production apps must use the authenticated Hosting gateway. If a native
+    // build was made without this optional EAS variable, falling back to a
+    // private callable endpoint produced 401s (and unexported actions 404s).
+    // Emulator and non-production projects stay on their configured Functions
+    // endpoint; the production DrivX project has a stable same-origin gateway.
+    functionsBaseURL: get('FUNCTIONS_BASE_URL') ??
+      (!wantEmulators && projectId === 'drivx-116de' ? 'https://drivx.in/api' : null),
     emulator: {
       firestore: wantEmulators ? { host, port: Number(get('FIRESTORE_EMULATOR_PORT') ?? 8080) } : null,
       database: wantEmulators ? { host, port: Number(get('RTDB_EMULATOR_PORT') ?? 9000) } : null,

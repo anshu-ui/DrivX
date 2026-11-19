@@ -128,7 +128,9 @@ export default function TripDetail() {
           ) : null}
           {booking.etaMinutes !== null ? (
             <Text variant="caption" tone="muted">
-              Driver is about {booking.etaMinutes} min from pickup
+              Driver is {booking.etaDistanceMeters !== null
+                ? `about ${(booking.etaDistanceMeters / 1000).toFixed(1)} km away · `
+                : ''}around {booking.etaMinutes} min from pickup
             </Text>
           ) : null}
           {booking.status === 'cancelled' ? (
@@ -169,7 +171,8 @@ export default function TripDetail() {
             destination={booking.destination}
             driverFix={driverFix}
             customerFix={customerFix}
-            routePolyline={booking.routePolyline}
+            routeMode={booking.status === 'driver_en_route' ? 'pickup' : 'trip'}
+            routePolyline={booking.status === 'driver_en_route' ? booking.pickupRoutePolyline : booking.routePolyline}
             title="Live driver map"
           />
         ) : null}

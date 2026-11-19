@@ -48,9 +48,11 @@ export type BookingView = {
   pickup: Place | null;
   destination: Place | null;
   routePolyline: string | null;
+  pickupRoutePolyline: string | null;
   estimatedDistanceMeters: number | null;
   estimatedDurationSeconds: number | null;
   etaMinutes: number | null;
+  etaDistanceMeters: number | null;
   /** Null on a booking written before the trip type was recorded — not a guess at one way. */
   tripDirection: TripDirection | null;
   estimate: FareBreakdown | null;
@@ -247,7 +249,7 @@ export function driverOf(value: unknown): AssignedDriverCard | null {
 
 function bookingView(snap: QueryDocumentSnapshot): BookingView {
   const data = snap.data() as Record<string, unknown>;
-  const eta = data.driverEnRouteEta as { minutes?: number } | undefined;
+  const eta = data.driverEnRouteEta as { minutes?: number; distanceMeters?: number; routePolyline?: unknown } | undefined;
   const cancellation = (data.cancellation ?? {}) as Record<string, unknown>;
   return {
     id: snap.id,
@@ -260,9 +262,11 @@ function bookingView(snap: QueryDocumentSnapshot): BookingView {
     pickup: placeOf(data.pickup),
     destination: placeOf(data.destination),
     routePolyline: typeof data.routePolyline === 'string' ? data.routePolyline : null,
+    pickupRoutePolyline: typeof eta?.routePolyline === 'string' ? eta.routePolyline : null,
     estimatedDistanceMeters: typeof data.estimatedDistanceMeters === 'number' ? data.estimatedDistanceMeters : null,
     estimatedDurationSeconds: typeof data.estimatedDurationSeconds === 'number' ? data.estimatedDurationSeconds : null,
     etaMinutes: typeof eta?.minutes === 'number' ? eta.minutes : null,
+    etaDistanceMeters: typeof eta?.distanceMeters === 'number' ? eta.distanceMeters : null,
     tripDirection:
       data.tripDirection === 'round_trip' || data.tripDirection === 'one_way'
         ? data.tripDirection

@@ -54,10 +54,13 @@ export type DriverTripView = {
   pickup: Place | null;
   destination: Place | null;
   routePolyline: string | null;
+  pickupRoutePolyline: string | null;
   estimatedDistanceMeters: number | null;
   estimatedDurationSeconds: number | null;
   tripDirection: TripDirection | null;
   scheduledForMs: number | null;
+  pickupEtaMinutes: number | null;
+  pickupDistanceMeters: number | null;
   /** What the map quoted, what the dial has produced so far, and the receipt. */
   estimate: FareBreakdown | null;
   runningFare: FareBreakdown | null;
@@ -78,6 +81,7 @@ function numberOrNull(value: unknown): number | null {
 
 function tripView(id: string, data: Record<string, unknown>): DriverTripView {
   const contact = data.customerContact as { fullName?: unknown; phoneE164?: unknown } | null | undefined;
+  const eta = data.driverEnRouteEta as { minutes?: unknown; distanceMeters?: unknown; routePolyline?: unknown } | null | undefined;
   return {
     id,
     reference: typeof data.reference === 'string' ? data.reference : id,
@@ -86,6 +90,7 @@ function tripView(id: string, data: Record<string, unknown>): DriverTripView {
     pickup: placeOf(data.pickup),
     destination: placeOf(data.destination),
     routePolyline: typeof data.routePolyline === 'string' ? data.routePolyline : null,
+    pickupRoutePolyline: typeof eta?.routePolyline === 'string' ? eta.routePolyline : null,
     estimatedDistanceMeters: numberOrNull(data.estimatedDistanceMeters),
     estimatedDurationSeconds: numberOrNull(data.estimatedDurationSeconds),
     tripDirection:
@@ -93,6 +98,8 @@ function tripView(id: string, data: Record<string, unknown>): DriverTripView {
         ? data.tripDirection
         : null,
     scheduledForMs: toEpochMs(data.scheduledForMs),
+    pickupEtaMinutes: numberOrNull(eta?.minutes),
+    pickupDistanceMeters: numberOrNull(eta?.distanceMeters),
     estimate: fareOf(data.estimate),
     runningFare: fareOf(data.runningFare),
     finalFare: fareOf(data.finalFare),

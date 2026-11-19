@@ -42,9 +42,13 @@ export const notifyBookingStateChanged = onDocumentUpdated(
     const statusChanged = before.status !== after.status;
     const assignmentChanged = before.assignedDriverUid !== after.assignedDriverUid;
     const beforeEta = before.driverEnRouteEta as { minutes?: unknown } | null;
-    const afterEta = after.driverEnRouteEta as { minutes?: unknown } | null;
+    const afterEta = after.driverEnRouteEta as { minutes?: unknown; distanceMeters?: unknown } | null;
     const beforeEtaMinutes = Number(beforeEta?.minutes);
     const afterEtaMinutes = Number(afterEta?.minutes);
+    const afterEtaDistanceMeters = Number(afterEta?.distanceMeters);
+    const etaDistanceLabel = Number.isFinite(afterEtaDistanceMeters)
+      ? `${(Math.max(0, afterEtaDistanceMeters) / 1000).toFixed(1)} km away and `
+      : '';
     const etaChanged = Number.isFinite(afterEtaMinutes) &&
       (!Number.isFinite(beforeEtaMinutes) || Math.abs(afterEtaMinutes - beforeEtaMinutes) >= 5 ||
         ((beforeEtaMinutes <= 15) !== (afterEtaMinutes <= 15)));
@@ -68,11 +72,21 @@ export const notifyBookingStateChanged = onDocumentUpdated(
       status === 'assigned' && driverUid && afterCardUid === driverUid &&
       (assignmentChanged || statusChanged || assignmentCardChanged)
     ) {
-      await sendCustomerAssignmentEmail(bookingId, after as Record<string, unknown>);
+      try {
+        await sendCustomerAssignmentEmail(bookingId, after as Record<string, unknown>);
+      } catch (error) {
+        // Inbox + push alerts must not depend on Resend being available.
+        console.error(JSON.stringify({ level: 'error', fn: 'notifyBookingStateChanged', outcome: 'assignment_email_failed', bookingId, message: error instanceof Error ? error.message : 'Unknown error' }));
+      }
     }
 
     if (status === 'completed' && before.status !== 'completed') {
-      await sendCustomerCompletionEmail(bookingId, after as Record<string, unknown>);
+      try {
+        await sendCustomerCompletionEmail(bookingId, after as Record<string, unknown>);
+      } catch (error) {
+        // The completion push and durable trip record are sent independently.
+        console.error(JSON.stringify({ level: 'error', fn: 'notifyBookingStateChanged', outcome: 'completion_email_failed', bookingId, message: error instanceof Error ? error.message : 'Unknown error' }));
+      }
     }
 
     if (statusChanged && customerUid) {
@@ -106,8 +120,8 @@ export const notifyBookingStateChanged = onDocumentUpdated(
         type: 'driver_assigned',
         title: afterEtaMinutes <= 15 ? 'Pickup ETA updated' : 'Your driver may be delayed',
         body: afterEtaMinutes <= 15
-          ? `Your driver is now about ${afterEtaMinutes} min from pickup for ${reference}.`
-          : `The latest road estimate is about ${afterEtaMinutes} min to pickup for ${reference}. If that timing no longer works, contact support or cancel and choose a later pickup time.`,
+          ? `Your driver is ${etaDistanceLabel}around ${afterEtaMinutes} min from pickup for ${reference}.`
+          : `Your driver is ${etaDistanceLabel}around ${afterEtaMinutes} min from pickup for ${reference}. If that timing no longer works, contact support or cancel and choose a later pickup time.`,
         route,
         bookingId,
       });
@@ -177,7 +191,13 @@ export const notifyDriverDueSettled = onDocumentUpdated(
 );
 
 export const notifyDriverVerification = onDocumentUpdated(
-  { region: REGION, document: 'driverProfiles/{driverUid}' },
+  {
+    region: REGION,
+    document: 'driverProfiles/{driverUid}',
+    cpu: 'gcf_gen1',
+    memory: '256MiB',
+    maxInstances: 1,
+  },
   async (event) => {
     const before = event.data?.before.data();
     const after = event.data?.after.data();

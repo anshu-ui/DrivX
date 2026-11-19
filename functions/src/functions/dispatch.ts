@@ -124,6 +124,11 @@ export async function startTripApproachForCaller(caller: Caller, raw: unknown) {
   return { bookingId, status: 'driver_en_route' as const };
 }
 
+/** Callable fallback for local/emulator clients without the Hosting gateway. */
+export const startTripApproach = onCall(CALLABLE_OPTIONS, async (request) =>
+  startTripApproachForCaller(requireVerifiedDriver(request), request.data),
+);
+
 /**
  * Driver: take the trip or hand it back.
  *
@@ -401,14 +406,17 @@ async function refreshDriverEnRouteEta(booking: Record<string, unknown>, booking
   if (lastCalculatedAt !== null && now - lastCalculatedAt < 4 * 60_000) return;
   const pickup = geoPointFromPlace(booking.pickup);
   if (!pickup) return;
-  const route = await measureRoute(origin, pickup, now);
+  // Request a traffic-aware route for the current departure, rather than the
+  // no-traffic estimate used for an immediate fare quote.
+  const route = await measureRoute(origin, pickup, now + 150_000);
   if (route.durationSeconds === null) return;
   const eta = {
     minutes: Math.max(0, Math.ceil(route.durationSeconds / 60)),
     calculatedAtMs: now,
     distanceMeters: route.distanceMeters,
+    routePolyline: route.encodedPolyline,
     source: route.source,
-    trafficAware: false,
+    trafficAware: route.source === 'google_routes',
   };
   await db().doc(bookingRefPath(bookingId)).update({ driverEnRouteEta: eta, updatedAtMs: serverTimestamp() });
 }
@@ -510,6 +518,11 @@ export async function setAvailabilityForCaller(caller: Caller, raw: unknown) {
     const dutyTermsVersion = typeof profile.dutyTermsVersion === 'string' ? profile.dutyTermsVersion : null;
     if (!hasAcceptedDutyTerms({ dutyTermsVersion })) {
       throw failedPrecondition('Agree to the duty terms on the Duty screen before going online.');
+    }
+    const notificationDevices = await db().collection('users').doc(caller.uid)
+      .collection('deviceTokens').where('surface', '==', 'driver').limit(1).get();
+    if (notificationDevices.empty) {
+      throw failedPrecondition('Enable push notifications for the DrivX Driver app before going online. Trip offers and pickup alerts cannot reach you while the app is closed without them.');
     }
     const work = await workFactsFor(caller.uid);
     if (work.outstandingPaise > 0) {

@@ -4,6 +4,7 @@ import { Card, Divider, Screen, ScreenHeader, StateView, Text, useTheme } from '
 import { formatINR } from '@drivx/domain';
 import { RequireApproval } from '../../components/RequireApproval';
 import { useDriverDues } from '../../features/driver/profile';
+import { FunctionCallError } from '@drivx/firebase-client';
 import { useDrivenTrips, useDriverEarningsSummary, type DrivenTrip } from '../../features/driver/trips';
 
 /** Labelled money line, the way a receipt reads: description on the left, amount on the right. */
@@ -100,7 +101,7 @@ export default function DriverEarnings() {
             <Card tone="brand">
               <View style={{ gap: theme.spacing.xs }}>
                 <Text variant="label" tone="onBrand">
-                  Kept from {rows.length} trip{rows.length === 1 ? '' : 's'}
+                  Kept from your latest {rows.length} completed trip{rows.length === 1 ? '' : 's'}
                 </Text>
                 <Text variant="title" tone="onBrand">
                   {formatINR(kept)}
@@ -130,7 +131,9 @@ export default function DriverEarnings() {
               ))}
             </View>
             {summary.isPending ? <Text variant="caption" tone="muted">Loading your verified earnings…</Text> : null}
-            {summary.isError ? <Text variant="caption" tone="danger">Could not load the period summary. Your trip-by-trip records are still shown below.</Text> : null}
+            {summary.isError ? <Text variant="caption" tone="danger">
+              Period totals could not load: {summary.error instanceof FunctionCallError ? `${summary.error.functionName} · ${summary.error.code} · ${summary.error.message}` : summary.error instanceof Error ? summary.error.message : 'Unknown server error'}. Recent trip records are still shown below.
+            </Text> : null}
             {totals ? <>
               <View style={{ gap: theme.spacing.xs }}>
                 <Text variant="fare" tone="brand">{formatINR(totals.netPaise)}</Text>
