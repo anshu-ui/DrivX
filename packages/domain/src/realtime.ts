@@ -48,7 +48,10 @@ export type RtdbActiveBooking = {
   status: BookingStatus;
   location: RtdbDriverLocation | null;
   etaMinutes: number | null;
+  etaDistanceMeters?: number | null;
   etaCalculatedAtMs: EpochMs | null;
+  etaTarget?: 'pickup' | 'destination' | null;
+  routePolyline?: string | null;
   /** Route polyline token held in Firestore; only the ref is streamed. */
   routeGeometryRef: string | null;
   updatedAtMs: EpochMs;
@@ -63,6 +66,8 @@ export type RtdbPresence = {
   zoneId: string | null;
   /** Null while offline — no coordinates are retained past availability. */
   location: GeoPointLite | null;
+  /** Last movement direction while the driver is sharing a live position. */
+  headingDegrees?: number | null;
   updatedAtMs: EpochMs;
   /** App-scoped client id; lets a scheduled sweep drop orphan nodes. */
   clientId: string | null;

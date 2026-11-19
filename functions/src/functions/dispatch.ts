@@ -396,19 +396,22 @@ function geoPointFromPlace(value: unknown): { lat: number; lng: number } | null 
     : null;
 }
 
-/** Recalculate the driver's road ETA at most every four minutes while en route. */
-async function refreshDriverEnRouteEta(booking: Record<string, unknown>, bookingId: string, origin: { lat: number; lng: number }, now: number): Promise<void> {
-  if (booking.status !== 'driver_en_route') return;
-  const previous = booking.driverEnRouteEta && typeof booking.driverEnRouteEta === 'object'
-    ? booking.driverEnRouteEta as Record<string, unknown>
-    : null;
+/** Refresh traffic-aware ETA to pickup or drop at most every four minutes. */
+async function refreshDriverEta(booking: Record<string, unknown>, bookingId: string, origin: { lat: number; lng: number }, now: number): Promise<void> {
+  const status = String(booking.status ?? '');
+  const targetKind = status === 'driver_en_route'
+    ? 'pickup'
+    : ['trip_started', 'in_progress', 'destination_reached'].includes(status) ? 'destination' : null;
+  if (!targetKind) return;
+  const previousValue = targetKind === 'pickup' ? booking.driverEnRouteEta : booking.driverTripEta;
+  const previous = previousValue && typeof previousValue === 'object' ? previousValue as Record<string, unknown> : null;
   const lastCalculatedAt = epochMs(previous?.calculatedAtMs);
   if (lastCalculatedAt !== null && now - lastCalculatedAt < 4 * 60_000) return;
-  const pickup = geoPointFromPlace(booking.pickup);
-  if (!pickup) return;
+  const destination = geoPointFromPlace(targetKind === 'pickup' ? booking.pickup : booking.destination);
+  if (!destination) return;
   // Request a traffic-aware route for the current departure, rather than the
   // no-traffic estimate used for an immediate fare quote.
-  const route = await measureRoute(origin, pickup, now + 150_000);
+  const route = await measureRoute(origin, destination, now + 150_000);
   if (route.durationSeconds === null) return;
   const eta = {
     minutes: Math.max(0, Math.ceil(route.durationSeconds / 60)),
@@ -418,7 +421,20 @@ async function refreshDriverEnRouteEta(booking: Record<string, unknown>, booking
     source: route.source,
     trafficAware: route.source === 'google_routes',
   };
-  await db().doc(bookingRefPath(bookingId)).update({ driverEnRouteEta: eta, updatedAtMs: serverTimestamp() });
+  // Write the live stream first. If either store has a transient failure, the
+  // next GPS fix can retry from the unchanged Firestore calculation timestamp.
+  await rtdb().ref(RTDB_PATHS.activeBooking(bookingId)).update({
+    etaMinutes: eta.minutes,
+    etaDistanceMeters: eta.distanceMeters,
+    etaCalculatedAtMs: eta.calculatedAtMs,
+    etaTarget: targetKind,
+    routePolyline: eta.routePolyline,
+    updatedAtMs: now,
+  });
+  await db().doc(bookingRefPath(bookingId)).update({
+    ...(targetKind === 'pickup' ? { driverEnRouteEta: eta } : { driverTripEta: eta }),
+    updatedAtMs: serverTimestamp(),
+  });
 }
 
 const availabilityInput = z.discriminatedUnion('state', [
@@ -562,6 +578,7 @@ export async function setAvailabilityForCaller(caller: Caller, raw: unknown) {
         state: 'online',
         zoneId,
         location: point,
+        headingDegrees: input.headingDegrees ?? null,
         updatedAtMs: now,
         clientId: null,
       }));
@@ -637,6 +654,7 @@ export async function publishDriverLocationForCaller(caller: Caller, raw: unknow
     const zoneId = typeof profile.zoneId === 'string' ? profile.zoneId : null;
     const dispatchWrites: Promise<unknown>[] = [rtdb().ref(RTDB_PATHS.presence(caller.uid)).update({
       location: { lat: input.lat, lng: input.lng },
+      headingDegrees: input.headingDegrees ?? null,
       updatedAtMs: now,
     })];
     if (zoneId) dispatchWrites.push(rtdb().ref(RTDB_PATHS.dispatchGrid(zoneId, caller.uid)).set({
@@ -673,7 +691,7 @@ export async function publishDriverLocationForCaller(caller: Caller, raw: unknow
     rtdb().ref(activePath).update({ updatedAtMs: now, status: booking.status }),
   ]);
   try {
-    await refreshDriverEnRouteEta(booking, input.bookingId, { lat: input.lat, lng: input.lng }, now);
+    await refreshDriverEta(booking, input.bookingId, { lat: input.lat, lng: input.lng }, now);
   } catch (error) {
     // A transient Routes/Firestore ETA update must not interrupt location sharing.
     console.warn(JSON.stringify({ level: 'warn', fn: 'publishDriverLocation', outcome: 'eta_refresh_failed', bookingId: input.bookingId, detail: String((error as Error).message ?? error) }));

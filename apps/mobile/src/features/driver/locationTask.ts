@@ -12,6 +12,7 @@ import { callFunction } from '@drivx/firebase-client';
 import { firebase } from '../../lib/firebase';
 
 export const DRIVER_LOCATION_TASK = 'drivx-driver-live-location';
+const LOCATION_TASK_REVISION = 2;
 const preferenceKey = (uid: string) => `drivx.driver.location.${uid}`;
 
 type LocationState = { uid: string; bookingId: string | null; online: boolean };
@@ -56,7 +57,12 @@ export async function syncDriverLocationTask(state: LocationState | null): Promi
     return;
   }
 
-  await AsyncStorage.setItem(preferenceKey(state.uid), JSON.stringify(state));
+  const saved = JSON.stringify({ ...state, revision: LOCATION_TASK_REVISION });
+  const previous = await AsyncStorage.getItem(preferenceKey(state.uid));
+  await AsyncStorage.setItem(preferenceKey(state.uid), saved);
+  // Keep the foreground service running across ordinary app closure. Restart
+  // only when duty/trip mode changes, so an assignment does not leave a GPS gap.
+  if (registered && previous === saved) return;
   if (registered) await stopLocationUpdatesAsync(DRIVER_LOCATION_TASK);
   await startLocationUpdatesAsync(DRIVER_LOCATION_TASK, {
     accuracy: state.bookingId ? Accuracy.High : Accuracy.Balanced,
@@ -67,10 +73,10 @@ export async function syncDriverLocationTask(state: LocationState | null): Promi
     foregroundService: {
       notificationTitle: 'DrivX driver location is active',
       notificationBody: state.bookingId
-        ? 'Sharing your live position for the trip. Tracking stops when the trip finishes.'
-        : 'Sharing your position while you are online for nearby bookings.',
-      notificationColor: '#155EEF',
-      killServiceOnDestroy: true,
+        ? 'Sharing your live position for this trip. Finish the trip before going offline.'
+        : 'Sharing your live position while you are online. Go offline in DrivX to stop sharing.',
+      notificationColor: '#2563EB',
+      killServiceOnDestroy: false,
     },
   });
 }

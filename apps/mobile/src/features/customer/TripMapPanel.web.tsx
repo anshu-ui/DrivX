@@ -128,6 +128,7 @@ export function TripMapPanel({
   const mapRef = useRef<LeafletMap | null>(null);
   const markersRef = useRef<Record<string, LeafletMarker>>({});
   const routeRef = useRef<LeafletPolyline | null>(null);
+  const framedFirstDriverFixRef = useRef(false);
   const pickupPoint = useMemo(() => pickup ? { lat: pickup.location.lat, lng: pickup.location.lng } : null, [pickup]);
   const destinationPoint = useMemo(() => destination ? { lat: destination.location.lat, lng: destination.location.lng } : null, [destination]);
   const driverPoint = useMemo(() => driverFix ? { lat: driverFix.lat, lng: driverFix.lng } : null, [driverFix]);
@@ -173,7 +174,7 @@ export function TripMapPanel({
     routeRef.current = null;
     if (routePoints.length > 1) {
       routeRef.current = leaflet.polyline(coordinates(routePoints), {
-        color: '#315EE8', weight: 6, opacity: 0.9, lineCap: 'round', lineJoin: 'round',
+        color: '#2563EB', weight: 6, opacity: 0.9, lineCap: 'round', lineJoin: 'round',
       }).addTo(map) as LeafletPolyline;
     }
     const framePoints = routeMode === 'pickup'
@@ -188,13 +189,28 @@ export function TripMapPanel({
     }
   }, [mapVersion, pickupPoint, destinationPoint, routePoints, routeMode]);
 
+  // If the map opened before the driver's first fix arrived, include both the
+  // pickup and driver once so the live pin is visible without snapping on every update.
+  useEffect(() => {
+    const map = mapRef.current;
+    const leaflet = window.L;
+    if (!driverPoint) { framedFirstDriverFixRef.current = false; return; }
+    if (!map || !leaflet || framedFirstDriverFixRef.current) return;
+    const points = [pickupPoint, driverPoint].filter((point): point is Point => point !== null);
+    if (points.length > 1) {
+      const bounds = leaflet.latLngBounds(coordinates(points));
+      if (bounds.isValid()) map.fitBounds(bounds, { padding: [26, 26], maxZoom: 15, animate: false });
+    } else map.setView([driverPoint.lat, driverPoint.lng], 14, { animate: false });
+    framedFirstDriverFixRef.current = true;
+  }, [mapVersion, driverPoint, pickupPoint]);
+
   // GPS updates move existing markers only; they do not redraw the road route.
   useEffect(() => {
     const map = mapRef.current;
     const leaflet = window.L;
     if (!map || !leaflet) return;
     const entries: [string, Point | null, string, string, boolean][] = [
-      ['pickup', pickupPoint, 'Pickup', '#315EE8', false],
+      ['pickup', pickupPoint, 'Pickup', '#2563EB', false],
       ['destination', routeMode === 'trip' ? destinationPoint : null, 'Drop-off', '#172033', false],
       ['driver', driverPoint, driverFix?.stale ? `${driverTitle} · last update is old` : driverTitle, '#168A5B', Boolean(driverFix?.stale)],
       ['customer', customerPoint, customerFix?.stale ? 'Customer · last update is old' : 'Customer', '#B98525', Boolean(customerFix?.stale)],

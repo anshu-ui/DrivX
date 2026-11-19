@@ -21,6 +21,7 @@ import {
 import { toEpochMs } from '@drivx/firebase-client';
 import { callFunction } from '@drivx/firebase-client';
 import { firebaseClients } from '../../lib/firebase';
+import { DriverLiveLocation } from '../../components/DriverLiveLocation';
 import { ConsoleHeader, StaffGate, describe, stamp, useReviewerSession, type Reviewer } from '../../lib/staff-session';
 
 /**
@@ -347,6 +348,11 @@ function DuesBoard({ reviewer }: { reviewer: Reviewer }) {
             ['Bookings', driverReport.totals.bookingCount], ['Completed', driverReport.totals.completedCount], ['Cancelled', driverReport.totals.cancelledCount], ['Trip fares', formatINR(driverReport.totals.grossFarePaise)], ['Driver net', formatINR(driverReport.totals.driverNetPaise)], ['Commission billed', formatINR(driverReport.totals.commissionTotalPaise)], ['Commission paid', formatINR(driverReport.totals.commissionPaidPaise)], ['Commission outstanding', formatINR(driverReport.totals.commissionOutstandingPaise)],
           ].map(([label, value]) => <div key={String(label)} className="rounded-xl bg-surface-muted p-3"><dt className="text-xs text-ink-muted">{label}</dt><dd className="mt-1 font-mono text-lg font-bold">{value}</dd></div>)}</dl>
           {driverReport.limited ? <p className="mt-3 text-xs text-badge-warning">Showing totals and the latest 5,000 assigned bookings; older trip rows exceed the report limit.</p> : null}
+          <DriverLiveLocation
+            driverUid={driverReport.driver.uid}
+            activeBookingId={driverReport.bookings.find((row) => ['assigned', 'driver_en_route', 'driver_arrived', 'trip_started', 'in_progress', 'destination_reached'].includes(row.status))?.id ?? null}
+            profileAvailability={drivers.find((row) => row.uid === driverReport.driver.uid)?.availabilityState ?? null}
+          />
           <div className="mt-5 overflow-x-auto"><table className="w-full min-w-[680px] text-left text-sm"><thead><tr className="border-b border-line text-xs uppercase text-ink-muted"><th className="py-2 pr-3">Booking</th><th className="py-2 pr-3">Status</th><th className="py-2 pr-3">Created / completed</th><th className="py-2 pr-3">Fare</th><th className="py-2 pr-3">Commission</th></tr></thead><tbody>{driverReport.bookings.slice(0, 100).map((row) => <tr key={row.id} className="border-b border-line"><td className="py-2 pr-3 font-medium">{row.reference}<span className="block text-[10px] text-ink-faint">{row.id}</span></td><td className="py-2 pr-3 capitalize">{row.status.replaceAll('_', ' ')}</td><td className="py-2 pr-3 text-xs text-ink-muted">{stamp(row.createdAtMs)}{row.completedAtMs ? <span className="block">Done {stamp(row.completedAtMs)}</span> : null}</td><td className="py-2 pr-3 font-mono">{row.farePaise > 0 ? <>{formatINR(row.farePaise)}<span className="block text-[10px] text-ink-faint">{row.fareKind}</span></> : '—'}</td><td className="py-2 pr-3 font-mono">{row.commissionPaise === null ? '—' : `${formatINR(row.commissionPaise)} · ${row.commissionStatus}`}</td></tr>)}</tbody></table>{driverReport.bookings.length > 100 ? <p className="mt-2 text-xs text-ink-muted">Showing latest 100 of {driverReport.bookings.length} booking rows; totals above include all loaded rows.</p> : null}</div>
         </div> : selectedDriverUid && !reportLoading && !reportError ? <p className="mt-4 text-sm text-ink-muted">No report available.</p> : null}
       </section>

@@ -48,9 +48,13 @@ export function TripMapPanel({
   // the trip destination here zoomed the customer out to the entire journey and
   // made the live driver-to-pickup preview unreadable.
   const routeBounds = routeMode === 'pickup'
-    ? [...routeCoordinates, pickupPoint].filter((point) => point !== null)
+    ? [...routeCoordinates, pickupPoint, ...(routeCoordinates.length > 1 ? [] : [driverPoint])].filter((point) => point !== null)
     : [pickupPoint, destinationPoint, ...routeCoordinates].filter((point) => point !== null);
-  const points = routeBounds.length > 1 ? routeBounds : [pickupPoint, destinationPoint].filter((point) => point !== null);
+  const points = routeBounds.length > 1
+    ? routeBounds
+    : routeMode === 'pickup'
+      ? [pickupPoint, driverPoint].filter((point) => point !== null)
+      : [pickupPoint, destinationPoint].filter((point) => point !== null);
 
   // The first booking frame still shows a usable city map before the customer
   // chooses an address. This is only the launch-area camera centre; no pin or

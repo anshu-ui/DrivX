@@ -28,7 +28,7 @@ export default function TripDetail() {
   const detail = useBookingDetail(bookingId);
   const bookingForLocation = detail.data?.booking;
   const trackable = bookingForLocation?.assignedDriverUid !== null && bookingForLocation?.assignedDriverUid !== undefined &&
-    ['driver_en_route', 'driver_arrived', 'trip_started', 'in_progress', 'destination_reached'].includes(bookingForLocation.status);
+    ['assigned', 'driver_en_route', 'driver_arrived', 'trip_started', 'in_progress', 'destination_reached'].includes(bookingForLocation.status);
   const driverFix = useLiveDriverFix(bookingId, trackable);
   const tripStarted = Boolean(bookingForLocation && ['trip_started', 'in_progress', 'destination_reached'].includes(bookingForLocation.status));
   const customerFix = useLiveCustomerFix(bookingId, tripStarted);
@@ -166,15 +166,47 @@ export default function TripDetail() {
         ) : null}
 
         {booking.assignedDriverUid ? (
-          <TripMapPanel
-            pickup={booking.pickup}
-            destination={booking.destination}
-            driverFix={driverFix}
-            customerFix={customerFix}
-            routeMode={booking.status === 'driver_en_route' ? 'pickup' : 'trip'}
-            routePolyline={booking.status === 'driver_en_route' ? booking.pickupRoutePolyline : booking.routePolyline}
-            title="Live driver map"
-          />
+          <>
+            <TripMapPanel
+              pickup={booking.pickup}
+              destination={booking.destination}
+              driverFix={driverFix}
+              customerFix={customerFix}
+              routeMode={['assigned', 'driver_en_route'].includes(booking.status) ? 'pickup' : 'trip'}
+              routePolyline={driverFix && driverFix.etaTarget === (['assigned', 'driver_en_route'].includes(booking.status) ? 'pickup' : 'destination')
+                ? driverFix.routePolyline
+                : (booking.status === 'driver_en_route' ? booking.pickupRoutePolyline : booking.status === 'assigned' ? null : booking.routePolyline)}
+              title="Live driver map"
+            />
+            {['assigned', 'driver_en_route', 'driver_arrived', 'trip_started', 'in_progress', 'destination_reached'].includes(booking.status) ? (
+              <Card tone="inset" style={{ gap: theme.spacing.xxs }}>
+                <Text variant="bodyStrong" tone="brand">
+                  {booking.status === 'assigned'
+                    ? 'Your driver has been assigned'
+                    : booking.status === 'driver_arrived'
+                    ? 'Your driver has arrived at pickup'
+                    : ['trip_started', 'in_progress', 'destination_reached'].includes(booking.status)
+                      ? 'Your trip is in progress'
+                      : 'Your driver is on the way'}
+                </Text>
+                <Text variant="caption" tone="muted">
+                  {driverFix
+                    ? `${driverFix.stale ? 'Last location update' : 'Live location updated'} · ${dateTime(driverFix.receivedAtMs)}${driverFix.stale ? ' · waiting for a fresh GPS fix' : ''}`
+                    : 'Waiting for the driver’s first live location update.'}
+                </Text>
+                {booking.status === 'driver_en_route' && (driverFix?.etaMinutes ?? booking.etaMinutes) !== null ? (
+                  <Text variant="caption" tone="muted">
+                    {(driverFix?.etaDistanceMeters ?? booking.etaDistanceMeters) !== null ? `${((driverFix?.etaDistanceMeters ?? booking.etaDistanceMeters)! / 1000).toFixed(1)} km away · ` : ''}about {driverFix?.etaMinutes ?? booking.etaMinutes} min to pickup
+                  </Text>
+                ) : null}
+                {['trip_started', 'in_progress', 'destination_reached'].includes(booking.status) && driverFix?.etaTarget === 'destination' && driverFix.etaMinutes != null ? (
+                  <Text variant="caption" tone="muted">
+                    {driverFix.etaDistanceMeters != null ? `${(driverFix.etaDistanceMeters / 1000).toFixed(1)} km to drop · ` : ''}about {driverFix.etaMinutes} min remaining
+                  </Text>
+                ) : null}
+              </Card>
+            ) : null}
+          </>
         ) : null}
 
         {booking.serviceTypeId === 'chauffeur_outstation' ? (

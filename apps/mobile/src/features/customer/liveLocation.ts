@@ -13,6 +13,10 @@ export type LiveDriverFix = {
   receivedAtMs: number;
   accuracyMeters: number | null;
   stale: boolean;
+  etaMinutes?: number | null;
+  etaDistanceMeters?: number | null;
+  etaTarget?: 'pickup' | 'destination' | null;
+  routePolyline?: string | null;
 };
 
 /** The active booking stream is readable only to its customer, assigned driver and staff. */
@@ -26,7 +30,8 @@ export function useLiveDriverFix(bookingId: string | undefined, enabled: boolean
     return onValue(
       ref(firebase().database, RTDB_PATHS.activeBooking(bookingId)),
       (snapshot) => {
-        const location = snapshot.val()?.location as Record<string, unknown> | null | undefined;
+        const activeBooking = snapshot.val() as Record<string, unknown> | null;
+        const location = activeBooking?.location as Record<string, unknown> | null | undefined;
         if (
           !location ||
           typeof location.lat !== 'number' ||
@@ -44,11 +49,27 @@ export function useLiveDriverFix(bookingId: string | undefined, enabled: boolean
             receivedAtMs: location.receivedAtMs,
             accuracyMeters: typeof location.accuracyMeters === 'number' ? location.accuracyMeters : null,
             stale: Date.now() - location.receivedAtMs > RTDB_RETENTION.staleAfterMs,
+            etaMinutes: typeof activeBooking?.etaMinutes === 'number' ? activeBooking.etaMinutes : null,
+            etaDistanceMeters: typeof activeBooking?.etaDistanceMeters === 'number' ? activeBooking.etaDistanceMeters : null,
+            etaTarget: activeBooking?.etaTarget === 'pickup' || activeBooking?.etaTarget === 'destination' ? activeBooking.etaTarget : null,
+            routePolyline: typeof activeBooking?.routePolyline === 'string' ? activeBooking.routePolyline : null,
           },
         });
       },
       () => setState({ key, fix: null }),
     );
+  }, [bookingId, enabled, key]);
+
+  // Keep the stale indicator accurate even when the driver's next GPS fix never arrives.
+  useEffect(() => {
+    if (!bookingId || !enabled) return undefined;
+    const timer = setInterval(() => {
+      setState((current) => current.key !== key || !current.fix ? current : {
+        key,
+        fix: { ...current.fix, stale: Date.now() - current.fix.receivedAtMs > RTDB_RETENTION.staleAfterMs },
+      });
+    }, 5_000);
+    return () => clearInterval(timer);
   }, [bookingId, enabled, key]);
 
   return state.key === key ? state.fix : null;

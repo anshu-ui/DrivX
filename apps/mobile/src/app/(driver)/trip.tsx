@@ -172,11 +172,20 @@ export default function DriverTrip() {
           destination={view.destination}
           driverFix={driverFix}
           customerFix={customerFix}
-          routeMode={view.status === 'driver_en_route' ? 'pickup' : 'trip'}
-          routePolyline={view.status === 'driver_en_route' ? view.pickupRoutePolyline : view.routePolyline}
+          routeMode={['assigned', 'driver_en_route'].includes(view.status) ? 'pickup' : 'trip'}
+          routePolyline={driverFix && driverFix.etaTarget === (['assigned', 'driver_en_route'].includes(view.status) ? 'pickup' : 'destination')
+            ? driverFix.routePolyline
+            : view.status === 'driver_en_route' ? view.pickupRoutePolyline : view.status === 'assigned' ? null : view.routePolyline}
           driverTitle="Your live location"
           title="Pickup and drop-off"
         />
+        {driverFix ? <Card tone="inset" style={{ gap: theme.spacing.xxs }}>
+          <Text variant="bodyStrong" tone="brand">Your location is sharing for this trip</Text>
+          <Text variant="caption" tone="muted">{driverFix.stale ? 'GPS update is delayed' : 'Live location updated'} · {dateTime(driverFix.receivedAtMs)}</Text>
+          {driverFix.etaMinutes != null && driverFix.etaTarget ? <Text variant="caption" tone="muted">
+            {driverFix.etaDistanceMeters != null ? `${(driverFix.etaDistanceMeters / 1000).toFixed(1)} km · ` : ''}{driverFix.etaMinutes} min to {driverFix.etaTarget === 'pickup' ? 'pickup' : 'drop'}
+          </Text> : null}
+        </Card> : null}
 
         {started ? <TripTrackingShare bookingId={view.id} /> : null}
 
