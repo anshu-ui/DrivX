@@ -1,9 +1,8 @@
 import { createHash } from 'node:crypto';
 import type { DocumentReference } from 'firebase-admin/firestore';
-import { getMessaging } from 'firebase-admin/messaging';
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { notificationPath } from '@drivx/domain';
-import { db, serverTimestamp } from '../lib/admin';
+import { db, messagingAdmin, serverTimestamp } from '../lib/admin';
 import { REGION } from '../lib/config';
 
 type PushOutbox = {
@@ -41,6 +40,9 @@ function transientMessagingError(code: string): boolean {
 export const deliverNotificationPush = onDocumentCreated(
   { region: REGION, document: 'notificationPushOutbox/{outboxId}', retry: true, timeoutSeconds: 60 },
   async (event) => {
+    // Use the shared Firestore singleton whose settings were applied at module
+    // load, before this trigger's DocumentReference is accessed.
+    const firestore = db();
     const outboxRef = event.data?.ref;
     const value = event.data?.data() as PushOutbox | undefined;
     if (!outboxRef || !value) return;
@@ -57,13 +59,13 @@ export const deliverNotificationPush = onDocumentCreated(
     const latest = (await outboxRef.get()).data() as PushOutbox | undefined;
     if (latest?.status === 'sent' || latest?.status === 'partially_sent' || latest?.status === 'no_registered_devices' || latest?.status === 'cancelled') return;
 
-    const notificationRef = db().doc(notificationPath(uid, notificationId));
+    const notificationRef = firestore.doc(notificationPath(uid, notificationId));
     if (!(await notificationRef.get()).exists) {
       await outboxRef.set({ status: 'cancelled', updatedAtMs: serverTimestamp() }, { merge: true });
       return;
     }
 
-    const accountRef = db().collection('users').doc(uid);
+    const accountRef = firestore.collection('users').doc(uid);
     const [account, devices] = await Promise.all([accountRef.get(), accountRef.collection('deviceTokens').get()]);
     const tokens = new Map<string, { receiptId: string; deviceId: string | null }>();
     const legacyToken = account.get('fcmToken');
@@ -103,7 +105,7 @@ export const deliverNotificationPush = onDocumentCreated(
       ? Object.fromEntries(Object.entries(value.data as Record<string, unknown>).filter((entry): entry is [string, string] => typeof entry[1] === 'string'))
       : {};
     const tokenList = pending.map(([token]) => token);
-    const response = await getMessaging().sendEachForMulticast({
+    const response = await messagingAdmin().sendEachForMulticast({
       tokens: tokenList,
       notification: { title, body },
       data: {

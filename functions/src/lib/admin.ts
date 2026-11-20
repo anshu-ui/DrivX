@@ -9,6 +9,7 @@ import { getStorage, type Storage } from 'firebase-admin/storage';
 import { getFunctions } from 'firebase-admin/functions';
 import { initializeApp, getApps, type App } from 'firebase-admin/app';
 import { getAuth, type Auth } from 'firebase-admin/auth';
+import { getMessaging, type Messaging } from 'firebase-admin/messaging';
 
 /**
  * Admin SDK entry point.
@@ -19,30 +20,35 @@ import { getAuth, type Auth } from 'firebase-admin/auth';
  */
 
 let app: App | null = null;
-let store: Firestore | null = null;
 
 function ensureApp(): App {
   if (app) return app;
-  app = getApps().length > 0 ? (getApps()[0] as App) : initializeApp();
+  const defaultApp = getApps().find((candidate) => candidate.name === '[DEFAULT]');
+  app = defaultApp ?? initializeApp();
   return app;
 }
+
+// Configure Firestore while the Functions module is loading, before a
+// Firestore-trigger event can construct or access its snapshot references.
+// Calling settings() lazily inside a handler is too late for those triggers.
+const store: Firestore = (() => {
+  const created = getFirestore(ensureApp());
+  // Zod schemas can preserve omitted optional fields as `undefined`; Firestore
+  // should skip those keys instead of rejecting the write.
+  created.settings({ ignoreUndefinedProperties: true });
+  return created;
+})();
 
 export const serverTimestamp = (): DocumentData => FieldValue.serverTimestamp();
 export const deleteField = (): DocumentData => FieldValue.delete();
 export const increment = (n: number): DocumentData => FieldValue.increment(n);
 
 export function db(): Firestore {
-  if (store) return store;
-  const created = getFirestore(ensureApp());
-  // A zod schema turns "this optional field was not sent" into a key whose value
-  // is `undefined`, and the Firestore encoder throws on that instead of skipping
-  // the field — which is how a booking with no second address line came back as
-  // an HTTP 500. Ignoring undefined makes an absent field absent, which is what
-  // the data model already means by it. Set before the first write, because the
-  // client refuses a settings change once it has started.
-  created.settings({ ignoreUndefinedProperties: true });
-  store = created;
   return store;
+}
+
+export function messagingAdmin(): Messaging {
+  return getMessaging(ensureApp());
 }
 
 export function rtdb(): Database {
