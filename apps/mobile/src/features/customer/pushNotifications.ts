@@ -21,6 +21,7 @@ import { firebase } from '../../lib/firebase';
 import type { AppSurface } from '../../lib/appSurface';
 
 type NotificationSurface = Exclude<AppSurface, null>;
+const ANDROID_TRIP_CHANNEL_ID = 'drivx_trip_alerts';
 const preferenceKey = (uid: string, surface: NotificationSurface) => `drivx.push.enabled.${surface}.${uid}`;
 const legacyPreferenceKey = (uid: string) => `drivx.push.enabled.${uid}`;
 let lastOpenedNotificationId: string | null = null;
@@ -86,10 +87,14 @@ async function currentDeviceToken(requestPermission: boolean, surface: Notificat
     return (await webMessagingAndToken(requestPermission, surface)).token;
   }
   if (Platform.OS === 'android') {
-    await setNotificationChannelAsync('bookings', {
-      name: 'Trip updates',
+    await setNotificationChannelAsync(ANDROID_TRIP_CHANNEL_ID, {
+      name: 'DrivX trip alerts',
+      description: 'Booking offers, driver arrival and trip status updates.',
       importance: AndroidImportance.MAX,
       vibrationPattern: [0, 250, 200, 250],
+      lightColor: '#2563EB',
+      enableLights: true,
+      enableVibrate: true,
       sound: 'default',
     });
   }
@@ -175,7 +180,17 @@ export function usePushRegistrationSync(user: User | null, surface: Notification
     const stopMessage = onMessage(messaging, (message) => {
       const title = message.notification?.title ?? 'DrivX update';
       const body = message.notification?.body ?? 'There is an update to your booking.';
-      void scheduleNotificationAsync({ content: { title, body, data: message.data }, trigger: null }).catch(() => undefined);
+      void scheduleNotificationAsync({
+        content: {
+          title,
+          body,
+          data: message.data,
+          sound: 'default',
+          color: '#2563EB',
+          priority: 'high',
+        },
+        trigger: Platform.OS === 'android' ? { channelId: ANDROID_TRIP_CHANNEL_ID } : null,
+      }).catch(() => undefined);
     });
     const stopResponse = addNotificationResponseReceivedListener(openNotificationRoute);
     void getLastNotificationResponseAsync().then((response) => {

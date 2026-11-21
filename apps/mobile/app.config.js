@@ -50,7 +50,11 @@ module.exports = ({ config }) => {
         isIosBackgroundLocationEnabled: true,
       }]] : []),
       './plugins/withFirebaseMessagingOverrides',
-      ['expo-notifications', { defaultChannel: 'bookings', color: '#2563EB' }],
+      ['expo-notifications', {
+        defaultChannel: 'drivx_trip_alerts',
+        color: '#2563EB',
+        icon: './assets/android-icon-monochrome.png',
+      }],
       ['expo-build-properties', { android: { kotlinVersion: '2.4.0' } }],
     ]),
   ];

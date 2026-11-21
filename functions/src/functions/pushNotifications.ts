@@ -116,7 +116,13 @@ export const deliverNotificationPush = onDocumentCreated(
       },
       android: {
         priority: 'high',
-        notification: { channelId: 'bookings', sound: 'default', tag: notificationId },
+        notification: {
+          channelId: 'drivx_trip_alerts',
+          sound: 'default',
+          tag: notificationId,
+          icon: 'notification_icon',
+          color: '#2563EB',
+        },
       },
       apns: {
         headers: { 'apns-priority': '10' },

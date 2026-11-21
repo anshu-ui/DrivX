@@ -500,7 +500,7 @@ export default function CustomerHome() {
                       : 'transparent',
                   opacity: disabled ? 0.48 : pressed ? 0.82 : 1,
                   transform: [{ translateY: hoveredMode === mode.key && !disabled ? -2 : 0 }],
-                  ...(selected ? { shadowColor: '#172033', shadowOpacity: 0.14, shadowRadius: 9, shadowOffset: { width: 0, height: 4 }, elevation: 3 } : {}),
+                  ...(selected ? { shadowColor: '#111113', shadowOpacity: 0.14, shadowRadius: 9, shadowOffset: { width: 0, height: 4 }, elevation: 3 } : {}),
                 })}
               >
                 <View style={{ width: 31, height: 31, borderRadius: 11, backgroundColor: selected ? 'rgba(255,255,255,0.12)' : theme.colors.primarySoft, alignItems: 'center', justifyContent: 'center' }}>
@@ -609,7 +609,7 @@ export default function CustomerHome() {
                     borderRadius: theme.radius.md, paddingHorizontal: 14,
                     backgroundColor: theme.colors.surface, opacity: pressed ? 0.82 : 0.97,
                     borderWidth: 1, borderColor: theme.colors.border,
-                    shadowColor: '#172033', shadowOpacity: 0.14, shadowRadius: 8, elevation: 3,
+                    shadowColor: '#111113', shadowOpacity: 0.14, shadowRadius: 8, elevation: 3,
                   })}
                 >
                   <Marker kind={end} />

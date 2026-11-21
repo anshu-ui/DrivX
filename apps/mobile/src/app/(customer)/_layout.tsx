@@ -3,28 +3,12 @@ import { StatusBar } from 'expo-status-bar';
 import { ThemeProvider } from '@drivx/ui';
 import { theme } from '@drivx/design-tokens';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFonts } from 'expo-font';
-import {
-  PlusJakartaSans_400Regular,
-  PlusJakartaSans_500Medium,
-  PlusJakartaSans_600SemiBold,
-  PlusJakartaSans_700Bold,
-  PlusJakartaSans_800ExtraBold,
-} from '@expo-google-fonts/plus-jakarta-sans';
 import { TabIcon } from '../../components/TabIcon';
 import { AppSurfaceGate } from '../../components/AppSurfaceGate';
 import { customerTheme } from '../../features/customer/customerTheme';
 
 export default function CustomerLayout() {
-  const [fontsLoaded, fontError] = useFonts({
-    PlusJakartaSans_400Regular,
-    PlusJakartaSans_500Medium,
-    PlusJakartaSans_600SemiBold,
-    PlusJakartaSans_700Bold,
-    PlusJakartaSans_800ExtraBold,
-  });
   const insets = useSafeAreaInsets();
-  if (!fontsLoaded && !fontError) return null;
   return (
     <AppSurfaceGate expects="customer">
       <ThemeProvider theme={customerTheme}>
@@ -59,7 +43,7 @@ export default function CustomerLayout() {
             paddingHorizontal: 6,
             paddingBottom: 4,
             paddingTop: 4,
-            shadowColor: '#172033',
+            shadowColor: '#111113',
             shadowOpacity: 0.10,
             shadowRadius: 18,
             shadowOffset: { width: 0, height: 7 },

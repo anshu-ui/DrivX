@@ -22,6 +22,7 @@ import { dateTime } from '../../features/customer/labels';
 import { LegalPanel } from '../../features/legal/LegalPanel';
 import { SurfaceSwitch } from '../../components/SurfaceSwitch';
 import { PushNotificationsCard } from '../../components/PushNotificationsCard';
+import { NotificationsInbox } from '../../components/NotificationsInbox';
 
 const TRANSMISSION_LABEL: Record<Transmission, string> = {
   automatic: 'Automatic',
@@ -103,7 +104,6 @@ export default function CustomerAccount() {
     );
   };
 
-  const unread = (notifications.data ?? []).filter((item) => item.readAtMs === null).length;
 
   return (
     <Screen>
@@ -259,48 +259,20 @@ export default function CustomerAccount() {
         </Card>
 
         <Card style={{ gap: theme.spacing.sm }}>
-          <Text variant="subheading" tone="brand">
-            Notifications {unread > 0 ? `(${unread} unread)` : ''}
-          </Text>
-          {notifications.isError ? (
-            <Text variant="caption" tone="danger">
-              {notifications.error instanceof Error ? notifications.error.message : 'Firestore refused.'}
-            </Text>
-          ) : null}
-          {!notifications.isError && (notifications.data ?? []).length === 0 && !notifications.isPending ? (
-            <Text variant="caption" tone="muted">
-              No notifications yet.
-            </Text>
-          ) : null}
-          {(notifications.data ?? []).map((item) => (
-            <View key={item.id} style={{ gap: theme.spacing.xxs }}>
-              <Text variant="caption">{item.title ?? item.type ?? 'Notification'}</Text>
-              <Text variant="caption" tone="muted">
-                {item.body ?? '—'} · {dateTime(item.createdAtMs)}
-              </Text>
-              {item.readAtMs === null ? (
-                <Button
-                  label="Mark read"
-                  appearance="ghost"
-                  size="sm"
-                  loading={markRead.isPending && markRead.variables === item.id}
-                  onPress={() =>
-                    markRead.mutate(item.id, {
-                      onError: (error) =>
-                        setFeedback({
-                          tone: 'danger',
-                          text: error instanceof Error ? error.message : 'Could not mark that as read.',
-                        }),
-                    })
-                  }
-                />
-              ) : (
-                <Text variant="caption" tone="faint">
-                  Read {dateTime(item.readAtMs)}
-                </Text>
-              )}
-            </View>
-          ))}
+          <NotificationsInbox
+            items={notifications.data ?? []}
+            isLoading={notifications.isPending}
+            error={notifications.isError
+              ? notifications.error instanceof Error ? notifications.error.message : 'Could not load notifications.'
+              : null}
+            pendingId={markRead.isPending ? markRead.variables : null}
+            onMarkRead={(id) => markRead.mutate(id, {
+              onError: (error) => setFeedback({
+                tone: 'danger',
+                text: error instanceof Error ? error.message : 'Could not mark that as read.',
+              }),
+            })}
+          />
         </Card>
 
         <PushNotificationsCard />

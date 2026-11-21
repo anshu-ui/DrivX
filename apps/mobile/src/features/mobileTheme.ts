@@ -1,6 +1,6 @@
 import { theme, type Theme } from '@drivx/design-tokens';
 
-/** Customer and Driver share the clean, cool-white app palette and typography. */
+/** Customer and Driver share the website's warm-white, ink and blue identity. */
 export const mobileTheme = {
   ...theme,
   radius: {
@@ -17,28 +17,27 @@ export const mobileTheme = {
   },
   colors: {
     ...theme.colors,
-    // Cool white page ground with softly tinted panels for clear hierarchy.
-    background: '#F6F8FC',
+    // Match the marketing site's warm paper ground and white content cards.
+    background: '#F3F0EB',
     surface: '#FFFFFF',
-    surfaceMuted: '#F1F5FB',
-    surfaceBrand: '#172033',
-    border: '#E3E9F2',
+    surfaceMuted: '#FAF8F4',
+    surfaceBrand: '#111113',
+    border: '#DFDDD8',
     borderFocus: '#2563EB',
-    text: '#172033',
-    // Keep helper text and timestamps readable on white and blue-tinted panels.
-    textMuted: '#64748B',
-    textFaint: '#475569',
-    textBrand: '#172033',
+    text: '#111113',
+    textMuted: '#686662',
+    textFaint: '#5C5A56',
+    textBrand: '#111113',
     textOnBrand: '#FFFFFF',
     primary: '#2563EB',
     primaryPressed: '#1D4ED8',
     primaryInk: '#1D4ED8',
     primarySoft: '#EFF6FF',
     onPrimary: '#FFFFFF',
-    neutralAction: '#172033',
-    neutralActionPressed: '#101827',
+    neutralAction: '#111113',
+    neutralActionPressed: '#252426',
     success: '#168A5B',
-    successSoft: '#E8F6EF',
+    successSoft: '#EAF3EA',
   },
   palette: {
     ...theme.palette,
@@ -47,27 +46,27 @@ export const mobileTheme = {
     brandBright: '#2563EB',
     brandTint: '#EFF6FF',
     brandTintDeep: '#DBEAFE',
-    ink: '#172033',
-    inkDeep: '#101827',
-    ground: '#F6F8FC',
+    ink: '#111113',
+    inkDeep: '#252426',
+    ground: '#F3F0EB',
     white: '#FFFFFF',
-    body: '#172033',
-    secondary: '#64748B',
-    faint: '#475569',
-    border: '#E3E9F2',
-    panel: '#F1F5FB',
+    body: '#111113',
+    secondary: '#686662',
+    faint: '#5C5A56',
+    border: '#DFDDD8',
+    panel: '#FAF8F4',
   },
   elevation: {
     ...theme.elevation,
     card: {
-      shadowColor: '#172033',
+      shadowColor: '#111113',
       shadowOpacity: 0.06,
       shadowRadius: 9,
       shadowOffset: { width: 0, height: 3 },
       elevation: 2,
     },
     floating: {
-      shadowColor: '#172033',
+      shadowColor: '#111113',
       shadowOpacity: 0.12,
       shadowRadius: 18,
       shadowOffset: { width: 0, height: 7 },
@@ -76,12 +75,12 @@ export const mobileTheme = {
   },
   support: {
     ...theme.support,
-    brandSoft: '#EFF6FF',
+    brandSoft: '#EEF3FF',
     brandDeep: '#1D4ED8',
-    successSoft: '#E8F6EF',
+    successSoft: '#EAF3EA',
     successDeep: '#0F6C48',
-    hairline: 'rgba(23, 32, 51, 0.09)',
-    scrim: 'rgba(23, 32, 51, 0.50)',
+    hairline: 'rgba(17, 17, 19, 0.10)',
+    scrim: 'rgba(17, 17, 19, 0.50)',
   },
   fontFamily: {
     ...theme.fontFamily,

@@ -211,7 +211,7 @@ export function TripMapPanel({
     if (!map || !leaflet) return;
     const entries: [string, Point | null, string, string, boolean][] = [
       ['pickup', pickupPoint, 'Pickup', '#2563EB', false],
-      ['destination', routeMode === 'trip' ? destinationPoint : null, 'Drop-off', '#172033', false],
+      ['destination', routeMode === 'trip' ? destinationPoint : null, 'Drop-off', '#111113', false],
       ['driver', driverPoint, driverFix?.stale ? `${driverTitle} · last update is old` : driverTitle, '#168A5B', Boolean(driverFix?.stale)],
       ['customer', customerPoint, customerFix?.stale ? 'Customer · last update is old' : 'Customer', '#B98525', Boolean(customerFix?.stale)],
     ];
@@ -253,7 +253,7 @@ export function TripMapPanel({
               : 'Pickup and destination are shown here. Live driver location appears when shared.'}
         </Text>
       </View>
-      <View style={{ height, width: '100%', overflow: 'hidden', backgroundColor: '#F2F5FA' }}>
+      <View style={{ height, width: '100%', overflow: 'hidden', backgroundColor: '#F3F0EB' }}>
         {!mapError
           ? createElement('div', { ref: setHost, 'aria-label': `${title}, live pickup, destination, driver and customer map`, style: { width: '100%', height: '100%' } })
           : createElement('iframe', { title, src: fallbackUrl, loading: 'lazy', allowFullScreen: true, referrerPolicy: 'no-referrer-when-downgrade', style: { width: '100%', height: '100%', border: 0 } })}

@@ -2,11 +2,20 @@ import { useEffect } from 'react';
 import { Platform } from 'react-native';
 import { Stack, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useFonts } from 'expo-font';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SystemUI from 'expo-system-ui';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider } from '@drivx/ui';
 import { theme } from '@drivx/design-tokens';
+import {
+  PlusJakartaSans_400Regular,
+  PlusJakartaSans_500Medium,
+  PlusJakartaSans_600SemiBold,
+  PlusJakartaSans_700Bold,
+  PlusJakartaSans_800ExtraBold,
+} from '@expo-google-fonts/plus-jakarta-sans';
+import { mobileTheme } from '../features/mobileTheme';
 import { AuthProvider, useSession } from '../features/auth/AuthProvider';
 import AdminApp from '../admin/AdminApp';
 import { usePushRegistrationSync } from '../features/customer/pushNotifications';
@@ -26,6 +35,10 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+// Keep guest and sign-in screens on the same product theme as the customer and
+// driver tabs. Admin keeps its separate console theme.
+const appTheme = appSurface === 'admin' ? theme : mobileTheme;
 
 /**
  * The navigator, keyed to the account and the surface it is standing on.
@@ -53,7 +66,7 @@ function RootStack() {
       key={stackKey}
       screenOptions={{
         headerShown: false,
-        contentStyle: { backgroundColor: theme.colors.background },
+        contentStyle: { backgroundColor: appTheme.colors.background },
       }}
     >
       <Stack.Screen name="index" />
@@ -72,6 +85,14 @@ function RootStack() {
 }
 
 export default function RootLayout() {
+  const [fontsLoaded, fontError] = useFonts({
+    PlusJakartaSans_400Regular,
+    PlusJakartaSans_500Medium,
+    PlusJakartaSans_600SemiBold,
+    PlusJakartaSans_700Bold,
+    PlusJakartaSans_800ExtraBold,
+  });
+
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof window === 'undefined') return;
     const host = window.location.hostname.toLowerCase();
@@ -88,8 +109,10 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
-    void SystemUI.setBackgroundColorAsync(theme.colors.background);
+    void SystemUI.setBackgroundColorAsync(appTheme.colors.background);
   }, []);
+
+  if (!fontsLoaded && !fontError) return null;
 
   if (appSurface === 'admin') {
     return (
@@ -104,7 +127,7 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <ThemeProvider theme={theme}>
+      <ThemeProvider theme={appTheme}>
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
             <StatusBar style="dark" />
