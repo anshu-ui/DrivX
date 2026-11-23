@@ -4,75 +4,42 @@ Development builds, deployment, monitoring, release checklist, cost, and the hon
 Assumes the Firebase project and Maps keys from `docs/firebase-setup.md` and
 `docs/google-maps.md` exist.
 
-## 1. Why Expo Go is not enough
+## 1. Native app builds
 
-The phone-OTP path cannot work in Expo Go. `signInWithPhoneNumber` from the JS SDK needs a
-reCAPTCHA verifier that React Native cannot mint, so a native build must supply
-`@react-native-firebase/auth` as the `nativePhoneVerifier` (`packages/firebase-client/src/auth.ts`).
-`DrivXAuth` is already shaped for it. Push, Crashlytics, background location and the Maps SDK are
-native too.
+The Expo project already configures Firebase Auth, Analytics, Messaging, notifications, maps, and
+driver background location through config plugins. Expo Go does not include all of those native
+modules; use a development build for device verification. For the customer or driver iOS archive,
+TestFlight upload, Firebase plist handoff, signing, and build-number steps, follow
+[`apps/mobile/BUILDING.md`](../apps/mobile/BUILDING.md). Its App Store variants are `in.drivx.customer`
+and `in.drivx.driver`; the `combined` `in.drivx.app` variant is for development only.
 
-**State of the repository today:** `apps/mobile/app.json` declares the location and notification
-permission strings and the usage descriptions, but has **no** `@react-native-firebase/*`,
-`expo-location`, `react-native-maps` or Google Maps key config. A `npm run mobile:dev-build` right
-now therefore produces a shell that can talk to Firestore/Auth over the JS SDK — which is exactly
-what Phase 1 needs — and nothing native. Adding those plugins is Phase 3 work and should be done
-one capability at a time, each verified on a device before the next lands.
-
-## 2. iOS development build
-
-Prerequisites: macOS with Xcode 16+, CocoaPods, an Apple Developer account, and EAS
-(`npm i -g eas-cli && eas login`), plus `EXPO_PUBLIC_*` values in `apps/mobile/.env`.
-
-```bash
-npm run mobile:dev-build              # expo prebuild --clean → generates ios/ and android/
-cd apps/mobile && pod-install         # npx pod-install
-eas build --profile development --platform ios
-eas build --platform ios             # or: npx expo run:ios --configuration Release
-```
-
-Then:
-
-1. Drop `GoogleService-Info.plist` into `apps/mobile/ios/` and set
-   `ios.googleServicesFile: "./GoogleService-Info.plist"` in `app.json`.
-2. Add `expo-build-properties` and the Firebase/Crashlytics + Messaging config plugins once the
-   native packages are installed.
-3. Register the bundle id `in.drivx.app` in App Check (App Attest) and add the simulator's debug
-   token while testing on a Mac.
-4. Re-run `expo prebuild` after **every** `app.json` change; hand-edits inside `ios/` are lost.
-
-`NSLocationWhenInUseUsageDescription` is for the customer. `NSLocationAlwaysAndWhenInUseUsageDescription`
-exists only for the driver surface — App Review will ask what background location is used for, and
-"the driver streams their position to the customer during an assigned trip, and stops when it ends"
-must also be true in the code, not just in the plist.
-
-## 3. Android development build
+## 2. Android development build
 
 Prerequisites: Android Studio with an SDK 35 platform and emulator image, JDK 17, a device with
-Google Play services, and `npm i -g eas-cli`.
+Google Play services, and the Firebase configuration in `apps/mobile/firebase/google-services.json`.
 
 That JDK 17 is Gradle's requirement and is separate from the Firebase Emulator Suite's, which needs
-**Java 21 or newer** (`scripts/emulators.sh` picks a qualifying JVM by itself — see §8). A JDK 17
+**Java 21 or newer** (`scripts/emulators.sh` picks a qualifying JVM by itself). A JDK 17
 alone builds the Android app but cannot boot the emulators.
 
 ```bash
-npm run mobile:dev-build
-eas build --profile development --platform android
-npx expo run:android --variant debug      # direct Gradle build instead of EAS
+npm run prebuild:dev --workspace @drivx/mobile
+cd apps/mobile
+npx expo run:android --variant debug
 ```
 
-1. Put `google-services.json` in `apps/mobile/android/app/` and reference it with
-   `android.googleServicesFile`.
+1. The Expo config reads `apps/mobile/firebase/google-services.json` and selects the matching
+   customer, driver, or admin client by application ID.
 2. `ACCESS_FINE_LOCATION`, `ACCESS_COARSE_LOCATION` and `POST_NOTIFICATIONS` are already declared.
    `ACCESS_BACKGROUND_LOCATION` is **not** — add it only when the driver surface actually needs
-   updates while backgrounded, and only with the Play location-disclosure flow in place (§6).
+   updates while backgrounded, and only after completing the Play location-disclosure flow.
 3. Create the signing key with `eas credentials` (or `keytool` locally); Play App Signing means the
    upload key is not the account key, so losing it is recoverable and losing the keystore password
    is not.
 4. App Check (Play Integrity) needs the SHA-1/SHA-256 of the **signing** certificate, not just the
    upload one.
 
-## 4. Deployment
+## 3. Deployment
 
 Order for a release (rules before code, so no client ever sees an unprotected surface):
 
@@ -84,9 +51,11 @@ npm run verify:driver-onboarding             # the ₹315 fee still gates activa
 npm run verify:driver-dues                   # the office's cut (13% default) + 5% still raises one row per finished trip, and holds new work
 firebase deploy --project drivx-116de --only firestore:rules,firestore:indexes,database,storage
 firebase deploy --project drivx-116de --only functions
-npm --workspace @drivx/admin run build && # deploy the dashboard to its own host
-npm --workspace @drivx/mobile run build:dev:ios   # then store builds via EAS Submit
+npm --workspace @drivx/admin run build    # deploy the dashboard to its own host
 ```
+
+Build and upload native iOS archives separately using the TestFlight workflow in
+[`apps/mobile/BUILDING.md`](../apps/mobile/BUILDING.md).
 
 - Tag every release (`git tag -a v0.1.0`) so a rollback is a redeploy of a known tag rather than a
   guess. Rules files are in git, which makes a rules rollback the same operation.
@@ -123,7 +92,7 @@ npm --workspace @drivx/mobile run build:dev:ios   # then store builds via EAS Su
   devices.** A rule that requires a new field breaks every app version that does not send it; ship
   the app change first, wait for adoption, then tighten the rule.
 
-## 5. Monitoring and alerting
+## 4. Monitoring and alerting
 
 Spec §11 requires crash reporting, performance monitoring, structured logs and alerts. Mapping of
 each requirement to where it lives:
@@ -132,7 +101,7 @@ each requirement to where it lives:
 | --- | --- |
 | Structured, privacy-conscious server logs | every function logs one JSON line with `fn`, `outcome`, actor id and request id; no coordinates, addresses or phone numbers (`functions/src/functions/*.ts`) |
 | Trip-event correlation | `TripEventRecord.requestId` joins a Firestore event to the Cloud Function execution that wrote it |
-| Crash reporting | Crashlytics, enabled once the native build exists (§2–3); `registerDeviceToken` already stores the push token the alert path will use |
+| Crash reporting | Crashlytics, enabled once the native build exists (§1–2); `registerDeviceToken` already stores the push token the alert path will use |
 | Alerts on failed assignment / function errors | Cloud Monitoring alert policies below |
 | Idempotent booking creation | `bookings.idempotencyKey` plus the `customerUid, idempotencyKey` index; a retry reads the existing booking instead of creating a second |
 | Duplicate-notification prevention | `NotificationRecord.dedupeKey` is the uniqueness claim |
@@ -157,7 +126,7 @@ Also turn on **BigQuery export** for Firestore and Analytics before the first re
 query history retroactively, and spec §10's reports (fulfilment, on-time arrival, cancellations,
 repeat usage, revenue) are aggregation queries that should not run against production Firestore.
 
-## 6. App Store and Google Play release checklist
+## 5. App Store and Google Play release checklist
 
 Policy, not preference: an on-demand-driver and passenger app is reviewed against location, privacy
 and account-deletion rules specifically. This is a working checklist; items marked ✗ are not yet
@@ -201,7 +170,7 @@ satisfied by this repository.
   cheapest to find.
 - [ ] App Signing, an App Bundle, and a `proguard`/R8 pass on the release build.
 
-## 7. Cost estimate
+## 6. Cost estimate
 
 Pilot assumptions, which is the only honest way to price this: **300 completed trips/month, 15
 drivers online, 2 zones, 1 200 customers, average trip 22 minutes, Blaze plan.** ₹ converted at
@@ -247,7 +216,7 @@ At 10× volume, expect Firebase ₹15–25 k and Maps ₹40–120 k per month, w
 watch — the ETA and matrix call counts are the levers, so they need to be configurable per zone
 rather than hardcoded.
 
-## 8. Backlog: what still needs your credentials or a real device
+## 7. Backlog: what still needs your credentials or a real device
 
 **Needs credentials (cannot be built or tested without them)**
 
@@ -350,7 +319,7 @@ rather than hardcoded.
     only their own bookings", still asserts the exact set. Export `RULES_RUN_ID` to reproduce a run
     against one fixed fixture set.
 
-## 9. Known limitations of this repository right now
+## 8. Known limitations of this repository right now
 
 - **The rules are now proven by execution, and were not before.** Running the suite for the first
   time (JDK 21 + `npm run emulators` + `npm run test:rules` → 79 passed at that point, 115 now)

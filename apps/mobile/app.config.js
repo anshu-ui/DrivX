@@ -54,10 +54,17 @@ module.exports = ({ config }) => {
         defaultChannel: 'drivx_trip_alerts',
         color: '#2563EB',
         icon: './assets/android-icon-monochrome.png',
+        enableBackgroundRemoteNotifications: true,
       }],
       ['expo-build-properties', { android: { kotlinVersion: '2.4.0' } }],
     ]),
   ];
+  // `experiments.baseUrl` is for web apps exported under a hosting subpath.
+  // Keep it out of native builds: iOS and Android route from `/`, while web
+  // exports may opt into `/driver`, `/customer`, or `/admin` explicitly.
+  const webBaseUrl = process.env.DRIVX_WEB_BASE_URL === 'true'
+    ? ({ driver: '/driver', customer: '/customer', admin: '/admin' }[variant.surface] ?? undefined)
+    : undefined;
   return {
     ...base,
     ...config,
@@ -90,9 +97,7 @@ module.exports = ({ config }) => {
     experiments: {
       ...base.experiments,
       ...config.experiments,
-      ...(variant.surface === 'driver' ? { baseUrl: '/driver' } : {}),
-      ...(variant.surface === 'customer' ? { baseUrl: '/customer' } : {}),
-      ...(variant.surface === 'admin' ? { baseUrl: '/admin' } : {}),
+      ...(webBaseUrl ? { baseUrl: webBaseUrl } : {}),
     },
     extra: {
       ...base.extra,

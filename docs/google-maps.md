@@ -34,7 +34,7 @@ apply **both** restriction columns; no exceptions, and never a server key in a c
 
 | Key | Lives in | API restriction | Additional restriction |
 | --- | --- | --- | --- |
-| `MF_IOS_SDK` | `apps/mobile/ios/` native config (via `app.json` `ios.config.googleMapsApiKey`) | Maps SDK for iOS | Bundle ID = `in.drivx.app` |
+| `MF_IOS_SDK` | `apps/mobile/ios/` native config (via `app.json` `ios.config.googleMapsApiKey`) | Maps SDK for iOS | Bundle IDs = `in.drivx.customer`, `in.drivx.driver`, and `in.drivx.admin` if shipped |
 | `MF_ANDROID_SDK` | `apps/mobile/android/app/` (manifest meta-data) | Maps SDK for Android | Android app + SHA-1/SHA-256 certificate fingerprint |
 | `MF_WEB_JS` | `apps/admin/.env.local` as `NEXT_PUBLIC_GOOGLE_MAPS_WEB_API_KEY` | Maps JavaScript API | HTTP referrer = the dashboard origin only |
 | `MF_PLACES_SERVER` | `functions/.env` → `GOOGLE_MAPS_SERVER_API_KEY` | Places API (New), Geocoding API | Cloud Functions egress IPs (or leave open and rely on the API restriction plus the request budget below) |

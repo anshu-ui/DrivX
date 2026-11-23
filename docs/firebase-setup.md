@@ -105,12 +105,16 @@ In the console: **Project settings → Your apps**.
 
 | App | Platform | Identifier | Config file |
 | --- | --- | --- | --- |
-| Mobile | iOS | `in.drivx.app` | `GoogleService-Info.plist` into `apps/mobile/ios/` (after prebuild) |
-| Mobile | Android | `in.drivx.app` | `google-services.json` into `apps/mobile/android/app/` |
+| Customer | iOS | `in.drivx.customer` | `apps/mobile/firebase/ios/customer/GoogleService-Info.plist` |
+| Driver | iOS | `in.drivx.driver` | `apps/mobile/firebase/ios/driver/GoogleService-Info.plist` |
+| Admin | iOS | `in.drivx.admin` | `apps/mobile/firebase/ios/admin/GoogleService-Info.plist` |
+| Customer, Driver, Admin | Android | `in.drivx.customer`, `in.drivx.driver`, `in.drivx.admin` | `apps/mobile/firebase/google-services.json` contains one client entry for each package |
 | Console | Web | DrivX Operations | copy the values into `apps/admin/.env.local` |
 
-The iOS and Android identifiers must match `apps/mobile/app.json`, or Deep Links and App Check
-attestation will not resolve to the app.
+The customer, driver, and admin identifiers are selected by `DRIVX_APP_VARIANT` in
+`apps/mobile/app.config.js`. The default `combined` development variant uses `in.drivx.app`;
+do not use it for the Customer or Driver App Store builds. Matching Firebase files are ignored
+by Git and must be supplied securely on each build machine.
 
 ## 3. Enable the services
 
@@ -274,8 +278,9 @@ Two deliberate decisions recorded in the code:
 
 Spec §9 requires it, and it is configuration rather than code:
 
-1. **iOS** — register the App Attest provider with the `in.drivx.app` bundle id.
-2. **Android** — register Play Integrity with the same package name. Debug builds need the
+1. **iOS** — register the App Attest provider for each shipped bundle id: `in.drivx.customer`,
+   `in.drivx.driver`, and (if distributed) `in.drivx.admin`.
+2. **Android** — register Play Integrity for each shipped package ID. Debug builds need the
    `expo-dev-client` debug token added to the **Debug tokens** list, or the development app will be
    rejected by every callable.
 3. **Web console** — reCAPTCHA Enterprise (v3) with the dashboard origin.

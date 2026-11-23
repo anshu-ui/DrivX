@@ -122,9 +122,11 @@ Do A and B. C can start while the code is being written, because Apple's account
 7. **Storage**: **Build → Storage → Get started** → Mumbai. This is where driver licence and
    vehicle-document photos go.
 8. **Register the apps**: the gear icon top-left → **Project settings** → scroll to **Your apps**.
-   - **iOS** → bundle id `in.drivx.app` → download `GoogleService-Info.plist`
-   - **Android** → package name `in.drivx.app` (must match `apps/mobile/app.json` exactly) →
-     download `google-services.json`
+   - **iOS** → register Customer (`in.drivx.customer`) and Driver (`in.drivx.driver`) separately;
+     download each `GoogleService-Info.plist` to its matching folder under
+     `apps/mobile/firebase/ios/`. Register Admin (`in.drivx.admin`) if it will ship on iOS.
+   - **Android** → the `google-services.json` used by this repo contains entries for Customer
+     (`in.drivx.customer`), Driver (`in.drivx.driver`), and Admin (`in.drivx.admin`).
    - **Web** → nickname `DrivX Operations` → you only need the config values from it
    The bundle id must be the one the code uses, or push notifications and App Check silently fail.
 9. **Copy the config**: Project settings → your **Web** app → the `firebaseConfig` block. That is

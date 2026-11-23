@@ -16,6 +16,8 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "in.drivx.app",
+      "version": "1.0",
+      "buildNumber": "6",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "DrivX shows your pickup point and shares your live trip while you are using the app.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Drivers only: DrivX streams your position to the customer while an assigned trip is active, and stops when the trip ends."

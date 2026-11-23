@@ -45,6 +45,10 @@
       "environment": "production",
       "env": { "DRIVX_APP_VARIANT": "admin" }
     },
-    "production": { "environment": "production", "env": { "DRIVX_APP_VARIANT": "combined" } }
+    "production": {
+      "distribution": "store",
+      "environment": "production",
+      "env": { "DRIVX_APP_VARIANT": "combined" }
+    }
   }
 }
