@@ -13,7 +13,7 @@ import {
   Text,
   useTheme,
 } from '@drivx/ui';
-import { formatINR } from '@drivx/domain';
+import { formatINR, gstComponentsFor, gstTypeForRoute, type GstType } from '@drivx/domain';
 import { RequireApproval } from '../../components/RequireApproval';
 import { useDriverTrip } from '../../features/driver/trip-control';
 import { useDriverDues } from '../../features/driver/profile';
@@ -62,6 +62,19 @@ function dialLine(trip: DrivenTrip): string | null {
   if (trip.startOdometerKm === null || trip.endOdometerKm === null) return null;
   const driven = trip.endOdometerKm - trip.startOdometerKm;
   return `${trip.startOdometerKm} → ${trip.endOdometerKm} km on the dial · ${driven} km driven`;
+}
+
+function taxLines(prefix: string, rate: number, amountPaise: number, gstType: GstType) {
+  const components = gstComponentsFor(amountPaise, gstType);
+  if (gstType === 'intra_state') {
+    const halfRate = Number.isInteger(rate * 50) ? String(rate * 50) : (rate * 50).toFixed(1);
+    return [
+      { label: `CGST on ${prefix} (${halfRate}%)`, paise: components.cgstPaise },
+      { label: `SGST on ${prefix} (${halfRate}%)`, paise: components.sgstPaise },
+    ];
+  }
+  const fullRate = Number.isInteger(rate * 100) ? String(rate * 100) : (rate * 100).toFixed(1);
+  return [{ label: `IGST on ${prefix} (${fullRate}%)`, paise: components.igstPaise }];
 }
 
 export default function DriverTrips() {
@@ -128,6 +141,10 @@ export default function DriverTrips() {
 
           {rows.map((trip) => {
             const due = dues.rows.find((row) => row.bookingId === trip.id && row.kind === 'commission');
+            const gstType = trip.split?.gstType ?? gstTypeForRoute(trip.pickup?.state, trip.destination?.state);
+            const fareGstRows = trip.finalFare
+              ? taxLines('fare', trip.finalFare.subtotalPaise > 0 ? trip.finalFare.taxPaise / trip.finalFare.subtotalPaise : 0.05, trip.finalFare.taxPaise, gstType)
+              : [];
             return (
               <Card key={trip.id} style={{ gap: theme.spacing.xs }}>
                 <View
@@ -171,8 +188,8 @@ export default function DriverTrips() {
                         {item.detail ? <Text variant="caption" tone="faint">{item.detail}</Text> : null}
                       </View>
                     ))}
-                    <Row label="Subtotal" value={money(trip.finalFare.subtotalPaise)} />
-                    <Row label={`Customer fare GST ${trip.finalFare.subtotalPaise > 0 ? (trip.finalFare.taxPaise / trip.finalFare.subtotalPaise * 100).toFixed(0) : '0'}%`} value={money(trip.finalFare.taxPaise)} />
+                    <Row label="Taxable fare subtotal" value={money(trip.finalFare.subtotalPaise)} />
+                    {fareGstRows.map((line) => <Row key={line.label} label={line.label} value={money(line.paise)} />)}
                   </View>
                 ) : null}
 
@@ -180,11 +197,10 @@ export default function DriverTrips() {
                   <>
                     <Divider />
                     <Row label="Fare the customer paid" value={formatINR(trip.split.fareTotalPaise)} />
-                    <Row label={`Customer fare GST ${Math.round(trip.split.fareTaxRate * 100)}% to remit`} value={formatINR(trip.split.fareTaxPaise)} />
+                    {taxLines('customer fare collected · to remit', trip.split.fareTaxRate, trip.split.fareTaxPaise, gstType).map((line) => <Row key={line.label} label={line.label} value={formatINR(line.paise)} />)}
                     <Row label={`Commission ${Math.round(trip.split.rate * 100)}%`} value={formatINR(trip.split.commissionBasePaise)} />
-                    <Row label={`GST on commission ${Math.round(trip.split.gstRate * 100)}%`} value={formatINR(trip.split.commissionGstPaise)} />
-                    <Row label={`TDS base after commission (${Math.round(trip.split.tdsRate * 100)}%)`} value={formatINR(trip.split.tdsBasePaise)} />
-                    <Row label={`TDS ${Math.round(trip.split.tdsRate * 100)}%`} value={formatINR(trip.split.tdsPaise)} />
+                    {taxLines('commission', trip.split.gstRate, trip.split.commissionGstPaise, gstType).map((line) => <Row key={line.label} label={line.label} value={formatINR(line.paise)} />)}
+                    {trip.split.tdsPaise > 0 ? <Row label={`Legacy TDS ${Math.round(trip.split.tdsRate * 100)}%`} value={formatINR(trip.split.tdsPaise)} /> : null}
                     <Row label="Total to remit to DrivX" value={formatINR(trip.split.totalDuePaise)} />
                     <Row label="You kept" value={formatINR(trip.split.netPaise)} />
                     {due ? (

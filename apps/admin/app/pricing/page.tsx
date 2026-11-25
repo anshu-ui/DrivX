@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { collection, doc, getDocFromServer, limit, onSnapshot, query, serverTimestamp, setDoc, updateDoc, writeBatch, type DocumentData } from 'firebase/firestore';
-import { COLLECTIONS, COMMISSION_CONFIG_DOC, formatINR } from '@drivx/domain';
+import { COLLECTIONS, COMMISSION_CONFIG_DOC, CUSTOMER_FARE_GST_RATE, formatINR } from '@drivx/domain';
 import { firebaseClients } from '../../lib/firebase';
 import { ConsoleHeader, StaffGate, describe, useReviewerSession } from '../../lib/staff-session';
 
@@ -17,8 +17,6 @@ export default function PricingPage() {
   const [services, setServices] = useState<Service[] | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [commission, setCommission] = useState('13');
-  const [commissionTax, setCommissionTax] = useState('18');
-  const [tdsRate, setTdsRate] = useState('1');
   const [invoiceBusinessName, setInvoiceBusinessName] = useState('');
   const [invoiceGstin, setInvoiceGstin] = useState('');
   const [invoiceAddress, setInvoiceAddress] = useState('');
@@ -48,9 +46,6 @@ export default function PricingPage() {
     const offCommission = onSnapshot(doc(db, COLLECTIONS.appConfig, COMMISSION_CONFIG_DOC), (snap) => {
       if (snap.exists()) {
         setCommission(String(Number(snap.data().rate ?? 0.13) * 100));
-        const currentSettlementConfig = snap.data().settlementVersion === 2;
-        setCommissionTax(String(Number(currentSettlementConfig ? snap.data().gstRate ?? 0.18 : 0.18) * 100));
-        setTdsRate(String(Number(currentSettlementConfig ? snap.data().tdsRate ?? 0.01 : 0.01) * 100));
       }
     }, (error) => setMessage(describe(error)));
     const offOnboarding = onSnapshot(doc(db, COLLECTIONS.appConfig, 'onboardingFee'), (snap) => {
@@ -110,13 +105,12 @@ export default function PricingPage() {
       const moneyInput = (key: string, fallbackPaise: number) => { const amount = Number(drafts[`${rule.id}:setting:${key}`] ?? fallbackPaise / 100); if (!Number.isFinite(amount) || amount < 0 || amount > 1_000_000) throw new Error('Enter a valid charge in rupees.'); return Math.round(amount * 100); };
       const fromHour = Number(drafts[`${rule.id}:setting:nightFrom`] ?? night.fromHour ?? 22);
       const toHour = Number(drafts[`${rule.id}:setting:nightTo`] ?? night.toHour ?? 6);
-      const taxPercent = Number(drafts[`${rule.id}:setting:gst`] ?? Number(rule.data.gstRate ?? 0) * 100);
-      if (![fromHour, toHour].every((hour) => Number.isInteger(hour) && hour >= 0 && hour <= 23) || !Number.isFinite(taxPercent) || taxPercent < 0 || taxPercent > 100) throw new Error('Check the night window and tax rate.');
+      if (![fromHour, toHour].every((hour) => Number.isInteger(hour) && hour >= 0 && hour <= 23)) throw new Error('Check the night window.');
       const updatedPackages = field === 'packages' ? updated.map((row) => ({ ...row, extraKmPaise: moneyInput('extraKm', Number(packagesDefault(rule, 'extraKmPaise'))), extraHourPaise: moneyInput('overtimePerHour', Number(packagesDefault(rule, 'extraHourPaise'))) })) : updated;
       const graceMinutes = Number(drafts[`${rule.id}:setting:graceMinutes`] ?? rule.data.overtimeGraceMinutes ?? 0);
       if (!Number.isInteger(graceMinutes) || graceMinutes < 0 || graceMinutes > 180) throw new Error('Overtime grace must be a whole number of minutes from 0 to 180.');
       const key = `${rule.id}:${field}`; setBusy(key); setMessage(null);
-      await updateDoc(doc(db, 'pricingRules', rule.id), { [field]: field === 'packages' ? updatedPackages : updated, pricingVersion: Number(rule.data.pricingVersion ?? 1) + 1, slabOverflowPerKmPaise: moneyInput('overflowPerKm', Number(rule.data.slabOverflowPerKmPaise ?? 0)), overtimeGraceMinutes: graceMinutes, gstRate: taxPercent / 100, nightSurcharge: { ...night, enabled: true, mode: 'flat', flatPaise: moneyInput('nightFee', Number(night.flatPaise ?? 20_000)), fromHour, toHour }, updatedAtMs: serverTimestamp() });
+      await updateDoc(doc(db, 'pricingRules', rule.id), { [field]: field === 'packages' ? updatedPackages : updated, pricingVersion: Number(rule.data.pricingVersion ?? 1) + 1, slabOverflowPerKmPaise: moneyInput('overflowPerKm', Number(rule.data.slabOverflowPerKmPaise ?? 0)), overtimeGraceMinutes: graceMinutes, gstRate: CUSTOMER_FARE_GST_RATE, nightSurcharge: { ...night, enabled: true, mode: 'flat', flatPaise: moneyInput('nightFee', Number(night.flatPaise ?? 20_000)), fromHour, toHour }, updatedAtMs: serverTimestamp() });
       setMessage(`${rule.id} saved. New quotes use these prices; confirmed bookings keep their saved price.`);
     } catch (error) { setMessage(describe(error)); }
     finally { setBusy(null); }
@@ -124,12 +118,10 @@ export default function PricingPage() {
 
   async function saveCommission() {
     const rate = Number(commission) / 100;
-    const gstRate = Number(commissionTax) / 100;
-    const tds = Number(tdsRate) / 100;
-    if (![rate, gstRate, tds].every((value) => Number.isFinite(value) && value >= 0 && value <= 1)) { setMessage('Commission, commission GST, and TDS must each be between 0% and 100%.'); return; }
+    if (!Number.isFinite(rate) || rate < 0 || rate > 1) { setMessage('Commission must be between 0% and 100%.'); return; }
     setBusy('commission'); setMessage(null);
     try {
-      await setDoc(doc(db, COLLECTIONS.appConfig, COMMISSION_CONFIG_DOC), { rate, gstRate, tdsRate: tds, settlementVersion: 2, updatedAtMs: serverTimestamp() }, { merge: true });
+      await setDoc(doc(db, COLLECTIONS.appConfig, COMMISSION_CONFIG_DOC), { rate, gstRate: 0.18, tdsRate: 0, settlementVersion: 2, updatedAtMs: serverTimestamp() }, { merge: true });
       setMessage('Settlement rates saved. New trips use the updated rates; completed trip records keep their original snapshots.');
     } catch (error) { setMessage(describe(error)); }
     finally { setBusy(null); }
@@ -218,7 +210,7 @@ export default function PricingPage() {
     try {
       const batch = writeBatch(db);
       batch.set(doc(db, 'pricingRules', 'ggn-outstation-round-trip'), {
-        id: 'ggn-outstation-round-trip', pricingVersion: 1, serviceTypeId: 'chauffeur_outstation', zoneId: 'zone-ggn-1', currency: 'INR', pricingModel: 'hourly_package', baseFarePaise: 0, perKmPaise: 0, perMinutePaise: 0, includedWaitMinutes: 0, waitChargePerMinutePaise: 0, overtimeGraceMinutes: 0, platformFeeRate: 0, gstRate: 0,
+        id: 'ggn-outstation-round-trip', pricingVersion: 1, serviceTypeId: 'chauffeur_outstation', zoneId: 'zone-ggn-1', currency: 'INR', pricingModel: 'hourly_package', baseFarePaise: 0, perKmPaise: 0, perMinutePaise: 0, includedWaitMinutes: 0, waitChargePerMinutePaise: 0, overtimeGraceMinutes: 0, platformFeeRate: 0, gstRate: CUSTOMER_FARE_GST_RATE,
         nightSurcharge: { enabled: true, fromHour: 22, toHour: 6, mode: 'flat', flatPaise: 20_000, rate: 0 }, surge: { enabled: false, maxMultiplier: 1 }, minimumFarePaise: 0,
         packages: fares.map((fare, index) => ({ id: `d${index + 1}`, label: `${index + 1} ${index === 0 ? 'day' : 'days'}`, hours: (index + 1) * 24, includedKilometers: 0, packagePricePaise: fare * 100, extraKmPaise: 0, extraHourPaise: 12_000, sortOrder: index + 1 })),
         slabs: [], slabOverflowPerKmPaise: 0, distanceRounding: 'one_decimal', estimateValidityMinutes: 30, active: true, updatedAtMs: serverTimestamp(),
@@ -291,8 +283,8 @@ export default function PricingPage() {
           {invoiceMessage ? <p role="status" aria-live="polite" className={`mt-3 rounded-control border p-3 text-sm ${invoiceMessage.startsWith('Issuer details were not saved:') || invoiceMessage.startsWith('Could not load') ? 'border-danger/30 bg-danger-soft text-danger' : 'border-line bg-surface-muted text-ink-muted'}`}>{invoiceMessage}</p> : null}
         </section>
         <section className="rounded-card border border-line bg-surface p-5 shadow-card">
-          <h2 className="text-lg font-semibold">Driver trip settlement</h2><p className="mt-1 text-sm text-ink-muted">Commission GST and TDS are saved per trip. Customer fare GST is passed through from the trip fare.</p>
-          <div className="mt-4 flex flex-wrap items-end gap-3"><label className="text-sm font-medium">Commission (%)<input aria-label="Commission percent" type="number" min="0" max="100" step="0.1" value={commission} onChange={(event) => setCommission(event.target.value)} className="mt-1 block w-32 rounded-control border border-line bg-surface px-3 py-2" /></label><label className="text-sm font-medium">GST on commission (%)<input aria-label="Commission GST percent" type="number" min="0" max="100" step="0.1" value={commissionTax} onChange={(event) => setCommissionTax(event.target.value)} className="mt-1 block w-32 rounded-control border border-line bg-surface px-3 py-2" /></label><label className="text-sm font-medium">TDS on driver share (%)<input aria-label="TDS percent" type="number" min="0" max="100" step="0.1" value={tdsRate} onChange={(event) => setTdsRate(event.target.value)} className="mt-1 block w-32 rounded-control border border-line bg-surface px-3 py-2" /></label><button type="button" onClick={() => void saveCommission()} disabled={busy === 'commission'} className="rounded-control bg-accent px-4 py-2.5 text-sm font-semibold text-ink-on-brand disabled:opacity-50">{busy === 'commission' ? 'Saving…' : 'Save settlement rates'}</button></div>
+          <h2 className="text-lg font-semibold">Driver trip settlement</h2><p className="mt-1 text-sm text-ink-muted">Commission is configurable. Commission GST stays at 18%; customer fare GST stays at 5%. CGST/SGST or IGST follows the pickup and drop states. TDS is disabled.</p>
+          <div className="mt-4 flex flex-wrap items-end gap-3"><label className="text-sm font-medium">Commission (%)<input aria-label="Commission percent" type="number" min="0" max="100" step="0.1" value={commission} onChange={(event) => setCommission(event.target.value)} className="mt-1 block w-32 rounded-control border border-line bg-surface px-3 py-2" /></label><button type="button" onClick={() => void saveCommission()} disabled={busy === 'commission'} className="rounded-control bg-accent px-4 py-2.5 text-sm font-semibold text-ink-on-brand disabled:opacity-50">{busy === 'commission' ? 'Saving…' : 'Save commission'}</button></div>
         </section>
         <section className="mt-5 rounded-card border border-line bg-surface p-5 shadow-card">
           <h2 className="text-lg font-semibold">Driver onboarding fee</h2>
@@ -344,7 +336,7 @@ export default function PricingPage() {
             <div className="mt-4 divide-y divide-line">{rows.map((row) => { const rowId = String(row.id ?? row.sortOrder); const title = field === 'slabs' ? `Up to ${row.upToKilometers} km` : `${row.label ?? `${row.hours} hours`} · ${Number(row.includedKilometers ?? 0) === 0 ? 'time based' : `${row.includedKilometers} km included`}`; return <div key={rowId} className="flex flex-wrap items-center justify-between gap-3 py-3"><label className="text-sm font-medium">{title}</label><label className="flex items-center gap-2 text-sm text-ink-muted">₹<input aria-label={`${title} fare in rupees`} type="number" min="0" step="1" value={value(rule, field, row)} onChange={(event) => setDrafts((current) => ({ ...current, [editKey(rule.id, field, rowId)]: event.target.value }))} className="w-28 rounded-control border border-line bg-surface px-3 py-2 text-right font-mono text-ink" /></label></div>; })}</div>
             {field === 'packages' && Number(packages[0]?.includedKilometers ?? 0) === 0 ? <p className="mt-3 rounded-control bg-accent-soft p-3 text-sm text-ink-muted">Round-trip packages are day based and price by selected days only. Overtime is prorated per minute; distance is not billed separately.</p> : null}
             <div className="mt-4 grid gap-3 rounded-control bg-surface-muted p-4 sm:grid-cols-2 lg:grid-cols-3">
-              {[["overflowPerKm", "Extra km / distance-slab overflow (₹/km)", Number(rule.data.slabOverflowPerKmPaise ?? 0) / 100], ["extraKm", "Hourly package extra distance (₹/km)", Number(packages[0]?.extraKmPaise ?? 0) / 100], ["overtimePerHour", "Hourly package overtime (₹/hour)", Number(packages[0]?.extraHourPaise ?? 0) / 100], ["nightFee", "Night charge (₹ per eligible trip)", Number(rule.data.nightSurcharge?.flatPaise ?? 20_000) / 100], ["nightFrom", "Night start hour (0–23)", Number(rule.data.nightSurcharge?.fromHour ?? 22)], ["nightTo", "Night end hour (0–23)", Number(rule.data.nightSurcharge?.toHour ?? 6)], ["gst", "Fare tax (%)", Number(rule.data.gstRate ?? 0) * 100], ["graceMinutes", "Overtime grace (minutes)", Number(rule.data.overtimeGraceMinutes ?? 0)]].map(([key, label, current]) => <label key={String(key)} className="text-xs font-medium text-ink-muted">{String(label)}<input aria-label={String(label)} type="number" min="0" step="1" value={drafts[`${rule.id}:setting:${String(key)}`] ?? String(current)} onChange={(event) => setDrafts((state) => ({ ...state, [`${rule.id}:setting:${String(key)}`]: event.target.value }))} className="mt-1 block w-full rounded-control border border-line bg-surface px-3 py-2 text-sm text-ink" /></label>)}
+              {[["overflowPerKm", "Extra km / distance-slab overflow (₹/km)", Number(rule.data.slabOverflowPerKmPaise ?? 0) / 100], ["extraKm", "Hourly package extra distance (₹/km)", Number(packages[0]?.extraKmPaise ?? 0) / 100], ["overtimePerHour", "Hourly package overtime (₹/hour)", Number(packages[0]?.extraHourPaise ?? 0) / 100], ["nightFee", "Night charge (₹ per eligible trip)", Number(rule.data.nightSurcharge?.flatPaise ?? 20_000) / 100], ["nightFrom", "Night start hour (0–23)", Number(rule.data.nightSurcharge?.fromHour ?? 22)], ["nightTo", "Night end hour (0–23)", Number(rule.data.nightSurcharge?.toHour ?? 6)], ["graceMinutes", "Overtime grace (minutes)", Number(rule.data.overtimeGraceMinutes ?? 0)]].map(([key, label, current]) => <label key={String(key)} className="text-xs font-medium text-ink-muted">{String(label)}<input aria-label={String(label)} type="number" min="0" step="1" value={drafts[`${rule.id}:setting:${String(key)}`] ?? String(current)} onChange={(event) => setDrafts((state) => ({ ...state, [`${rule.id}:setting:${String(key)}`]: event.target.value }))} className="mt-1 block w-full rounded-control border border-line bg-surface px-3 py-2 text-sm text-ink" /></label>)}<p className="text-xs text-ink-muted">Customer fare GST: fixed at 5%.</p>
             </div>
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4"><p className="text-xs text-ink-muted">{rule.data.slabOverflowPerKmPaise ? `Extra distance ${formatINR(Number(rule.data.slabOverflowPerKmPaise))}/km` : packages[0] ? `Extra distance ${formatINR(Number(packages[0].extraKmPaise ?? 0))}/km · overtime ${formatINR(Number(packages[0].extraHourPaise ?? 0) / 60)}/minute` : 'No automatic overage beyond the chart'} · Night charge {formatINR(Number(rule.data.nightSurcharge?.flatPaise ?? 20_000))}/eligible trip, {rule.data.nightSurcharge?.fromHour ?? 22}:00–{rule.data.nightSurcharge?.toHour ?? 6}:00</p><button type="button" onClick={() => void savePrices(rule, field)} disabled={busy === saveKey} className="rounded-control bg-accent px-4 py-2.5 text-sm font-semibold text-ink-on-brand disabled:opacity-50">{busy === saveKey ? 'Saving…' : 'Save prices'}</button></div>
           </section>;

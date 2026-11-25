@@ -3,8 +3,7 @@ import { Image, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, Card, Field, Screen, ScreenHeader, StateView, StatusPill, Text, useTheme } from '@drivx/ui';
-import type { DocumentType } from '@drivx/domain';
-import { DOCUMENT_LABELS, formatINR } from '@drivx/domain';
+import { DOCUMENT_LABELS, formatINR, gstComponentsFor, type DocumentType, type GstType } from '@drivx/domain';
 import { useSession } from '../../features/auth/AuthProvider';
 import { useDriverDues, type DriverDueRow } from '../../features/driver/profile';
 import { payDriverDue } from '../../features/driver/payments';
@@ -217,6 +216,12 @@ function DuesCard({ documentsReady, missingDocuments, profile }: {
 function DueRow({ row }: { row: DriverDueRow }) {
   const theme = useTheme();
   const paid = row.status === 'paid';
+  const commissionTaxRows = row.kind === 'commission' && row.gstType
+    ? gstLines('commission', row.gstPaise, row.gstRate, row.gstType)
+    : [{ label: `${row.kind === 'commission' ? 'GST on commission' : 'GST'} (${Math.round(row.gstRate * 100)}%)`, paise: row.gstPaise }];
+  const fareTaxRows = row.gstType
+    ? gstLines('customer fare tax to remit', row.fareTaxPaise, row.fareTaxRate, row.gstType)
+    : [{ label: `Customer fare GST (${Math.round(row.fareTaxRate * 100)}%) to remit`, paise: row.fareTaxPaise }];
   return (
     <View
       style={{
@@ -253,11 +258,10 @@ function DueRow({ row }: { row: DriverDueRow }) {
           label={row.kind === 'commission' ? `Commission (${Math.round((row.rate ?? 0) * 100)}%)` : 'Onboarding fee'}
           value={formatINR(row.basePaise)}
         />
-        <FeeLine label={`${row.kind === 'commission' ? 'GST on commission' : 'GST'} (${Math.round(row.gstRate * 100)}%)`} value={formatINR(row.gstPaise)} />
+        {commissionTaxRows.map((line) => <FeeLine key={line.label} label={line.label} value={formatINR(line.paise)} />)}
         {row.kind === 'commission' ? <>
-          <FeeLine label={`Customer fare GST (${Math.round(row.fareTaxRate * 100)}%) to remit`} value={formatINR(row.fareTaxPaise)} />
-          <FeeLine label={`TDS base (${Math.round(row.tdsRate * 100)}%)`} value={formatINR(row.tdsBasePaise)} />
-          <FeeLine label={`TDS (${Math.round(row.tdsRate * 100)}%)`} value={formatINR(row.tdsPaise)} />
+          {fareTaxRows.map((line) => <FeeLine key={line.label} label={line.label} value={formatINR(line.paise)} />)}
+          {row.tdsPaise > 0 ? <FeeLine label={`Legacy TDS (${Math.round(row.tdsRate * 100)}%)`} value={formatINR(row.tdsPaise)} /> : null}
         </> : null}
         <FeeLine label="Total" value={formatINR(row.totalPaise)} strong />
       </View>
@@ -271,6 +275,20 @@ function DueRow({ row }: { row: DriverDueRow }) {
     </View>
   );
 }
+
+function gstLines(prefix: string, amountPaise: number, rate: number, gstType: GstType) {
+  const components = gstComponentsFor(amountPaise, gstType);
+  if (gstType === 'intra_state') {
+    const halfRate = (rate * 50).toFixed(Number.isInteger(rate * 50) ? 0 : 1);
+    return [
+      { label: `CGST on ${prefix} (${halfRate}%)`, paise: components.cgstPaise },
+      { label: `SGST on ${prefix} (${halfRate}%)`, paise: components.sgstPaise },
+    ];
+  }
+  const fullRate = (rate * 100).toFixed(Number.isInteger(rate * 100) ? 0 : 1);
+  return [{ label: `IGST on ${prefix} (${fullRate}%)`, paise: components.igstPaise }];
+}
+
 function FeeLine({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
   const theme = useTheme();
   return (

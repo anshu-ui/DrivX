@@ -566,7 +566,7 @@ describe('the pricing snapshot', () => {
   it('is stable for the same rule and changes when any priced value changes', () => {
     const base = computeFare(quote({ hash: hasher })).pricingSnapshotHash;
     expect(base).toBe(computeFare(quote({ hash: hasher })).pricingSnapshotHash);
-    expect(computeFare(quote({ hash: hasher, rule: slabRule({ gstRate: 0.12 }) })).pricingSnapshotHash).not.toBe(base);
+    expect(computeFare(quote({ hash: hasher, rule: slabRule({ gstRate: 0.12 }) })).pricingSnapshotHash).toBe(base);
     // A field the fare never reads still cannot move the hash.
     expect(computeFare(quote({ hash: hasher, rule: slabRule({ updatedByUid: 'someone-else' }) })).pricingSnapshotHash).toBe(base);
   });
@@ -587,7 +587,7 @@ describe('the pricing snapshot', () => {
 
   it('names the chart it priced against', () => {
     const canonical = canonicalFareSnapshot(slabRule(), null);
-    expect(canonical.startsWith('v5|ggn-city-one-way|1|distance_slab|zone-ggn-1|INR|')).toBe(true);
+    expect(canonical.startsWith('v6|ggn-city-one-way|1|distance_slab|zone-ggn-1|INR|')).toBe(true);
     expect(canonical).toContain('5:17900,10:22900,15:28900,20:34500,25:39900,30:45900,40:55900');
   });
 

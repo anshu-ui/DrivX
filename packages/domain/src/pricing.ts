@@ -3,6 +3,9 @@ import type { DistanceRoundingMode } from './enums';
 import type { DistanceSlab, HourlyPackageTier, PricingRuleRecord } from './records-identity';
 import type { FareBreakdown, FareLineItem } from './records-trip';
 
+/** Current customer fare GST applied to every DrivX trip fare. */
+export const CUSTOMER_FARE_GST_RATE = 0.05;
+
 /**
  * The fare engine. Pure and synchronous: it takes a pricing rule and the facts
  * of a trip and returns the breakdown, with no I/O, no clock and no randomness,
@@ -33,7 +36,7 @@ import type { FareBreakdown, FareLineItem } from './records-trip';
  * ## Order of operation
  *
  * core (slab, package, or per-kilometre fare, plus overage and waiting) → night
- * surcharge → surge → minimum-fare top-up → platform fee → configured tax. Night and surge
+ * surcharge → surge → minimum-fare top-up → platform fee → 5% GST. Night and surge
  * both read the core fare, never each other, and the platform fee is charged on
  * the discounted-to-floor amount so a minimum fare cannot silently inflate the
  * commission.
@@ -227,10 +230,11 @@ function assertRuleUsable(rule: PricingRuleRecord, zoneId: string, nowMs: EpochM
  * the slab chart, overflow rate, distance rounding rule,
  * the flat night charge. A quote taken before them is still `v1` data and is read
  * from the booking's own stored breakdown, never recomputed here.
+ * `v6` pins the fixed 5% customer fare GST instead of using a rule's old tax field.
  */
 export function canonicalFareSnapshot(rule: PricingRuleRecord, tier: HourlyPackageTier | null): string {
   const parts: (string | number | boolean | null)[] = [
-    'v5',
+    'v6',
     rule.id,
     rule.pricingVersion ?? 1,
     rule.pricingModel,
@@ -243,7 +247,7 @@ export function canonicalFareSnapshot(rule: PricingRuleRecord, tier: HourlyPacka
     rule.waitChargePerMinutePaise,
     rule.overtimeGraceMinutes ?? 0,
     rule.platformFeeRate,
-    rule.gstRate,
+    CUSTOMER_FARE_GST_RATE,
     rule.nightSurcharge.enabled,
     rule.nightSurcharge.fromHour,
     rule.nightSurcharge.toHour,
@@ -521,7 +525,7 @@ export function computeFare(input: FareComputation): FareBreakdown {
 
   // Sum of the rounded items, so the receipt adds up exactly as printed.
   const subtotalPaise = items.reduce((sum, item) => sum + item.amountPaise, 0);
-  const taxPaise = paise(subtotalPaise * rule.gstRate);
+  const taxPaise = paise(subtotalPaise * CUSTOMER_FARE_GST_RATE);
 
   return {
     currency: 'INR',

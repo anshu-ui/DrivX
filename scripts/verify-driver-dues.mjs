@@ -3,8 +3,8 @@
  *
  * The owner's rule is the office's configured cut — 13% unless `appConfig/commission`
  * says otherwise — of the pre-tax driver fare, plus configured GST on the
- * commission, customer fare GST passed through, and TDS on the driver's
- * remaining share, per completed booking. A driver who has not cleared what they owe stops
+ * commission, customer fare GST passed through, and no TDS, per completed
+ * booking. A driver who has not cleared what they owe stops
  * receiving bookings. There
  * is no payment gateway here and no trip-completion callable yet — Phase 4 owns
  * that — so what this script exercises is the part that is real today:
@@ -67,12 +67,11 @@ const PASSWORD = 'drivx-dev-password';
  * Trip fares and what the office's settlement rates make of them.
  *
  * On the ₹960 pre-tax subtotal, 13% commission is ₹124.80; 18% commission GST
- * is ₹22.46; customer fare GST passed through is ₹48; and 1% TDS on the
- * ₹835.20 driver share is ₹8.35. Total remittance is ₹203.61. Each component
- * is recorded separately and rounded to paise.
+ * is ₹22.46; customer fare GST passed through is ₹48. Total remittance is
+ * ₹195.26. Each component is recorded separately and rounded to paise.
  */
-const TRIP_ONE = { base: 96_000, gst: 4_800, total: 100_800, commissionBase: 12_480, commissionGst: 2_246, tdsBase: 83_520, tds: 835, commissionTotal: 20_361 };
-const TRIP_TWO = { base: 30_500, gst: 1_525, total: 32_025, commissionBase: 3_965, commissionGst: 714, tdsBase: 26_535, tds: 265, commissionTotal: 6_469 };
+const TRIP_ONE = { base: 96_000, gst: 4_800, total: 100_800, commissionBase: 12_480, commissionGst: 2_246, commissionTotal: 19_526 };
+const TRIP_TWO = { base: 30_500, gst: 1_525, total: 32_025, commissionBase: 3_965, commissionGst: 714, commissionTotal: 6_204 };
 
 /** The same ₹960.00 subtotal with ₹50.00 of it being the office's own platform fee. */
 const TRIP_WITH_FEE = {
@@ -82,14 +81,12 @@ const TRIP_WITH_FEE = {
     { key: 'platform_fee', label: 'Platform fee', amountPaise: 5_000 },
   ],
   commissionBase: 11_830,
-  commissionGst: 2_130,
-  tdsBase: 79_170,
-  tds: 792,
-  commissionTotal: 19_552,
+  commissionGst: 2_129,
+  commissionTotal: 18_759,
 };
 
 /** TRIP_TWO priced while the office has set its cut to 10%. */
-const TRIP_AT_TEN = { ...TRIP_TWO, commissionBase: 3_050, commissionGst: 549, tdsBase: 27_450, tds: 275, commissionTotal: 5_399 };
+const TRIP_AT_TEN = { ...TRIP_TWO, commissionBase: 3_050, commissionGst: 549, commissionTotal: 5_124 };
 
 const failures = [];
 function check(label, ok, detail) {
@@ -230,6 +227,8 @@ function bookingBody(id, reference, trip, status, driverField, extra = {}) {
     status,
     serviceTypeId: 'cab-ac',
     zoneId: 'zone-ggn-1',
+    pickup: { label: 'Gurugram, Haryana', state: 'Haryana' },
+    destination: { label: 'Faridabad, Haryana', state: 'Haryana' },
     currency: 'INR',
     estimate: {
       kind: 'estimate',
@@ -250,7 +249,7 @@ const throwawayDrivers = [];
 /** The office's own cut, as the seed left it, so the finally can put it back. */
 let commissionConfig = null;
 commissionConfig = (await db.doc('appConfig/commission').get()).data() ?? null;
-// Exercise the configured 18% commission GST and 1% driver-share TDS without changing the
+// Exercise that stale TDS configuration is ignored and the 18% commission GST stays fixed, without changing the
 // repository's default commission config or any production pricing.
 await db.doc('appConfig/commission').set(
   { rate: 0.13, gstRate: 0.18, tdsRate: 0.01, settlementVersion: 2, updatedByUid: 'verify-dues', updatedAtMs: Date.now() },
@@ -334,16 +333,17 @@ try {
 
   const one = dueOne?.data ?? {};
   check(
-    '13% commission + 18% commission GST + 5% fare GST pass-through + 1% TDS on the remainder',
+    '13% commission + 18% commission GST + 5% fare GST pass-through, no TDS',
     one.basePaise === TRIP_ONE.commissionBase &&
       one.gstRate === 0.18 &&
       one.gstPaise === TRIP_ONE.commissionGst &&
       one.fareTaxPaise === TRIP_ONE.gst &&
-      one.tdsRate === 0.01 &&
-      one.tdsBasePaise === TRIP_ONE.tdsBase &&
-      one.tdsPaise === TRIP_ONE.tds &&
+      one.gstType === 'intra_state' &&
+      one.tdsRate === 0 &&
+      one.tdsBasePaise === 0 &&
+      one.tdsPaise === 0 &&
       one.totalPaise === TRIP_ONE.commissionTotal,
-    `${one.basePaise}+${one.gstPaise}+${one.fareTaxPaise}+${one.tdsPaise}=${one.totalPaise} paise, expected ${TRIP_ONE.commissionBase}+${TRIP_ONE.commissionGst}+${TRIP_ONE.gst}+${TRIP_ONE.tds}=${TRIP_ONE.commissionTotal}`,
+    `${one.basePaise}+${one.gstPaise}+${one.fareTaxPaise}=${one.totalPaise} paise, expected ${TRIP_ONE.commissionBase}+${TRIP_ONE.commissionGst}+${TRIP_ONE.gst}=${TRIP_ONE.commissionTotal}`,
   );
   check(
     'so the customer’s tax is never part of the base',
@@ -445,7 +445,7 @@ try {
   const online = await callFailure(callable(driver, 'setAvailability', onlinePayload()));
   check('going online is refused', online.code === 'failed-precondition', `${online.code}: ${online.message.slice(0, 120)}`);
   check('the refusal names the total trip remittance owed',
-    /₹268\.30/.test(online.message) && /trip remittances/i.test(online.message), online.message.slice(0, 140));
+    /₹257\.30/.test(online.message) && /trip remittances/i.test(online.message), online.message.slice(0, 140));
 
   const accept = await callFailure(
     callable(driver, 'respondToAssignment', { bookingId: bookingOne, decision: 'accept' }),
@@ -590,7 +590,7 @@ try {
 
   // Every booking `createBooking` takes carries the terms it was quoted on, and
   // the ledger bills from them rather than from today's figure — a driver who
-  // agreed ₹203.61 on a trip cannot be re-billed at today's rate because the office
+  // agreed ₹195.26 on a trip cannot be re-billed at today's rate because the office
   // changed its mind after the trip was driven.
   await db.doc(`bookings/${bookingPinned}`).set(
     bookingBody(bookingPinned, `DRX-${tag.toUpperCase()}G`, TRIP_ONE, 'completed', { assignedDriverUid: rateDriver.uid }, {
@@ -599,9 +599,10 @@ try {
         gstRate: 0.18,
         fareTaxPaise: TRIP_ONE.gst,
         fareTaxRate: 0.05,
-        tdsRate: 0.01,
-        tdsBasePaise: TRIP_ONE.tdsBase,
-        tdsPaise: TRIP_ONE.tds,
+        gstType: 'intra_state',
+        tdsRate: 0,
+        tdsBasePaise: 0,
+        tdsPaise: 0,
         commissionablePaise: TRIP_ONE.base,
         basePaise: TRIP_ONE.commissionBase,
         gstPaise: TRIP_ONE.commissionGst,

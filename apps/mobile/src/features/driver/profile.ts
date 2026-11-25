@@ -8,6 +8,7 @@ import {
   SUBCOLLECTIONS,
   formatINR,
   type VerificationStatus,
+  type GstType,
 } from '@drivx/domain';
 import { useSession } from '../auth/AuthProvider';
 import { firebase } from '../../lib/firebase';
@@ -90,6 +91,7 @@ export type DriverDueRow = {
   gstPaise: number;
   fareTaxPaise: number;
   fareTaxRate: number;
+  gstType: GstType | null;
   tdsBasePaise: number;
   tdsRate: number;
   tdsPaise: number;
@@ -151,6 +153,7 @@ export function useDriverDues(): DriverDues {
               gstPaise: Number(data.gstPaise ?? 0),
               fareTaxPaise: Number(data.fareTaxPaise ?? 0),
               fareTaxRate: Number(data.fareTaxRate ?? 0),
+              gstType: data.gstType === 'intra_state' || data.gstType === 'inter_state' ? data.gstType : null,
               tdsBasePaise: Number(data.tdsBasePaise ?? 0),
               tdsRate: Number(data.tdsRate ?? 0),
               tdsPaise: Number(data.tdsPaise ?? 0),

@@ -48,7 +48,7 @@ npm run typecheck && npm run test:rules      # must pass, against the local emul
 npm run verify:phone-otp                     # the auth trigger still mints the claim on a fresh number
 npm run verify:customer-paths                # every shipped client query still clears the rules
 npm run verify:driver-onboarding             # required contact details, four documents, both card sides, and fee gate
-npm run verify:driver-dues                   # commission GST, customer GST pass-through, rate-based TDS, one row per trip, and the dispatch hold
+npm run verify:driver-dues                   # commission GST, customer GST pass-through, state GST split, no TDS, one row per trip, and the dispatch hold
 npm run verify:trip-invoices                 # PDFs, separate emails, idempotency, and admin ZIP export
 firebase deploy --project drivx-116de --only firestore:rules,firestore:indexes,database,storage
 firebase deploy --project drivx-116de --only functions
@@ -76,9 +76,27 @@ trip invoice/PDF/email-idempotency/admin-export flow. The invoice verifier uses 
 no production trip was created to send real customer or driver mail. Set the legal issuer name, GSTIN,
 and address in Admin before issuing tax invoices; those values are intentionally blank until supplied.
 
-Firebase Hosting does not update the native iOS/Android binaries. No TestFlight build was created or
-uploaded. The source changes also need to be committed and pushed before another developer can pull
-them for a native build.
+### GST and zero-TDS invoice follow-up — 2026-11-25
+
+The customer fare now uses 5% GST. Same-state pickup/drop invoices split that total into CGST 2.5%
+and SGST 2.5%; interstate routes use IGST 5%. Driver commission remains configurable, its GST is
+fixed at 18%, and that tax follows the same route split (9% CGST + 9% SGST within a state, or 18%
+IGST across states). The customer's fare GST remains a separate pass-through in driver remittance.
+New trip settlements store zero TDS; already-issued PDFs and collected ledger rows stay as historical
+records.
+
+Deployed functions: bookingOptions, quoteFare, createBooking, confirmCompletion,
+chargeCommissionOnCompletion, chargeCommissionOnImportedTrip, sendTripInvoicesOnCompletion,
+sendTripInvoicesOnImportedTrip, driverGateway, and getDriverEarningsSummary. Hosting was
+released after the admin, customer, and driver web exports were rebuilt; /, /admin/, /customer/,
+/driver/, /admin/pricing/, and /admin/dues/ returned HTTP 200. Local invoice verification used
+mocked email delivery, and no production booking was created.
+
+The TestFlight binaries were not rebuilt by this Firebase release. Expo Updates are not configured in
+apps/mobile/app.config.js, so the invoice details and trip download controls need fresh customer and
+driver iOS builds before they appear in installed TestFlight apps. Android binaries also need a new
+build. No native builds were uploaded, and the source has not been pushed to Git for another developer
+to pull.
 
 Build and upload native iOS archives separately using the TestFlight workflow in
 [`apps/mobile/BUILDING.md`](../apps/mobile/BUILDING.md).
@@ -262,8 +280,9 @@ rather than hardcoded.
 5. Cashfree — **configured, and blocked one step short of working.** The live app id and secret key are
    in `functions/.env` and the functions are redeployed; one ₹1.00 order was created against the live
    merchant account and read back with its amount intact, so the outbound leg is proved. The two
-   charges the platform keeps are *live* regardless — the driver's ₹315 onboarding fee and the configured cut (13% by
-   default) + any Admin-configured tax on completed-trip commission — because the office takes cash or UPI and an administrator
+   charges the platform keeps are *live* regardless — the driver's ₹315 onboarding fee and the configured
+   cut (13% by default) + fixed 18% GST on completed-trip commission, plus the customer's 5% fare GST
+   passed through — because the office takes cash or UPI and an administrator
    records that handover (`recordDriverDuePayment`), which is an attested fact rather than a simulated
    transaction. What the in-app path still cannot do is complete: the `referralme.in` organisation policy
    (see `credentials-checklist.md` step 10) refuses to make a Cloud Run service publicly callable, which
@@ -329,7 +348,7 @@ rather than hardcoded.
      in `requireDriverForNewWork` precisely so the dispatcher can call the same helper.
    - **Whether the cut is of the fare before tax or of the receipt.** It is currently the configured
      rate of the booking's own GST-exclusive `subtotalPaise` — minus any `platform_fee` line, which is
-     the office's charge and not a fare the driver took — plus Admin-configured tax on that share, with 0.13 as the
+     the office's charge and not a fare the driver took — plus fixed 18% GST on that share, with 0.13 as the
      fallback in `COMMISSION_TERMS` and pinned by the 38 cases in `packages/domain/tests/dues.test.ts`.
      At these two rates the readings differ by exactly nothing (13% of ₹1,008.00 = ₹124.80 + ₹6.24),
      which is why the checks assert `basePaise` and the excluded lines rather than the total: if the

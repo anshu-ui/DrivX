@@ -319,7 +319,7 @@ export default function DriverHome() {
             <Text variant="caption" tone="muted">The final bill uses the odometer readings at pickup and drop-off.</Text>
             <View style={{ borderRadius: theme.radius.md, backgroundColor: theme.colors.surfaceMuted, padding: theme.spacing.sm, gap: theme.spacing.xxs }}>
               <Text variant="caption" tone="brand">How your earnings work</Text>
-              <Text variant="caption" tone="muted">This is the customer’s fare estimate. After the trip, the final fare is calculated from the odometer; your remittance breakdown shows commission, both GST amounts, and TDS before you pay.</Text>
+              <Text variant="caption" tone="muted">This is the customer’s fare estimate. After the trip, the final fare is calculated from the odometer; your remittance breakdown shows commission, the GST split, and the total to pay. TDS is currently disabled.</Text>
             </View>
             <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
               <Button

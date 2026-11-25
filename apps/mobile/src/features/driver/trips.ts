@@ -3,6 +3,7 @@ import { collection, getDocs, limit, orderBy, query, where } from 'firebase/fire
 import {
   COLLECTIONS,
   driverTripSplitFor,
+  gstTypeForRoute,
   readCommissionSnapshot,
   type CommissionSnapshot,
   type DriverTripSplit,
@@ -123,6 +124,10 @@ export function useDrivenTrips() {
                       totalPaise: Number(fare.totalPaise ?? 0),
                     },
                     readCommissionSnapshot(data.commission),
+                    gstTypeForRoute(
+                      (data.pickup as Record<string, unknown> | undefined)?.state,
+                      (data.destination as Record<string, unknown> | undefined)?.state,
+                    ),
                   )
                 : null,
           },

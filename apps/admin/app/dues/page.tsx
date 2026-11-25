@@ -16,7 +16,9 @@ import {
   COMMISSION_TERMS,
   SUBCOLLECTIONS,
   formatINR,
+  gstComponentsFor,
   type DriverDueKind,
+  type GstType,
 } from '@drivx/domain';
 import { toEpochMs } from '@drivx/firebase-client';
 import { callFunction } from '@drivx/firebase-client';
@@ -54,6 +56,7 @@ type DueRow = {
   gstRate: number;
   fareTaxPaise: number;
   fareTaxRate: number;
+  gstType: GstType | null;
   tdsBasePaise: number;
   tdsRate: number;
   tdsPaise: number;
@@ -115,6 +118,7 @@ function readDue(snap: { id: string; ref: { path: string }; data: () => Document
     gstRate: Number(data.gstRate ?? 0),
     fareTaxPaise: Number(data.fareTaxPaise ?? 0),
     fareTaxRate: Number(data.fareTaxRate ?? 0),
+    gstType: data.gstType === 'intra_state' || data.gstType === 'inter_state' ? data.gstType : null,
     tdsBasePaise: Number(data.tdsBasePaise ?? 0),
     tdsRate: Number(data.tdsRate ?? 0),
     tdsPaise: Number(data.tdsPaise ?? 0),
@@ -125,6 +129,17 @@ function readDue(snap: { id: string; ref: { path: string }; data: () => Document
     reference: typeof data.reference === 'string' ? data.reference : null,
     settledBy: typeof data.settledBy === 'string' ? data.settledBy : null,
   };
+}
+
+function taxDescription(prefix: string, amountPaise: number, rate: number, gstType: GstType | null): string[] {
+  if (!gstType) return [`${prefix} ${formatINR(amountPaise)}`];
+  const components = gstComponentsFor(amountPaise, gstType);
+  if (gstType === 'intra_state') {
+    const halfRate = Number.isInteger(rate * 50) ? String(rate * 50) : (rate * 50).toFixed(1);
+    return [`CGST ${halfRate}% ${formatINR(components.cgstPaise)}`, `SGST ${halfRate}% ${formatINR(components.sgstPaise)}`];
+  }
+  const fullRate = Number.isInteger(rate * 100) ? String(rate * 100) : (rate * 100).toFixed(1);
+  return [`IGST ${fullRate}% ${formatINR(components.igstPaise)}`];
 }
 
 /**
@@ -324,7 +339,7 @@ function DuesBoard({ reviewer }: { reviewer: Reviewer }) {
               {billedRates.length > 0
                 ? billedRates.map((rate) => `${Math.round(rate * 100)}%`).join(' or ')
                 : `${Math.round(COMMISSION_TERMS.rate * 100)}%`}{' '}
-              of fare + GST + customer fare GST + TDS)
+              of fare + commission GST + customer fare GST)
             </dt>
             <dd className="mt-1 font-mono text-xl">{rows === null ? '—' : formatINR(commissionPaise)}</dd>
           </div>
@@ -450,11 +465,11 @@ function DriverDues({ group, canRecord }: { group: Group; canRecord: boolean }) 
                 {row.bookingId ? ` · booking ${row.bookingId}` : ''} ·{' '}
                 {row.createdAtMs === null ? 'no date on the row' : `billed ${stamp(row.createdAtMs)}`}
               </p>
-              {row.kind === 'commission' ? <p className="mt-1 text-xs text-ink-muted">Commission GST {formatINR(row.gstPaise)} · Customer fare GST {Math.round(row.fareTaxRate * 100)}% to remit {formatINR(row.fareTaxPaise)} · TDS {Math.round(row.tdsRate * 100)}% of {formatINR(row.tdsBasePaise)} = {formatINR(row.tdsPaise)}</p> : null}
+              {row.kind === 'commission' ? <p className="mt-1 text-xs text-ink-muted">Commission tax: {taxDescription('commission GST', row.gstPaise, row.gstRate, row.gstType).join(' · ')} · Customer tax to remit: {taxDescription('fare GST', row.fareTaxPaise, row.fareTaxRate, row.gstType).join(' · ')}{row.tdsPaise > 0 ? ` · Legacy TDS ${formatINR(row.tdsPaise)}` : ''}</p> : null}
             </div>
             <p className="font-mono text-sm">
               {formatINR(row.basePaise)} + {Math.round(row.gstRate * 100)}% commission GST {formatINR(row.gstPaise)}
-              {row.kind === 'commission' ? ` + fare GST ${formatINR(row.fareTaxPaise)} + TDS ${formatINR(row.tdsPaise)} = ` : ' = '}
+              {row.kind === 'commission' ? ` + fare GST ${formatINR(row.fareTaxPaise)}${row.tdsPaise > 0 ? ` + legacy TDS ${formatINR(row.tdsPaise)}` : ''} = ` : ' = '}
               <span className="font-semibold">{formatINR(row.totalPaise)}</span>
             </p>
           </li>

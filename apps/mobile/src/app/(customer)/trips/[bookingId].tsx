@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { Button, Card, Divider, Screen, ScreenHeader, StateView, StatusPill, Text, useTheme } from '@drivx/ui';
+import { gstComponentsFor, gstTypeForRoute } from '@drivx/domain';
 import { CancelTripAction } from '../../../features/customer/CancelTripPanel';
 import { DriverCardPanel } from '../../../features/customer/DriverCardPanel';
 import { RateDriverPanel } from '../../../features/customer/RateDriverPanel';
@@ -85,6 +86,9 @@ export default function TripDetail() {
     : booking.runningFare
       ? 'Fare so far'
       : 'Fare estimate';
+  const gstType = gstTypeForRoute(booking.pickup?.state, booking.destination?.state);
+  const fareTaxRate = fare && fare.subtotalPaise > 0 ? fare.taxPaise / fare.subtotalPaise : 0.05;
+  const fareGstComponents = fare ? gstComponentsFor(fare.taxPaise, gstType) : null;
   const drivenKm =
     booking.currentOdometerKm !== null && booking.startOdometerKm !== null
       ? booking.currentOdometerKm - booking.startOdometerKm
@@ -299,8 +303,11 @@ export default function TripDetail() {
                 </Text>
               </View>
             ))}
-            <SummaryLine label="Subtotal" amountPaise={fare.subtotalPaise} />
-            <SummaryLine label="tax" amountPaise={fare.taxPaise} />
+            <SummaryLine label="Taxable fare subtotal" amountPaise={fare.subtotalPaise} />
+            {fareGstComponents && gstType === 'intra_state' ? <>
+              <SummaryLine label={`CGST (${(fareTaxRate * 50).toFixed(1)}%)`} amountPaise={fareGstComponents.cgstPaise} />
+              <SummaryLine label={`SGST (${(fareTaxRate * 50).toFixed(1)}%)`} amountPaise={fareGstComponents.sgstPaise} />
+            </> : fareGstComponents ? <SummaryLine label={`IGST (${(fareTaxRate * 100).toFixed(1)}%)`} amountPaise={fareGstComponents.igstPaise} /> : null}
             <Divider size="sm" />
             <View
               style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', gap: theme.spacing.md }}

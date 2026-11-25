@@ -12,6 +12,8 @@ import {
   commissionablePaise,
   driverTripSplitFor,
   commissionTitleFor,
+  gstComponentsFor,
+  gstTypeForRoute,
   readCommissionSnapshot,
 } from '../src/records-identity';
 import type { MoneyPaise } from '../src/common';
@@ -51,20 +53,20 @@ describe('driver due kinds', () => {
 });
 
 describe('commission terms', () => {
-  it('default to the configured 13% commission, 18% GST and 1% TDS', () => {
-    expect(COMMISSION_TERMS).toMatchObject({ kind: 'commission', rate: 0.13, gstRate: 0.18, tdsRate: 0.01 });
+  it('defaults to a 13% commission, 18% commission GST and no TDS', () => {
+    expect(COMMISSION_TERMS).toMatchObject({ kind: 'commission', rate: 0.13, gstRate: 0.18, tdsRate: 0 });
   });
 
-  it('calculates commission GST and TDS from the configured commission rate', () => {
+  it('calculates commission GST and fare GST pass-through with no TDS by default', () => {
     expect(commissionDueFor(96_000)).toEqual({
       rate: 0.13,
       basePaise: 12_480,
       gstPaise: 2_246,
       fareTaxPaise: 0,
-      tdsRate: 0.01,
-      tdsBasePaise: 83_520,
-      tdsPaise: 835,
-      totalPaise: 15_561,
+      tdsRate: 0,
+      tdsBasePaise: 0,
+      tdsPaise: 0,
+      totalPaise: 14_726,
     });
   });
 
@@ -74,20 +76,20 @@ describe('commission terms', () => {
       basePaise: 14_400,
       gstPaise: 720,
       fareTaxPaise: 0,
-      tdsRate: 0.01,
-      tdsBasePaise: 81_600,
-      tdsPaise: 816,
-      totalPaise: 15_936,
+      tdsRate: 0,
+      tdsBasePaise: 0,
+      tdsPaise: 0,
+      totalPaise: 15_120,
     });
     expect(commissionDueFor(96_000, 0)).toEqual({
       rate: 0,
       basePaise: 0,
       gstPaise: 0,
       fareTaxPaise: 0,
-      tdsRate: 0.01,
-      tdsBasePaise: 96_000,
-      tdsPaise: 960,
-      totalPaise: 960,
+      tdsRate: 0,
+      tdsBasePaise: 0,
+      tdsPaise: 0,
+      totalPaise: 0,
     });
   });
 
@@ -97,14 +99,14 @@ describe('commission terms', () => {
   });
 
   it('round each line to whole paise, once', () => {
-    // ₹1.00 fare: commission 13 paise, GST 2 paise and TDS 1 paise.
-    expect(commissionDueFor(100, 0.13, 0.18, 0, 0.01)).toEqual({
+    // ₹1.00 fare: commission 13 paise and GST 2 paise; there is no TDS.
+    expect(commissionDueFor(100, 0.13, 0.18)).toEqual({
       rate: 0.13, basePaise: 13, gstPaise: 2, fareTaxPaise: 0,
-      tdsRate: 0.01, tdsBasePaise: 87, tdsPaise: 1, totalPaise: 16,
+      tdsRate: 0, tdsBasePaise: 0, tdsPaise: 0, totalPaise: 15,
     });
     expect(commissionDueFor(0)).toEqual({
       rate: 0.13, basePaise: 0, gstPaise: 0, fareTaxPaise: 0,
-      tdsRate: 0.01, tdsBasePaise: 0, tdsPaise: 0, totalPaise: 0,
+      tdsRate: 0, tdsBasePaise: 0, tdsPaise: 0, totalPaise: 0,
     });
   });
 
@@ -115,15 +117,26 @@ describe('commission terms', () => {
     }
   });
 
-  it('matches the ₹1,000 fare example and recalculates remaining-share TDS when commission changes', () => {
-    expect(commissionDueFor(100_000, 0.13, 0.18, 5_000, 0.01)).toMatchObject({
+  it('matches the ₹1,000 fare example and changes only the commission when its rate changes', () => {
+    expect(commissionDueFor(100_000, 0.13, 0.18, 5_000)).toMatchObject({
       basePaise: 13_000, gstPaise: 2_340, fareTaxPaise: 5_000,
-      tdsBasePaise: 87_000, tdsPaise: 870, totalPaise: 21_210,
+      tdsBasePaise: 0, tdsPaise: 0, totalPaise: 20_340,
     });
-    expect(commissionDueFor(100_000, 0.15, 0.18, 5_000, 0.01)).toMatchObject({
+    expect(commissionDueFor(100_000, 0.15, 0.18, 5_000)).toMatchObject({
       basePaise: 15_000, gstPaise: 2_700, fareTaxPaise: 5_000,
-      tdsBasePaise: 85_000, tdsPaise: 850, totalPaise: 23_550,
+      tdsBasePaise: 0, tdsPaise: 0, totalPaise: 22_700,
     });
+  });
+});
+
+describe('state-based GST components', () => {
+  it('uses CGST and SGST inside a state, and IGST across state boundaries', () => {
+    expect(gstTypeForRoute('Haryana', 'Haryana')).toBe('intra_state');
+    expect(gstTypeForRoute('Haryana', 'Rajasthan')).toBe('inter_state');
+    expect(gstTypeForRoute('NCT of Delhi', 'New Delhi')).toBe('intra_state');
+    expect(gstComponentsFor(842, 'intra_state')).toEqual({ cgstPaise: 421, sgstPaise: 421, igstPaise: 0 });
+    expect(gstComponentsFor(841, 'intra_state')).toEqual({ cgstPaise: 420, sgstPaise: 421, igstPaise: 0 });
+    expect(gstComponentsFor(842, 'inter_state')).toEqual({ cgstPaise: 0, sgstPaise: 0, igstPaise: 842 });
   });
 });
 
@@ -168,13 +181,13 @@ describe('the commission snapshot stored on a booking', () => {
       gstRate: 0.18,
       fareTaxPaise: 5_000,
       fareTaxRate: 0.05,
-      tdsRate: 0.01,
-      tdsBasePaise: 76_500,
-      tdsPaise: 765,
+      tdsRate: 0,
+      tdsBasePaise: 0,
+      tdsPaise: 0,
       commissionablePaise: 90_000,
       basePaise: 13_500,
       gstPaise: 2_430,
-      totalPaise: 21_695,
+      totalPaise: 20_930,
     });
   });
 
@@ -249,8 +262,8 @@ describe('commission due ids', () => {
 });
 
 describe('driver trip split', () => {
-  it('hands the driver everything the ledger did not take', () => {
-    // ₹960 fare + ₹48 customer GST, less commission, commission GST, pass-through GST and TDS.
+  it('hands the driver everything the ledger did not take and uses IGST by default without state data', () => {
+    // ₹960 fare + ₹48 customer GST, less commission, commission GST and pass-through GST.
     const receipt = fare(96_000);
     expect(driverTripSplitFor(receipt, commissionSnapshotFor(receipt))).toEqual({
       fareTotalPaise: 100_800,
@@ -262,11 +275,35 @@ describe('driver trip split', () => {
       commissionGstPaise: 2_246,
       fareTaxPaise: 4_800,
       fareTaxRate: 0.05,
-      tdsBasePaise: 83_520,
-      tdsRate: 0.01,
-      tdsPaise: 835,
-      totalDuePaise: 20_361,
-      netPaise: 80_439,
+      gstType: 'inter_state',
+      fareCgstPaise: 0,
+      fareSgstPaise: 0,
+      fareIgstPaise: 4_800,
+      commissionCgstPaise: 0,
+      commissionSgstPaise: 0,
+      commissionIgstPaise: 2_246,
+      tdsBasePaise: 0,
+      tdsRate: 0,
+      tdsPaise: 0,
+      totalDuePaise: 19_526,
+      netPaise: 81_274,
+    });
+  });
+
+  it('splits fare and commission GST on same-state trips', () => {
+    const receipt = fare(96_000);
+    const snapshot = commissionSnapshotFor(receipt, 0.13, 0.18, 0, 'intra_state');
+    expect(driverTripSplitFor(receipt, snapshot)).toMatchObject({
+      gstType: 'intra_state',
+      fareCgstPaise: 2_400,
+      fareSgstPaise: 2_400,
+      fareIgstPaise: 0,
+      commissionCgstPaise: 1_123,
+      commissionSgstPaise: 1_123,
+      commissionIgstPaise: 0,
+      tdsPaise: 0,
+      totalDuePaise: 19_526,
+      netPaise: 81_274,
     });
   });
 
@@ -286,10 +323,11 @@ describe('driver trip split', () => {
       rate: 0.15,
       commissionPaise: 14_400,
       commissionGstPaise: 2_592,
-      tdsBasePaise: 81_600,
-      tdsPaise: 816,
-      totalDuePaise: 22_608,
-      netPaise: 78_192,
+      tdsBasePaise: 0,
+      tdsRate: 0,
+      tdsPaise: 0,
+      totalDuePaise: 21_792,
+      netPaise: 79_008,
     });
   });
 
@@ -310,8 +348,15 @@ describe('driver trip split', () => {
       commissionGstPaise: 0,
       fareTaxPaise: 0,
       fareTaxRate: 0,
+      gstType: 'inter_state',
+      fareCgstPaise: 0,
+      fareSgstPaise: 0,
+      fareIgstPaise: 0,
+      commissionCgstPaise: 0,
+      commissionSgstPaise: 0,
+      commissionIgstPaise: 0,
       tdsBasePaise: 0,
-      tdsRate: 0.01,
+      tdsRate: 0,
       tdsPaise: 0,
       totalDuePaise: 0,
       netPaise: 0,

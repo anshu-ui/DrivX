@@ -30,7 +30,7 @@ const CUSTOMER_TERMS: LegalDocument = {
     {
       heading: 'The fare you are shown',
       lines: [
-        'The price on the confirmation screen is calculated by DrivX from the rate card in force at that moment: a fixed band for the distance of your route, plus the configured extra-distance amount only beyond the band you were quoted, plus a one-time night charge if your scheduled pickup is between 22:00 and 06:00 or the map-estimated journey overlaps those hours, plus any configured tax; tax is not assumed until the Admin sets it.',
+        'The price on the confirmation screen is calculated by DrivX from the rate card in force at that moment: a fixed band for the distance of your route, plus the configured extra-distance amount only beyond the band you were quoted, plus a one-time night charge if your scheduled pickup is between 22:00 and 06:00 or the map-estimated journey overlaps those hours, plus 5% GST. For a trip within one state, the GST is split equally between CGST and SGST; for a trip crossing states, it is shown as IGST.',
         'One band prices the whole route. Bands are never added together, and driving further than the map estimated does not move you onto a bigger band — it adds the extra kilometres at the per-kilometre rate.',
         'The band you confirmed stays the price of the band even if the trip turns out shorter.',
       ],

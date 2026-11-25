@@ -67,8 +67,8 @@ const booking = {
   customerUid,
   assignedDriverUid: driverUid,
   reference: 'DRX-AUDIT1',
-  pickup: { label: 'Connaught Place, New Delhi' },
-  destination: { label: 'India Gate, New Delhi' },
+  pickup: { label: 'Gurugram, Haryana', state: 'Haryana' },
+  destination: { label: 'Faridabad, Haryana', state: 'Haryana' },
   scheduledForMs: Date.now(),
   tripStartedAtMs: Date.now() - 3_600_000,
   completedAtMs: Date.now(),
@@ -83,13 +83,14 @@ const booking = {
     gstRate: 0.18,
     fareTaxRate: 0.05,
     fareTaxPaise: 5_000,
-    tdsRate: 0.01,
-    tdsBasePaise: 87_000,
-    tdsPaise: 870,
+    gstType: 'intra_state',
+    tdsRate: 0,
+    tdsBasePaise: 0,
+    tdsPaise: 0,
     commissionablePaise: 100_000,
     basePaise: 13_000,
     gstPaise: 2_340,
-    totalPaise: 21_210,
+    totalPaise: 20_340,
   },
 };
 
@@ -129,7 +130,7 @@ try {
   assert.equal(invoice.driverEmail, driverEmail);
   assert.equal(invoice.customerTaxDetails.businessName, 'Audit Buyer Pvt Ltd');
   assert.equal(invoice.issuer.businessName, issuer.businessName);
-  assert.equal(invoice.settlement.totalDuePaise, 21_210);
+  assert.equal(invoice.settlement.totalDuePaise, 20_340);
   assert.equal(invoice.pdfStatus, 'ready');
   assert.equal(invoice.emailStatus, 'sent');
   assert.equal(resendRequests.length, 2, 'one customer and one driver email are sent');
@@ -156,9 +157,15 @@ try {
     assert.ok(body.includes('DRX-AUDIT1'), `${side} PDF contains the booking reference`);
     assert.ok(body.includes(bookingId), `${side} PDF contains the booking ID`);
     assert.ok(body.includes('07ABCDE1234F1Z5'), `${side} PDF contains the configured issuer GSTIN`);
-    assert.ok(body.includes('Connaught Place') && body.includes('India Gate'), `${side} PDF contains the route`);
+    assert.ok(body.includes('Gurugram') && body.includes('Faridabad'), `${side} PDF contains the route`);
     if (side === 'customer') assert.ok(body.includes('07AABCU9603R1ZM'), 'customer PDF includes buyer GSTIN');
-    if (side === 'driver') assert.ok(body.includes('TDS 1%') && body.includes('GST on commission 18%'));
+    assert.ok(body.includes('Taxable fare subtotal'), `${side} PDF labels the taxable base clearly`);
+    assert.ok(body.includes('CGST on fare at 2.5%') && body.includes('SGST on fare at 2.5%'), `${side} PDF splits same-state fare GST`);
+    assert.ok(!body.includes('TDS'), `${side} PDF does not show TDS`);
+    if (side === 'driver') {
+      assert.ok(body.includes('CGST on commission at 9%') && body.includes('SGST on commission at 9%'), 'driver PDF splits commission GST');
+      assert.ok(body.includes('Total driver remittance to DrivX'));
+    }
   }
 
   await sendTripCompletionInvoices(bookingId, booking);

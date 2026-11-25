@@ -3,6 +3,7 @@ import type { HttpsError } from 'firebase-functions/v2/https';
 import {
   computeFare,
   computeMeteredFare,
+  CUSTOMER_FARE_GST_RATE,
   FareError,
   listDistanceSlabs,
   listPackageTiers,
@@ -338,7 +339,7 @@ export function publishedTerms(rule: PricingRuleRecord): BookingOptionTerms {
   const chargesNight = night.enabled && (night.mode === 'flat' || night.mode === 'hourly' ? night.flatPaise > 0 : night.rate > 0);
   return {
     pricingRuleId: rule.id,
-    gstRate: rule.gstRate,
+    gstRate: CUSTOMER_FARE_GST_RATE,
     platformFeeRate: rule.platformFeeRate,
     // A package rule or a slab chart has no flat per-kilometre rate at all: the
     // first sells time, the second sells bands, and only a slab rule has a rate

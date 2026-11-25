@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
 import { bucket, db, epochMs, serverTimestamp } from './admin';
 import { RESEND_API_KEY, RESEND_FROM_EMAIL } from './config';
-import { CUSTOMER_CARE_CONTACTS, COMMISSION_TERMS, driverTripSplitFor, readCommissionSnapshot } from '@drivx/domain';
+import { CUSTOMER_CARE_CONTACTS, COMMISSION_TERMS, driverTripSplitFor, gstComponentsFor, gstTypeForRoute, readCommissionSnapshot } from '@drivx/domain';
+import type { GstType } from '@drivx/domain';
 import type { Caller } from './guards';
 import { billableCompletion, configuredCommissionTerms } from './dues';
 import { failedPrecondition, invalidArgument, permissionDenied } from './errors';
@@ -19,6 +20,14 @@ function placeLabel(place: unknown): string {
   const row = place as Data;
   return text(row.label, [row.addressLine1, row.addressLine2, row.city, row.state]
     .filter((part): part is string => typeof part === 'string' && part.trim().length > 0).join(', ') || 'Not recorded');
+}
+
+function placeState(place: unknown): string {
+  return place && typeof place === 'object' ? text((place as Data).state) : '';
+}
+
+function percentLabel(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
 function dateLabel(value: unknown): string {
@@ -252,7 +261,7 @@ function invoicePdf(title: string, invoiceNumber: string, invoiceDate: string, i
     drawText(section.title, 55, financeY, 6.5, true, 'muted');
     financeY += 13;
     for (const row of section.rows) {
-      const total = ['Customer total', 'Total driver remittance to DrivX'].includes(row.label);
+      const total = ['Total payable by passenger', 'Total driver remittance to DrivX'].includes(row.label);
       const net = row.label === 'Driver net from customer total';
       if (total || net) roundRect(50, financeY - 8, 495, Math.max(13, rowStep), 5, total ? 'blue' : 'bluePale');
       const foreground = total ? 'white' : net ? 'navy' : 'ink';
@@ -308,16 +317,29 @@ function tripRouteRows(trip: Data): string[] {
   ];
 }
 
-function fareRows(fare: Data): string[] {
+function gstRows(label: string, totalPaise: number, rate: number, gstType: GstType): string[] {
+  if (totalPaise <= 0) return [];
+  const components = gstComponentsFor(totalPaise, gstType);
+  if (gstType === 'intra_state') {
+    const halfRate = percentLabel(rate * 50);
+    return [
+      `CGST on ${label} at ${halfRate}%\t${INR(components.cgstPaise)}`,
+      `SGST on ${label} at ${halfRate}%\t${INR(components.sgstPaise)}`,
+    ];
+  }
+  return [`IGST on ${label} at ${percentLabel(rate * 100)}%\t${INR(components.igstPaise)}`];
+}
+
+function fareRows(fare: Data, gstType: GstType): string[] {
   const items = Array.isArray(fare.items) ? fare.items as Data[] : [];
   const subtotalPaise = Number(fare.subtotalPaise ?? 0);
   const taxRate = subtotalPaise > 0 ? Number(fare.taxPaise ?? 0) / subtotalPaise : 0;
   return [
     '## Fare breakdown',
     ...items.map((item) => `${text(item.label, text(item.key, 'Fare item'))}\t${INR(item.amountPaise)}`),
-    `Fare subtotal\t${INR(subtotalPaise)}`,
-    `Fare GST ${Math.round(taxRate * 100)}%\t${INR(fare.taxPaise)}`,
-    `Customer total\t${INR(fare.totalPaise)}`,
+    `Taxable fare subtotal\t${INR(subtotalPaise)}`,
+    ...gstRows('fare', Number(fare.taxPaise ?? 0), taxRate, gstType),
+    `Total payable by passenger\t${INR(fare.totalPaise)}`,
   ];
 }
 
@@ -340,7 +362,26 @@ async function reserveInvoiceNumbers(bookingId: string, invoiceData: Data, compl
   const invoiceRef = db().doc(`tripInvoices/${bookingId}`);
   return db().runTransaction(async (transaction) => {
     const existing = await transaction.get(invoiceRef);
-    if (existing.exists) return existing.data() ?? {};
+    if (existing.exists) {
+      const current = existing.data() ?? {};
+      // A pending row has no delivered PDFs yet. Refresh its amounts from the
+      // completed fare while keeping the invoice numbers already reserved.
+      // Ready PDFs stay immutable so retries cannot rewrite an issued invoice.
+      if (current.pdfStatus === 'pending') {
+        const refreshed = {
+          ...current,
+          ...invoiceData,
+          bookingId,
+          financialYear: current.financialYear ?? year,
+          customerInvoiceNumber: current.customerInvoiceNumber,
+          driverInvoiceNumber: current.driverInvoiceNumber,
+          updatedAtMs: serverTimestamp(),
+        };
+        transaction.set(invoiceRef, refreshed);
+        return refreshed;
+      }
+      return current;
+    }
     const customerCounterRef = db().doc(`invoiceCounters/customer-${year}`);
     const driverCounterRef = db().doc(`invoiceCounters/driver-${year}`);
     const [customerCounter, driverCounter] = await Promise.all([
@@ -449,7 +490,17 @@ export async function sendTripCompletionInvoices(bookingId: string, booking: Dat
   const fare = booking.finalFare as Data;
   const commissionSnapshot = readCommissionSnapshot(booking.commission);
   const fallbackTerms = commissionSnapshot ? null : await configuredCommissionTerms();
-  const terms = commissionSnapshot ?? billableCompletion(booking, fallbackTerms?.rate, fallbackTerms?.gstRate, fallbackTerms?.tdsRate)?.terms ?? null;
+  // Recalculate against the completed fare while preserving the quoted
+  // commission rate. The final odometer fare may differ from the estimate.
+  // This also applies state-based GST and keeps TDS disabled on new invoices.
+  const completedTerms = billableCompletion(
+    { ...booking, id: bookingId },
+    fallbackTerms?.rate,
+    fallbackTerms?.gstRate,
+    0,
+  )?.terms;
+  if (!completedTerms) throw new Error('The completed trip fare could not be used to calculate invoice tax and settlement.');
+  const terms = completedTerms;
   const split = driverTripSplitFor({
     subtotalPaise: Number(fare.subtotalPaise ?? 0) as never,
     taxPaise: Number(fare.taxPaise ?? 0) as never,
@@ -488,6 +539,9 @@ export async function sendTripCompletionInvoices(bookingId: string, booking: Dat
   const tripSnapshot = {
     pickup: placeLabel(booking.pickup),
     destination: placeLabel(booking.destination),
+    pickupState: placeState(booking.pickup),
+    destinationState: placeState(booking.destination),
+    gstType: gstTypeForRoute(placeState(booking.pickup), placeState(booking.destination)),
     scheduledPickupAtMs: epochMs(booking.scheduledForMs),
     startedAtMs,
     completedAtMs,
@@ -541,6 +595,11 @@ export async function sendTripCompletionInvoices(bookingId: string, booking: Dat
   const savedCustomerTax = record.customerTaxDetails && typeof record.customerTaxDetails === 'object' ? record.customerTaxDetails as Data : {};
   const savedSettlement = record.settlement && typeof record.settlement === 'object' ? record.settlement as Data : {};
   const savedTerms = record.commissionSnapshot && typeof record.commissionSnapshot === 'object' ? record.commissionSnapshot as Data : {};
+  const savedGstType = savedTrip.gstType === 'intra_state' || savedTrip.gstType === 'inter_state'
+    ? savedTrip.gstType
+    : savedTerms.gstType === 'intra_state' || savedTerms.gstType === 'inter_state'
+      ? savedTerms.gstType
+      : gstTypeForRoute(savedTrip.pickupState, savedTrip.destinationState);
   const savedCustomerName = text(record.customerName, customerName);
   const savedDriverName = text(record.driverName, driverName);
   const savedCustomerEmail = text(record.customerEmail, customerEmail).toLowerCase();
@@ -572,7 +631,7 @@ export async function sendTripCompletionInvoices(bookingId: string, booking: Dat
       ...(text(savedCustomerTax.gstin) ? [`Customer GSTIN\t${text(savedCustomerTax.gstin).toUpperCase()}`] : []),
     ] : []),
     ...tripRouteRows(savedTrip),
-    ...fareRows(savedFare),
+    ...fareRows(savedFare, savedGstType),
   ];
   const driverLines = [
     '## Booking',
@@ -581,14 +640,12 @@ export async function sendTripCompletionInvoices(bookingId: string, booking: Dat
     `Driver\t${savedDriverName}`,
     `Customer\t${savedCustomerName}`,
     ...tripRouteRows(savedTrip),
-    ...fareRows(savedFare),
+    ...fareRows(savedFare, savedGstType),
     '## Driver settlement',
     `Commissionable fare base\t${INR(normalizedTerms.commissionablePaise)}`,
     `Commission ${Math.round(normalizedTerms.rate * 100)}%\t${INR(normalizedTerms.basePaise)}`,
-    `GST on commission ${Math.round(normalizedTerms.gstRate * 100)}%\t${INR(normalizedTerms.gstPaise)}`,
-    `Customer fare GST ${Math.round(Number(savedSettlement.fareTaxRate ?? 0) * 100)}% to remit\t${INR(savedSettlement.fareTaxPaise ?? savedFare.taxPaise ?? 0)}`,
-    `TDS base after commission\t${INR(savedSettlement.tdsBasePaise ?? normalizedTerms.tdsBasePaise)}`,
-    `TDS ${Math.round(Number(savedSettlement.tdsRate ?? normalizedTerms.tdsRate) * 100)}%\t${INR(savedSettlement.tdsPaise ?? normalizedTerms.tdsPaise)}`,
+    ...gstRows('commission', normalizedTerms.gstPaise, normalizedTerms.gstRate, savedGstType),
+    ...gstRows('customer fare GST collected', Number(savedSettlement.fareTaxPaise ?? savedFare.taxPaise ?? 0), Number(savedSettlement.fareTaxRate ?? savedTerms.fareTaxRate ?? 0), savedGstType),
     `Total driver remittance to DrivX\t${INR(driverRemittancePaise)}`,
     `Driver net from customer total\t${INR(savedSettlement.netPaise ?? Math.max(0, fareTotalPaise - driverRemittancePaise))}`,
   ];

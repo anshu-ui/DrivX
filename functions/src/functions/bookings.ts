@@ -7,6 +7,7 @@ import {
   COLLECTIONS,
   cancelBookingInputSchema,
   commissionSnapshotFor,
+  gstTypeForRoute,
   couponPreviewInputSchema,
   createBookingInputSchema,
   emailSchema,
@@ -474,7 +475,13 @@ export const createBooking = onCall(CALLABLE_OPTIONS, async (request) => {
     nowMs,
   });
   const commissionTerms = await configuredCommissionTerms();
-  const commission = commissionSnapshotFor(breakdown, commissionTerms.rate, commissionTerms.gstRate, commissionTerms.tdsRate);
+  const commission = commissionSnapshotFor(
+    breakdown,
+    commissionTerms.rate,
+    commissionTerms.gstRate,
+    0,
+    gstTypeForRoute(input.pickup.state, input.destination.state),
+  );
 
   // Reward selections are requests only. The wallet, miles and coupon are
   // checked and consumed atomically with the booking below.

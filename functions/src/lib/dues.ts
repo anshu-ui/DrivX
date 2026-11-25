@@ -10,10 +10,12 @@ import {
   commissionRateFrom,
   driverDuePath,
   formatINR,
+  gstTypeForRoute,
   readCommissionSnapshot,
   type CommissionSnapshot,
   type DriverDueKind,
   type FareLineItem,
+  type GstType,
   type MoneyPaise,
 } from '@drivx/domain';
 import { db, serverTimestamp } from './admin';
@@ -25,7 +27,7 @@ import { failedPrecondition } from './errors';
  * The owner's rules are two charges and one consequence: a new driver clears a
  * one-time fee before the account can take work, the platform keeps
  * its configured share of every trip fare — 13% unless the office has set
- * another — plus any Admin-configured tax on that share, and a driver with an uncleared row does
+ * another — plus fixed 18% GST on that commission, and a driver with an uncleared row does
  * not receive new bookings. This file is the ledger those three claims are
  * checked against.
  *
@@ -56,6 +58,7 @@ export type NewDriverDue = {
   gstPaise: number;
   fareTaxPaise: number;
   fareTaxRate: number;
+  gstType?: GstType;
   tdsBasePaise: number;
   tdsRate: number;
   tdsPaise: number;
@@ -86,6 +89,7 @@ async function createDue(due: NewDriverDue): Promise<boolean> {
       gstPaise: due.gstPaise,
       fareTaxPaise: due.fareTaxPaise,
       fareTaxRate: due.fareTaxRate,
+      ...(due.gstType ? { gstType: due.gstType } : {}),
       tdsBasePaise: due.tdsBasePaise,
       tdsRate: due.tdsRate,
       tdsPaise: due.tdsPaise,
@@ -175,11 +179,12 @@ export async function configuredCommissionTerms(): Promise<{ rate: number; gstRa
     .doc(`${COLLECTIONS.appConfig}/${COMMISSION_CONFIG_DOC}`)
     .get();
   const config = snap.data() ?? {};
-  const currentSettlementConfig = config.settlementVersion === 2;
   return {
     rate: commissionRateFrom(config.rate) ?? COMMISSION_TERMS.rate,
-    gstRate: currentSettlementConfig ? commissionRateFrom(config.gstRate) ?? COMMISSION_TERMS.gstRate : COMMISSION_TERMS.gstRate,
-    tdsRate: currentSettlementConfig ? commissionRateFrom(config.tdsRate) ?? COMMISSION_TERMS.tdsRate : COMMISSION_TERMS.tdsRate,
+    gstRate: COMMISSION_TERMS.gstRate,
+    // Ignore any stale Admin setting so the previous 1% deduction is not
+    // reintroduced on a new trip.
+    tdsRate: 0,
   };
 }
 
@@ -221,6 +226,9 @@ export function billableCompletion(
 
   const bookingId = String(booking.id ?? '');
   if (bookingId.length === 0) return null;
+  const pickup = typeof booking.pickup === 'object' && booking.pickup !== null ? booking.pickup as Record<string, unknown> : {};
+  const destination = typeof booking.destination === 'object' && booking.destination !== null ? booking.destination as Record<string, unknown> : {};
+  const gstType = gstTypeForRoute(pickup.state, destination.state);
 
   // The office's *rate* stays the one the quote carried, so a change of mind
   // cannot rewrite a trip already driven. The *base* follows the fare the
@@ -234,8 +242,9 @@ export function billableCompletion(
       taxPaise: typeof fare.taxPaise === 'number' ? (fare.taxPaise as MoneyPaise) : (0 as MoneyPaise),
     },
     pinned?.rate ?? rate,
-    pinned?.gstRate ?? gstRate,
-    pinned?.tdsRate ?? tdsRate,
+    COMMISSION_TERMS.gstRate,
+    0,
+    gstType,
   );
 
   return {
@@ -253,8 +262,9 @@ export function billableCompletion(
       gstPaise: terms.gstPaise,
       fareTaxPaise: terms.fareTaxPaise ?? 0,
       fareTaxRate: terms.fareTaxRate ?? 0,
+      gstType,
       tdsBasePaise: terms.tdsBasePaise ?? 0,
-      tdsRate: terms.tdsRate ?? tdsRate,
+      tdsRate: 0,
       tdsPaise: terms.tdsPaise ?? 0,
       totalPaise: terms.totalPaise,
       bookingId,
@@ -316,7 +326,7 @@ export function totalOutstandingPaise(dues: Array<Record<string, unknown>>): num
  * What a driver is told when unpaid money blocks their work.
  *
  * Names the kinds rather than only the total, because a trip remittance contains
- * commission, taxes and TDS. With one kind
+ * commission and taxes. With one kind
  * owing, the breakdown is the total twice over, so only the breakdown is said.
  */
 export function describeOutstanding(dues: Array<Record<string, unknown>>): string {
