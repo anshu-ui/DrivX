@@ -22,6 +22,7 @@ type InvoiceRow = {
   totalPaise: number;
   fareTotalPaise: number;
   settlementPaise: number | null;
+  pdfStatus: string;
   emailStatus: string;
   data: DocumentData;
 };
@@ -77,6 +78,7 @@ function invoiceRow(bookingId: string, data: DocumentData, side: Side): InvoiceR
     totalPaise: Number(side === 'customer' ? data.fareTotalPaise : settlement.totalDuePaise ?? data.fareTotalPaise ?? 0),
     fareTotalPaise: Number(data.fareTotalPaise ?? 0),
     settlementPaise: side === 'driver' ? Number(settlement.totalDuePaise ?? 0) : null,
+    pdfStatus: typeof data.pdfStatus === 'string' ? data.pdfStatus : typeof invoice.storagePath === 'string' ? 'ready' : 'pending',
     emailStatus: typeof invoice.emailStatus === 'string' ? invoice.emailStatus : 'pending',
     data,
   };
@@ -207,8 +209,8 @@ function InvoiceArchive({ reviewer }: { reviewer: Reviewer }) {
     <section className="mt-5 overflow-hidden rounded-2xl border border-line bg-surface shadow-card">
       <div className="flex items-center justify-between border-b border-line px-5 py-4"><div><h2 className="font-bold">{side === 'customer' ? 'Customer trip invoices' : 'Driver settlement statements'}</h2><p className="mt-1 text-sm text-ink-muted">{loadingRecords ? 'Loading records…' : `${visible.length} record${visible.length === 1 ? '' : 's'} · ${stamp(start)} – ${stamp(end - 1)}`}</p></div></div>
       {loadingRecords ? <div className="px-5 py-10 text-sm text-ink-muted">Loading invoice records…</div> : visible.length === 0 ? <div className="px-5 py-10 text-center text-sm text-ink-muted">No {side} invoices match this period.</div> : <div className="divide-y divide-line">{visible.map((row) => <article key={`${row.bookingId}:${row.side}`} className="grid gap-4 px-5 py-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
-        <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="font-bold text-ink">{row.invoiceNumber}</span><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${row.emailStatus === 'sent' ? 'bg-success-soft text-badge-success' : 'bg-warning-soft text-badge-warning'}`}>Email {row.emailStatus.replaceAll('_', ' ')}</span></div><p className="mt-1 text-sm text-ink-muted">{row.name} · {row.email}</p><p className="mt-1 text-xs text-ink-faint">Booking {row.reference} · {row.bookingId} · completed {stamp(row.completedAtMs)}</p><p className="mt-2 truncate text-sm text-ink">{row.pickup} <span className="px-1 text-ink-faint">→</span> {row.destination}</p></div>
-        <div className="flex flex-wrap items-center justify-between gap-3 lg:justify-end"><div className="text-right"><p className="font-mono font-bold">{formatINR(row.totalPaise)}</p>{row.settlementPaise !== null ? <p className="text-xs text-ink-muted">Driver remittance due</p> : <p className="text-xs text-ink-muted">Customer fare total</p>}</div><button type="button" onClick={() => void download(row)} disabled={downloading !== null} className="rounded-control bg-accent px-4 py-2.5 text-sm font-semibold text-ink-on-brand disabled:opacity-50">{downloading === `${row.bookingId}:${row.side}` ? 'Preparing…' : 'Download PDF'}</button></div>
+        <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="font-bold text-ink">{row.invoiceNumber}</span><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${row.pdfStatus === 'ready' ? 'bg-success-soft text-badge-success' : 'bg-warning-soft text-badge-warning'}`}>PDF {row.pdfStatus.replaceAll('_', ' ')}</span><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${row.emailStatus === 'sent' ? 'bg-success-soft text-badge-success' : 'bg-warning-soft text-badge-warning'}`}>Email {row.emailStatus.replaceAll('_', ' ')}</span></div><p className="mt-1 text-sm text-ink-muted">{row.name} · {row.email}</p><p className="mt-1 text-xs text-ink-faint">Booking {row.reference} · {row.bookingId} · completed {stamp(row.completedAtMs)}</p><p className="mt-2 truncate text-sm text-ink">{row.pickup} <span className="px-1 text-ink-faint">→</span> {row.destination}</p></div>
+        <div className="flex flex-wrap items-center justify-between gap-3 lg:justify-end"><div className="text-right"><p className="font-mono font-bold">{formatINR(row.totalPaise)}</p>{row.settlementPaise !== null ? <p className="text-xs text-ink-muted">Driver remittance due</p> : <p className="text-xs text-ink-muted">Customer fare total</p>}</div><button type="button" onClick={() => void download(row)} disabled={downloading !== null || row.pdfStatus !== 'ready'} className="rounded-control bg-accent px-4 py-2.5 text-sm font-semibold text-ink-on-brand disabled:opacity-50">{downloading === `${row.bookingId}:${row.side}` ? 'Preparing…' : row.pdfStatus === 'ready' ? 'Download PDF' : 'PDF preparing…'}</button></div>
       </article>)}</div>}
     </section>
     <p className="mt-3 text-xs leading-5 text-ink-faint">Customer and driver statements are separate. Download filtered PDFs creates one ZIP for up to 1,000 matching records. Issuer tax details remain marked pending until the company name and GSTIN are configured in Fare settings.</p>

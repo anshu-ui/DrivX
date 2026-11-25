@@ -47,6 +47,7 @@ const db = getFirestore(app);
 const bucket = getStorage(app).bucket();
 const storageFilePrototype = Object.getPrototypeOf(bucket.file('trip-invoices/audit-placeholder'));
 storageFilePrototype.getSignedUrl = async function () { return [`https://storage.example.test/${this.name}`, {}]; };
+const saveStorageFile = storageFilePrototype.save;
 const bookingId = `invoice-audit-${randomUUID()}`;
 const customerUid = `invoice-customer-${randomUUID()}`;
 const driverUid = `invoice-driver-${randomUUID()}`;
@@ -101,6 +102,21 @@ try {
     db.doc(`users/${driverUid}`).set({ displayName: 'Invoice Driver', email: driverEmail }),
     db.doc('appConfig/invoice').set(issuer),
   ]);
+
+  storageFilePrototype.save = async function () { throw new Error('simulated temporary storage failure'); };
+  try {
+    await assert.rejects(() => sendTripCompletionInvoices(bookingId, booking), /simulated temporary storage failure/);
+  } finally {
+    storageFilePrototype.save = saveStorageFile;
+  }
+  const pendingInvoice = await db.doc(`tripInvoices/${bookingId}`).get();
+  assert.equal(pendingInvoice.get('pdfStatus'), 'pending', 'a storage failure leaves a recoverable invoice row');
+  assert.equal(pendingInvoice.get('customer.emailStatus'), 'pending');
+  assert.match(pendingInvoice.get('customer.storagePath'), /^trip-invoices\//);
+  await assert.rejects(
+    () => getTripInvoiceDownloadUrlForCaller({ uid: customerUid, claims: { admin: false, ops: false } }, { bookingId, side: 'customer' }),
+    /still being prepared/,
+  );
 
   await sendTripCompletionInvoices(bookingId, booking);
   const invoiceRef = db.doc(`tripInvoices/${bookingId}`);

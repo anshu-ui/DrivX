@@ -180,7 +180,12 @@ export function upcomingDays(nowMs: number, count = 90): ScheduleDay[] {
 
 /** False once the slot is far enough ahead for the backend to accept it. */
 export function slotIsTooSoon(slot: ScheduleSlot, nowMs: number): boolean {
-  return scheduledEpochMs(slot, nowMs) < nowMs + MIN_LEAD_MS;
+  return pickupTimeNeedsMoreNotice(scheduledEpochMs(slot, nowMs), nowMs);
+}
+
+/** True for any selected pickup time that has entered the minimum notice window. */
+export function pickupTimeNeedsMoreNotice(scheduledForMs: number | null, nowMs: number): boolean {
+  return scheduledForMs !== null && scheduledForMs < nowMs + MIN_LEAD_MS;
 }
 
 /**

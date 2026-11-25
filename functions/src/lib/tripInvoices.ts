@@ -413,6 +413,32 @@ async function sendInvoiceEmail(input: {
   return 'sent';
 }
 
+/** Store an immutable invoice at its deterministic path without requiring overwrite/delete access. */
+async function storeTripInvoicePdf(
+  storagePath: string,
+  pdf: Buffer,
+  metadata: { bookingId: string; invoiceSide: InvoiceSide; invoiceNumber: string },
+): Promise<void> {
+  const file = bucket().file(storagePath);
+  const [alreadyStored] = await file.exists();
+  if (alreadyStored) return;
+  try {
+    await file.save(pdf, {
+      resumable: false,
+      preconditionOpts: { ifGenerationMatch: 0 },
+      metadata: { contentType: 'application/pdf', cacheControl: 'private, no-store', metadata },
+    });
+  } catch (error) {
+    // Two retrying function instances may race to create the same immutable
+    // object. Treat the losing create as success only when the object exists.
+    if ((error as { code?: number }).code === 412) {
+      const [createdByOtherAttempt] = await file.exists();
+      if (createdByOtherAttempt) return;
+    }
+    throw error;
+  }
+}
+
 /** Reserves invoice numbers, stores both private PDFs and sends one completion email per trip participant. */
 export async function sendTripCompletionInvoices(bookingId: string, booking: Data): Promise<void> {
   if (booking.status !== 'completed' || !booking.finalFare || typeof booking.finalFare !== 'object') return;
@@ -572,14 +598,21 @@ export async function sendTripCompletionInvoices(bookingId: string, booking: Dat
   if (customerPdf.length > 5_000_000 || driverPdf.length > 5_000_000) throw new Error('Trip invoice PDF exceeded the email attachment limit.');
   const customerPath = `trip-invoices/${bookingId}/customer-${customerInvoiceNumber}.pdf`;
   const driverPath = `trip-invoices/${bookingId}/driver-${driverInvoiceNumber}.pdf`;
-  await Promise.all([
-    bucket().file(customerPath).save(customerPdf, { resumable: false, metadata: { contentType: 'application/pdf', cacheControl: 'private, no-store', metadata: { bookingId, invoiceSide: 'customer', invoiceNumber: customerInvoiceNumber } } }),
-    bucket().file(driverPath).save(driverPdf, { resumable: false, metadata: { contentType: 'application/pdf', cacheControl: 'private, no-store', metadata: { bookingId, invoiceSide: 'driver', invoiceNumber: driverInvoiceNumber } } }),
-  ]);
   const invoiceRef = db().doc(`tripInvoices/${bookingId}`);
+  // Publish a pending archive row before touching Cloud Storage. If the bucket
+  // temporarily rejects a write, the trip remains visible to Admin and the
+  // participant sees a useful "still preparing" message instead of an empty
+  // archive record.
   await invoiceRef.set({
     customer: { invoiceNumber: customerInvoiceNumber, storagePath: customerPath, recipientEmail: savedCustomerEmail || null, emailStatus: 'pending' },
     driver: { invoiceNumber: driverInvoiceNumber, storagePath: driverPath, recipientEmail: savedDriverEmail || null, emailStatus: 'pending' },
+    pdfStatus: 'pending', emailStatus: 'pending', updatedAtMs: serverTimestamp(),
+  }, { merge: true });
+  await Promise.all([
+    storeTripInvoicePdf(customerPath, customerPdf, { bookingId, invoiceSide: 'customer', invoiceNumber: customerInvoiceNumber }),
+    storeTripInvoicePdf(driverPath, driverPdf, { bookingId, invoiceSide: 'driver', invoiceNumber: driverInvoiceNumber }),
+  ]);
+  await invoiceRef.set({
     pdfStatus: 'ready', updatedAtMs: serverTimestamp(),
   }, { merge: true });
   const [customerStatus, driverStatus] = await Promise.all([
@@ -610,8 +643,11 @@ export async function getTripInvoiceDownloadUrlForCaller(caller: Caller, input: 
   const belongs = side === 'customer' ? booking.customerUid === caller.uid : booking.assignedDriverUid === caller.uid;
   if (!staff && !belongs) throw permissionDenied('You can only download your own trip invoice.');
   const invoice = invoiceSnapshot.get(side) as Data | undefined;
+  if (invoiceSnapshot.get('pdfStatus') === 'pending') {
+    throw failedPrecondition('Your trip invoice PDF is still being prepared. Please try again shortly.');
+  }
   const storagePath = text(invoice?.storagePath);
-  if (!storagePath.startsWith(`trip-invoices/${bookingId}/${side}-`)) throw failedPrecondition('This invoice PDF has not been stored yet.');
+  if (!storagePath.startsWith(`trip-invoices/${bookingId}/${side}-`)) throw failedPrecondition('Your trip invoice PDF is still being prepared. Please try again shortly.');
   const file = bucket().file(storagePath);
   const [exists] = await file.exists();
   if (!exists) throw failedPrecondition('This invoice PDF is temporarily unavailable.');

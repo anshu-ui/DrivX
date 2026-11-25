@@ -58,6 +58,7 @@ import {
   departureAt,
   nextScheduleSlot,
   MIN_LEAD_MS,
+  pickupTimeNeedsMoreNotice,
   latestBookingDateMs,
   scheduledEpochMs,
   scheduleCalendarMonth,
@@ -223,6 +224,7 @@ export default function CustomerHome() {
   const [openBox, setOpenBox] = useState<'start' | 'duration' | null>(null);
   const [departure, setDeparture] = useState<DepartureKey | 'slot'>('slot');
   const [calendarMonthOffset, setCalendarMonthOffset] = useState(0);
+  const [scheduleNotice, setScheduleNotice] = useState<string | null>(null);
   /** The last hand-picked slot, kept so the panel reopens where the customer left it. */
   const [initialSchedule] = useState(() => {
     const now = Date.now();
@@ -243,7 +245,7 @@ export default function CustomerHome() {
   // out and is sent again cannot become two bookings.
   const [idempotencyKey, setIdempotencyKey] = useState(newIdempotencyKey);
 
-  const nowMs = useNowMs(20_000);
+  const nowMs = useNowMs(5_000);
   const places = savedPlaces.data ?? [];
   const optionResult = options.data;
   const services = optionResult && !optionResult.failed ? optionResult.options.services : [];
@@ -353,7 +355,18 @@ export default function CustomerHome() {
   function chooseDeparture(key: DepartureKey) {
     setDeparture(key);
     setScheduledForMs(departureAt(key, nowMs));
+    setScheduleNotice(null);
     setOpenBox(null);
+  }
+
+  function chooseNextAvailablePickup() {
+    const now = Date.now();
+    const next = nextScheduleSlot(now);
+    setSlot(next);
+    setDeparture('slot');
+    setScheduledForMs(scheduledEpochMs(next, now));
+    setScheduleNotice(null);
+    setOpenBox('start');
   }
 
   // A hand-picked slot stays open until the customer closes it, because the
@@ -362,11 +375,13 @@ export default function CustomerHome() {
     setSlot(next);
     setDeparture('slot');
     setScheduledForMs(scheduledEpochMs(next, nowMs));
+    setScheduleNotice(null);
   }
 
   const days = upcomingDays(nowMs);
   const calendarMonth = scheduleCalendarMonth(nowMs, calendarMonthOffset);
-  const startTooSoon = departure === 'slot' && slotIsTooSoon(slot, nowMs);
+  const startTooSoon = pickupTimeNeedsMoreNotice(scheduledForMs, nowMs);
+  const nextPickupAtMs = scheduledEpochMs(nextScheduleSlot(nowMs), nowMs);
   const startLabel =
     departure === 'slot'
       ? `${days[slot.offsetDays]?.label ?? 'Today'} ${clockLabel(slot)}`
@@ -876,8 +891,8 @@ export default function CustomerHome() {
 
                     {startTooSoon ? (
                       <Text variant="caption" tone="danger" accessibilityRole="alert">
-                        That time has already passed. A pickup needs at least{' '}
-                        {MIN_LEAD_MS / 60_000} minutes’ notice.
+                        This pickup time is too soon. Choose a time at least{' '}
+                        {MIN_LEAD_MS / 60_000} minutes from now.
                       </Text>
                     ) : null}
                   </View>
@@ -1057,9 +1072,32 @@ export default function CustomerHome() {
                         {gstDetailsError ? <Text variant="caption" tone="danger" accessibilityRole="alert">{gstDetailsError}</Text> : null}
                       </View> : null}
                     </Card>
+                    {startTooSoon ? (
+                      <Card tone="inset" style={{ gap: theme.spacing.xs }}>
+                        <Text variant="label" tone="danger" accessibilityRole="alert">Pickup time is too soon</Text>
+                        <Text variant="caption" tone="muted">
+                          A driver needs at least {MIN_LEAD_MS / 60_000} minutes’ notice. Move the pickup later to continue.
+                        </Text>
+                        <Button
+                          label={`Use next available time · ${dateTime(nextPickupAtMs)}`}
+                          appearance="secondary"
+                          size="sm"
+                          onPress={chooseNextAvailablePickup}
+                        />
+                      </Card>
+                    ) : scheduleNotice ? (
+                      <Card tone="inset">
+                        <Text variant="caption" tone="warning" accessibilityRole="alert">{scheduleNotice}</Text>
+                      </Card>
+                    ) : null}
                     <Button
                       label="Confirm DrivX ride"
                       onPress={() => {
+                        if (pickupTimeNeedsMoreNotice(scheduledForMs, Date.now())) {
+                          chooseNextAvailablePickup();
+                          setScheduleNotice('Your selected pickup moved inside the 30-minute notice window. We set the next available time; please review it before confirming.');
+                          return;
+                        }
                         if (!service || !pickup || !destination) return;
                         const cleanBusinessName = gstBusinessName.trim();
                         const cleanGstin = gstin.trim().toUpperCase();

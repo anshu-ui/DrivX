@@ -9,7 +9,6 @@ import {
   ScreenHeader,
   StateView,
   StatusPill,
-  Tag,
   Text,
   useTheme,
 } from '@drivx/ui';
@@ -17,7 +16,6 @@ import type { FareBreakdown } from '@drivx/domain';
 import {
   useDriverTrip,
   useEndTrip,
-  usePostReading,
   useStartTrip,
   useStartTripApproach,
   type DriverTripView,
@@ -30,9 +28,8 @@ import { useLiveCustomerFix, useLiveDriverFix } from '../../features/customer/li
 
 /**
  * The trip the driver is carrying, in the order it actually happens: take the
- * customer's start code and the dial at pickup, post readings as the car moves,
- * then take the end code and the closing reading, and the bill is priced from the
- * two.
+ * customer's start code and the dial at pickup, then take the end code and the
+ * dial at drop-off. The bill is priced from those two readings.
  *
  * Nothing on this screen computes money. The rupees shown while the trip runs are
  * the breakdown the server wrote on the booking, the same one the customer's app
@@ -189,7 +186,7 @@ export default function DriverTrip() {
 
         {started ? <TripTrackingShare bookingId={view.id} /> : null}
 
-        {started ? <LiveMeter trip={view} /> : <StartForm trip={view} />}
+        {!started ? <StartForm trip={view} /> : null}
 
         {started ? <CloseForm trip={view} /> : null}
 
@@ -308,95 +305,6 @@ function StartForm({ trip }: { trip: DriverTripView }) {
   );
 }
 
-/**
- * What the car has run and what it costs so far.
- *
- * Both figures come off the booking document, which the server writes — so this
- * panel and the customer's screen show the same number at the same moment, and a
- * posting that failed never leaves a bigger fare on the driver's side.
- */
-function LiveMeter({ trip }: { trip: DriverTripView }) {
-  const theme = useTheme();
-  const post = usePostReading();
-  const [km, setKm] = useState('');
-  const [notice, setNotice] = useState<string | null>(null);
-  const fare = trip.runningFare;
-  const driven =
-    trip.currentOdometerKm !== null && trip.startOdometerKm !== null
-      ? trip.currentOdometerKm - trip.startOdometerKm
-      : null;
-
-  const submit = () => {
-    const reading = Number(km);
-    if (!/^\d+$/.test(km) || !Number.isInteger(reading)) {
-      setNotice('Enter the odometer reading in whole kilometres.');
-      return;
-    }
-    setNotice(null);
-    void post.mutateAsync({ bookingId: trip.id, odometerKm: reading }).then((outcome) => {
-      if (!outcome.ok) {
-        setNotice(outcome.message);
-        return;
-      }
-      setKm('');
-      setNotice(
-        `Posted ${outcome.result.currentOdometerKm} km — ${money(outcome.result.runningFare.totalPaise)} so far.`,
-      );
-    });
-  };
-
-  return (
-    <Card tone="brand" style={{ gap: theme.spacing.sm }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: theme.spacing.md }}>
-        <View style={{ gap: theme.spacing.xxs }}>
-          <Text variant="caption" tone="onBrand">
-            Fare so far
-          </Text>
-          <Text variant="fare" tone="onBrand">
-            {fare ? money(fare.totalPaise) : '—'}
-          </Text>
-        </View>
-        <Tag label={`${driven ?? 0} km`} tone="onBrand" />
-      </View>
-      <Text variant="caption" tone="onBrand">
-        {trip.currentOdometerKm !== null
-          ? `Dial at ${trip.currentOdometerKm} km, opened at ${trip.startOdometerKm} km`
-          : 'No reading posted yet'}
-        {trip.tripStartedAtMs ? ` · started ${dateTime(trip.tripStartedAtMs)}` : ''}
-      </Text>
-      {fare ? <FareLines fare={fare} onBrand /> : null}
-
-      <View style={{ gap: theme.spacing.xs }}>
-        <Field
-          label="Post the current reading (km)"
-          value={km}
-          onChangeText={(next) => setKm(next.replace(/[^\d]/g, '').slice(0, 7))}
-          keyboardType="number-pad"
-          inputMode="numeric"
-          containerStyle={{ marginTop: theme.spacing.sm }}
-          helper={
-            trip.currentOdometerKm === null
-              ? 'The reading on the dial right now.'
-              : `Last posted: ${trip.currentOdometerKm} km. A reading below it is refused.`
-          }
-        />
-        {notice ? (
-          <Text variant="caption" tone="onBrand">
-            {notice}
-          </Text>
-        ) : null}
-        <Button
-          label="Post reading"
-          onPress={submit}
-          loading={post.isPending}
-          appearance="secondary"
-          fullWidth
-        />
-      </View>
-    </Card>
-  );
-}
-
 /** The end code, the closing reading, and the bill that follows. */
 function CloseForm({ trip }: { trip: DriverTripView }) {
   const theme = useTheme();
@@ -488,11 +396,7 @@ function CloseForm({ trip }: { trip: DriverTripView }) {
         onChangeText={(next) => setKm(next.replace(/[^\d]/g, '').slice(0, 7))}
         keyboardType="number-pad"
         inputMode="numeric"
-        helper={
-          trip.currentOdometerKm === null
-            ? `Opened at ${trip.startOdometerKm} km.`
-            : `Opened at ${trip.startOdometerKm} km, last posted ${trip.currentOdometerKm} km.`
-        }
+        helper={`Opened at ${trip.startOdometerKm} km. The final fare uses this and the drop-off reading.`}
       />
       {typeof outcome === 'string' ? (
         <Text variant="caption" tone="danger">
