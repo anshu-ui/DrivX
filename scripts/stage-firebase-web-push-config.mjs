@@ -22,10 +22,16 @@ const requiredConfig = [config.apiKey, config.authDomain, config.projectId, conf
 if (config.projectId !== 'drivx-116de' || requiredConfig.some((value) => !value)) {
   throw new Error('Production Firebase web config is incomplete or targets the wrong project.');
 }
+if (!config.vapidKey) {
+  throw new Error('Firebase Web Push public VAPID key is missing from apps/mobile/.env.');
+}
 const destinations = process.argv.slice(2);
 if (!destinations.length) throw new Error('Pass one or more generated web output directories.');
 const content = `self.DRIVX_FIREBASE_CONFIG = ${JSON.stringify(config)};\n`;
 for (const destination of destinations) {
+  if (!fs.existsSync(path.join(root, destination, 'firebase-messaging-sw.js'))) {
+    throw new Error(`Firebase messaging worker is missing from ${destination}; export the web app before staging push config.`);
+  }
   const file = path.join(root, destination, 'firebase-config.js');
   fs.writeFileSync(file, content, { mode: 0o644 });
   const indexFile = path.join(root, destination, 'index.html');

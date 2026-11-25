@@ -55,6 +55,10 @@ firebase deploy --project drivx-116de --only functions
 firebase deploy --project drivx-116de --only hosting
 ```
 
+The Hosting predeploy hook stages Firebase's public messaging config into both the driver and
+customer web exports. It requires `EXPO_PUBLIC_FIREBASE_VAPID_KEY` in `apps/mobile/.env` and stops
+the deploy if either export is missing its messaging worker.
+
 ### Verified live rollout — 2026-11-25
 
 The customer, driver, and admin web apps are released to Firebase Hosting. The root, `/customer`,

@@ -3,6 +3,9 @@
     {
       "site": "drivx-116de",
       "public": ".firebase/live-site",
+      "predeploy": [
+        "node scripts/stage-firebase-web-push-config.mjs .firebase/live-site/driver .firebase/live-site/customer"
+      ],
       "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
       "headers": [
         {
