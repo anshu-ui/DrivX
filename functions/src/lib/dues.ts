@@ -54,6 +54,11 @@ export type NewDriverDue = {
   commissionablePaise: number | null;
   gstRate: number;
   gstPaise: number;
+  fareTaxPaise: number;
+  fareTaxRate: number;
+  tdsBasePaise: number;
+  tdsRate: number;
+  tdsPaise: number;
   totalPaise: number;
   /** The trip a commission row came from; null for the one-time fee. */
   bookingId: string | null;
@@ -79,6 +84,11 @@ async function createDue(due: NewDriverDue): Promise<boolean> {
       commissionablePaise: due.commissionablePaise,
       gstRate: due.gstRate,
       gstPaise: due.gstPaise,
+      fareTaxPaise: due.fareTaxPaise,
+      fareTaxRate: due.fareTaxRate,
+      tdsBasePaise: due.tdsBasePaise,
+      tdsRate: due.tdsRate,
+      tdsPaise: due.tdsPaise,
       totalPaise: due.totalPaise,
       status: 'unpaid',
       method: null,
@@ -131,6 +141,11 @@ export async function ensureOnboardingDue(driverUid: string): Promise<boolean> {
     commissionablePaise: null,
     gstRate,
     gstPaise,
+    fareTaxPaise: 0,
+    fareTaxRate: 0,
+    tdsBasePaise: 0,
+    tdsRate: 0,
+    tdsPaise: 0,
     totalPaise: basePaise + gstPaise,
     bookingId: null,
   };
@@ -155,14 +170,16 @@ export async function ensureOnboardingDue(driverUid: string): Promise<boolean> {
  * an error — it means nobody has set one — and a rate outside 0–1 is refused the
  * same way rather than billing a driver more than the fare was worth.
  */
-export async function configuredCommissionTerms(): Promise<{ rate: number; gstRate: number }> {
+export async function configuredCommissionTerms(): Promise<{ rate: number; gstRate: number; tdsRate: number }> {
   const snap = await db()
     .doc(`${COLLECTIONS.appConfig}/${COMMISSION_CONFIG_DOC}`)
     .get();
   const config = snap.data() ?? {};
+  const currentSettlementConfig = config.settlementVersion === 2;
   return {
     rate: commissionRateFrom(config.rate) ?? COMMISSION_TERMS.rate,
-    gstRate: commissionRateFrom(config.gstRate) ?? COMMISSION_TERMS.gstRate,
+    gstRate: currentSettlementConfig ? commissionRateFrom(config.gstRate) ?? COMMISSION_TERMS.gstRate : COMMISSION_TERMS.gstRate,
+    tdsRate: currentSettlementConfig ? commissionRateFrom(config.tdsRate) ?? COMMISSION_TERMS.tdsRate : COMMISSION_TERMS.tdsRate,
   };
 }
 
@@ -187,6 +204,7 @@ export function billableCompletion(
   booking: Record<string, unknown> | null | undefined,
   rate: number = COMMISSION_TERMS.rate,
   gstRate: number = COMMISSION_TERMS.gstRate,
+  tdsRate: number = COMMISSION_TERMS.tdsRate,
 ): { driverUid: string; terms: CommissionSnapshot; due: NewDriverDue } | null {
   if (!booking || booking.status !== 'completed') return null;
 
@@ -217,6 +235,7 @@ export function billableCompletion(
     },
     pinned?.rate ?? rate,
     pinned?.gstRate ?? gstRate,
+    pinned?.tdsRate ?? tdsRate,
   );
 
   return {
@@ -232,6 +251,11 @@ export function billableCompletion(
       commissionablePaise: terms.commissionablePaise,
       gstRate: terms.gstRate,
       gstPaise: terms.gstPaise,
+      fareTaxPaise: terms.fareTaxPaise ?? 0,
+      fareTaxRate: terms.fareTaxRate ?? 0,
+      tdsBasePaise: terms.tdsBasePaise ?? 0,
+      tdsRate: terms.tdsRate ?? tdsRate,
+      tdsPaise: terms.tdsPaise ?? 0,
       totalPaise: terms.totalPaise,
       bookingId,
     },
@@ -252,7 +276,7 @@ export async function chargeCommissionDue(
   booking: Record<string, unknown> | null | undefined,
 ): Promise<boolean> {
   const terms = await configuredCommissionTerms();
-  const billable = billableCompletion(booking, terms.rate, terms.gstRate);
+  const billable = billableCompletion(booking, terms.rate, terms.gstRate, terms.tdsRate);
   if (!billable) {
     console.log(
       JSON.stringify({
@@ -291,8 +315,8 @@ export function totalOutstandingPaise(dues: Array<Record<string, unknown>>): num
 /**
  * What a driver is told when unpaid money blocks their work.
  *
- * Names the kinds rather than only the total, because "₹151.20 of commission for
- * one trip" is collectable at the office and "₹466.20" is not. With one kind
+ * Names the kinds rather than only the total, because a trip remittance contains
+ * commission, taxes and TDS. With one kind
  * owing, the breakdown is the total twice over, so only the breakdown is said.
  */
 export function describeOutstanding(dues: Array<Record<string, unknown>>): string {
@@ -304,7 +328,7 @@ export function describeOutstanding(dues: Array<Record<string, unknown>>): strin
   const parts = [
     ...(fees.length > 0 ? [`${rupees(fees)} of fees`] : []),
     ...(trips.length > 0
-      ? [`${rupees(trips)} of trip commission (${trips.length} ${trips.length === 1 ? 'trip' : 'trips'})`]
+      ? [`${rupees(trips)} of trip remittances (${trips.length} ${trips.length === 1 ? 'trip' : 'trips'})`]
       : []),
   ];
   if (parts.length === 1) return `${parts[0]} is uncleared on this account.`;

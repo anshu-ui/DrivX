@@ -1,7 +1,6 @@
 import { onDocumentCreated, onDocumentUpdated } from 'firebase-functions/v2/firestore';
-import { REGION, RESEND_API_KEY, RESEND_FROM_EMAIL } from '../lib/config';
+import { REGION } from '../lib/config';
 import { deliverInbox } from '../lib/notify';
-import { sendCustomerAssignmentEmail, sendCustomerCompletionEmail } from '../lib/bookingAssignmentEmail';
 
 function text(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
@@ -9,7 +8,13 @@ function text(value: unknown): string | null {
 
 /** Durable inbox + opted-in device push for the important booking lifecycle. */
 export const notifyBookingCreated = onDocumentCreated(
-  { region: REGION, document: 'bookings/{bookingId}' },
+  {
+    region: REGION,
+    document: 'bookings/{bookingId}',
+    cpu: 'gcf_gen1',
+    memory: '256MiB',
+    maxInstances: 1,
+  },
   async (event) => {
     const booking = event.data?.data();
     const uid = text(booking?.customerUid);
@@ -32,7 +37,9 @@ export const notifyBookingStateChanged = onDocumentUpdated(
   {
     region: REGION,
     document: 'bookings/{bookingId}',
-    secrets: [RESEND_API_KEY, RESEND_FROM_EMAIL],
+    cpu: 'gcf_gen1',
+    memory: '256MiB',
+    maxInstances: 1,
     retry: true,
   },
   async (event) => {
@@ -63,31 +70,6 @@ export const notifyBookingStateChanged = onDocumentUpdated(
     const customerUid = text(after.customerUid);
     const version = Number(after.stateVersion ?? 0);
     const route = `/trips/${bookingId}`;
-
-    // The public driver card is published by a separate Firestore trigger. Wait
-    // until that card matches the assigned UID so the first email includes the
-    // real driver's name, contact, photo and vehicle rather than a placeholder.
-    // The email helper is idempotent per booking/driver/state version.
-    if (
-      status === 'assigned' && driverUid && afterCardUid === driverUid &&
-      (assignmentChanged || statusChanged || assignmentCardChanged)
-    ) {
-      try {
-        await sendCustomerAssignmentEmail(bookingId, after as Record<string, unknown>);
-      } catch (error) {
-        // Inbox + push alerts must not depend on Resend being available.
-        console.error(JSON.stringify({ level: 'error', fn: 'notifyBookingStateChanged', outcome: 'assignment_email_failed', bookingId, message: error instanceof Error ? error.message : 'Unknown error' }));
-      }
-    }
-
-    if (status === 'completed' && before.status !== 'completed') {
-      try {
-        await sendCustomerCompletionEmail(bookingId, after as Record<string, unknown>);
-      } catch (error) {
-        // The completion push and durable trip record are sent independently.
-        console.error(JSON.stringify({ level: 'error', fn: 'notifyBookingStateChanged', outcome: 'completion_email_failed', bookingId, message: error instanceof Error ? error.message : 'Unknown error' }));
-      }
-    }
 
     if (statusChanged && customerUid) {
       const driver = after.driver as { fullName?: unknown; phoneE164?: unknown } | null;
@@ -134,7 +116,7 @@ export const notifyBookingStateChanged = onDocumentUpdated(
       driver_en_route: { type: 'driver_assigned', title: 'Pickup reminder', body: `You are on the way to the pickup for ${reference}. Arrive by the booked time to avoid the late-start penalty.`, route: '/trip' },
       driver_arrived: { type: 'driver_assigned', title: 'Pickup reached', body: `You marked yourself at pickup for ${reference}. Confirm the start OTP with the customer.`, route: '/trip' },
       trip_started: { type: 'trip_started', title: 'Trip started', body: `Trip ${reference} is underway. Keep location sharing on until the trip ends.`, route: '/trip' },
-      completed: { type: 'trip_completed', title: 'Trip completed', body: `Trip ${reference} is complete. Your commission is being added to dues.`, route: '/dues' },
+      completed: { type: 'trip_completed', title: 'Trip completed', body: `Trip ${reference} is complete. Your settlement amount is being added to dues.`, route: '/dues' },
       cancelled: { type: 'booking_cancelled', title: 'Booking cancelled', body: `Booking ${reference} was cancelled.`, route: '/' },
     };
     const driverMessageForStatus = driverMessage[status];
@@ -150,9 +132,15 @@ export const notifyBookingStateChanged = onDocumentUpdated(
   },
 );
 
-/** New onboarding/commission dues and their settlement are visible to the driver. */
+/** New onboarding/remittance dues and their settlement are visible to the driver. */
 export const notifyDriverDueCreated = onDocumentCreated(
-  { region: REGION, document: 'driverProfiles/{driverUid}/dues/{dueId}' },
+  {
+    region: REGION,
+    document: 'driverProfiles/{driverUid}/dues/{dueId}',
+    cpu: 'gcf_gen1',
+    memory: '256MiB',
+    maxInstances: 1,
+  },
   async (event) => {
     const due = event.data?.data();
     if (!due || due.status !== 'unpaid') return;
@@ -163,7 +151,7 @@ export const notifyDriverDueCreated = onDocumentCreated(
       surface: 'driver',
       id: `due_created_${event.params.dueId}`,
       type: 'payment_update',
-      title: onboarding ? 'Onboarding fee ready' : due.kind === 'late_arrival_penalty' ? 'Late start penalty added' : 'Trip commission added',
+      title: onboarding ? 'Onboarding fee ready' : due.kind === 'late_arrival_penalty' ? 'Late start penalty added' : 'Trip remittance added',
       body: onboarding ? `Your one-time onboarding fee of ₹${amount} is ready.` : due.kind === 'late_arrival_penalty' ? `A late-start penalty of ₹${amount} was added after trip completion.` : `${String(due.title ?? 'DrivX charge')}: ₹${amount} is now due.`,
       route: '/dues',
       bookingId: text(due.bookingId),
@@ -172,7 +160,13 @@ export const notifyDriverDueCreated = onDocumentCreated(
 );
 
 export const notifyDriverDueSettled = onDocumentUpdated(
-  { region: REGION, document: 'driverProfiles/{driverUid}/dues/{dueId}' },
+  {
+    region: REGION,
+    document: 'driverProfiles/{driverUid}/dues/{dueId}',
+    cpu: 'gcf_gen1',
+    memory: '256MiB',
+    maxInstances: 1,
+  },
   async (event) => {
     const before = event.data?.before.data();
     const after = event.data?.after.data();

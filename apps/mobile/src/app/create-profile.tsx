@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { View } from 'react-native';
 import { router } from 'expo-router';
 import { Button, Card, Field, Screen, ScreenHeader, Text, useTheme } from '@drivx/ui';
@@ -19,11 +19,6 @@ export default function CreateProfile() {
   const [errors, setErrors] = useState<{ fullName?: string; email?: string }>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    setFullName((value) => value || profileDraft.fullName);
-    setEmail((value) => value || profileDraft.email);
-  }, [profileDraft.email, profileDraft.fullName]);
 
   const submit = async () => {
     const next: { fullName?: string; email?: string } = {};
@@ -59,7 +54,7 @@ export default function CreateProfile() {
 
         <Card style={{ gap: theme.spacing.lg }}>
           <Field
-            label="Full name"
+            label="Full name (required)"
             autoCapitalize="words"
             value={fullName}
             onChangeText={(value) => {
@@ -68,11 +63,11 @@ export default function CreateProfile() {
               setErrors((current) => ({ ...current, fullName: undefined }));
             }}
             error={errors.fullName ?? null}
-            helper={user?.phoneNumber ?? undefined}
+            helper={user?.phoneNumber ? `Required for trip records and invoices · ${user.phoneNumber}` : 'Required for trip records and invoices.'}
             accessibilityLabel="Full name"
           />
           <Field
-            label="Email"
+            label="Email address (required)"
             value={email}
             onChangeText={(value) => {
               setEmail(value);
@@ -83,6 +78,7 @@ export default function CreateProfile() {
             keyboardType="email-address"
             autoCapitalize="none"
             autoCorrect={false}
+            helper="Required to continue and receive trip updates."
             accessibilityLabel="Email"
           />
           <Button label="Continue" onPress={submit} loading={busy} fullWidth />

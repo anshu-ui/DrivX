@@ -2,8 +2,8 @@ import { onCall } from 'firebase-functions/v2/https';
 import { randomInt } from 'node:crypto';
 import { FieldPath } from 'firebase-admin/firestore';
 import { z } from 'zod';
-import type { UserRole } from '@drivx/domain';
-import { authAdmin, db, readDoc, serverTimestamp, writeAuditLog } from '../lib/admin';
+import { DRIVER_REQUIRED_DOCUMENT_TYPES, driverDocumentNeedsBack, type UserRole } from '@drivx/domain';
+import { authAdmin, bucket, db, readDoc, serverTimestamp, writeAuditLog } from '../lib/admin';
 import { CALLABLE_OPTIONS } from '../lib/config';
 import { invalidArgument, notFound, parseInput, failedPrecondition } from '../lib/errors';
 import { requireAdmin } from '../lib/guards';
@@ -82,10 +82,25 @@ export const setDriverVerification = onCall({ ...CALLABLE_OPTIONS, cpu: 'gcf_gen
     throw invalidArgument('One or more document ids do not belong to this driver.');
   }
   if (data.decision === 'approved' && profile.verificationStatus !== 'approved') {
-    const required = ['driver_photograph', 'photo_id', 'driving_licence'];
+    const required = DRIVER_REQUIRED_DOCUMENT_TYPES;
     const filed = new Map(docSnaps.docs.map((document) => [document.id, document.data()]));
-    if (required.some((id) => !data.documentIds.includes(id) || filed.get(id)?.status !== 'pending_review')) {
-      throw failedPrecondition('Approval requires all three submitted documents to be selected and awaiting review.');
+    if (required.some((type) => {
+      const document = filed.get(type);
+      return !data.documentIds.includes(type) || document?.status !== 'pending_review' ||
+        typeof document.storagePath !== 'string' ||
+        (driverDocumentNeedsBack(type) && typeof document.backStoragePath !== 'string');
+    })) {
+      throw failedPrecondition('Approval requires all four documents, including front and reverse photos for every card.');
+    }
+    const requiredPaths = required.flatMap((type) => {
+      const document = filed.get(type)!;
+      return driverDocumentNeedsBack(type)
+        ? [String(document.storagePath), String(document.backStoragePath)]
+        : [String(document.storagePath)];
+    });
+    const existingFiles = await Promise.all(requiredPaths.map(async (path) => (await bucket().file(path).exists())[0]));
+    if (existingFiles.some((exists) => !exists)) {
+      throw failedPrecondition('Approval requires every uploaded front and reverse photo to be present in storage.');
     }
   }
 

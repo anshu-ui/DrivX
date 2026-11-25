@@ -17,7 +17,11 @@ export default function PricingPage() {
   const [services, setServices] = useState<Service[] | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [commission, setCommission] = useState('13');
-  const [commissionTax, setCommissionTax] = useState('0');
+  const [commissionTax, setCommissionTax] = useState('18');
+  const [tdsRate, setTdsRate] = useState('1');
+  const [invoiceBusinessName, setInvoiceBusinessName] = useState('');
+  const [invoiceGstin, setInvoiceGstin] = useState('');
+  const [invoiceAddress, setInvoiceAddress] = useState('');
   const [onboardingBase, setOnboardingBase] = useState('500');
   const [onboardingGst, setOnboardingGst] = useState('5');
   const [arrivalGrace, setArrivalGrace] = useState('10');
@@ -40,7 +44,12 @@ export default function PricingPage() {
       setServices(snap.docs.map((item) => ({ id: item.id, data: item.data() })).sort((a, b) => Number(a.data.sortOrder ?? 99) - Number(b.data.sortOrder ?? 99)));
     }, (error) => setMessage(describe(error)));
     const offCommission = onSnapshot(doc(db, COLLECTIONS.appConfig, COMMISSION_CONFIG_DOC), (snap) => {
-      if (snap.exists()) { setCommission(String(Number(snap.data().rate ?? 0.13) * 100)); setCommissionTax(String(Number(snap.data().gstRate ?? 0) * 100)); }
+      if (snap.exists()) {
+        setCommission(String(Number(snap.data().rate ?? 0.13) * 100));
+        const currentSettlementConfig = snap.data().settlementVersion === 2;
+        setCommissionTax(String(Number(currentSettlementConfig ? snap.data().gstRate ?? 0.18 : 0.18) * 100));
+        setTdsRate(String(Number(currentSettlementConfig ? snap.data().tdsRate ?? 0.01 : 0.01) * 100));
+      }
     }, (error) => setMessage(describe(error)));
     const offOnboarding = onSnapshot(doc(db, COLLECTIONS.appConfig, 'onboardingFee'), (snap) => {
       if (snap.exists()) {
@@ -61,7 +70,13 @@ export default function PricingPage() {
       const cities = snap.data().cities;
       if (Array.isArray(cities)) setPickupCities(cities.filter((city): city is string => typeof city === 'string').join('\n'));
     }, (error) => setMessage(describe(error)));
-    return () => { offRules(); offServices(); offCommission(); offOnboarding(); offDriverPerformance(); offServiceArea(); };
+    const offInvoice = onSnapshot(doc(db, COLLECTIONS.appConfig, 'invoice'), (snap) => {
+      if (!snap.exists()) return;
+      setInvoiceBusinessName(String(snap.data().businessName ?? ''));
+      setInvoiceGstin(String(snap.data().gstin ?? ''));
+      setInvoiceAddress(String(snap.data().address ?? ''));
+    }, (error) => setMessage(describe(error)));
+    return () => { offRules(); offServices(); offCommission(); offOnboarding(); offDriverPerformance(); offServiceArea(); offInvoice(); };
   }, [db, reviewer?.admin]);
 
   const ordered = useMemo(() => [...(rules ?? [])].sort((a, b) => a.id.localeCompare(b.id)), [rules]);
@@ -104,11 +119,12 @@ export default function PricingPage() {
   async function saveCommission() {
     const rate = Number(commission) / 100;
     const gstRate = Number(commissionTax) / 100;
-    if (!Number.isFinite(rate) || rate < 0 || rate > 1 || !Number.isFinite(gstRate) || gstRate < 0 || gstRate > 1) { setMessage('Commission and tax must each be between 0% and 100%.'); return; }
+    const tds = Number(tdsRate) / 100;
+    if (![rate, gstRate, tds].every((value) => Number.isFinite(value) && value >= 0 && value <= 1)) { setMessage('Commission, commission GST, and TDS must each be between 0% and 100%.'); return; }
     setBusy('commission'); setMessage(null);
     try {
-      await setDoc(doc(db, COLLECTIONS.appConfig, COMMISSION_CONFIG_DOC), { rate, gstRate, updatedAtMs: serverTimestamp() }, { merge: true });
-      setMessage('Commission saved. New bookings use the updated rate; earlier booking snapshots stay unchanged.');
+      await setDoc(doc(db, COLLECTIONS.appConfig, COMMISSION_CONFIG_DOC), { rate, gstRate, tdsRate: tds, settlementVersion: 2, updatedAtMs: serverTimestamp() }, { merge: true });
+      setMessage('Settlement rates saved. New trips use the updated rates; completed trip records keep their original snapshots.');
     } catch (error) { setMessage(describe(error)); }
     finally { setBusy(null); }
   }
@@ -170,6 +186,20 @@ export default function PricingPage() {
     finally { setBusy(null); }
   }
 
+  async function saveInvoiceIssuer() {
+    const businessName = invoiceBusinessName.trim();
+    const gstin = invoiceGstin.trim().toUpperCase();
+    const address = invoiceAddress.trim();
+    if (businessName.length > 120 || address.length > 300) { setMessage('Business name must be under 120 characters and address under 300.'); return; }
+    if (gstin && !/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(gstin)) { setMessage('Enter a valid 15-character GSTIN, or leave it blank until it is issued.'); return; }
+    setBusy('invoiceIssuer'); setMessage(null);
+    try {
+      await setDoc(doc(db, COLLECTIONS.appConfig, 'invoice'), { businessName, gstin, address, updatedAtMs: serverTimestamp() }, { merge: true });
+      setMessage('Invoice issuer details saved. New trip invoices will use these details; older trip records retain their original snapshot.');
+    } catch (error) { setMessage(describe(error)); }
+    finally { setBusy(null); }
+  }
+
   async function enableOutstationRoundTrip() {
     const fares = [1250, 2410, 3570, 4728, 5888, 7047, 8211, 9372, 10534, 11696, 12854, 14020, 15181, 16340, 17502, 18663, 19824, 20985, 22146, 23307, 24468, 25629, 26790, 27968, 29111, 30290, 31434, 32594, 33755, 34916];
     setBusy('outstationRoundTrip'); setMessage(null);
@@ -225,7 +255,7 @@ export default function PricingPage() {
 
   return <StaffGate checked={checked} reviewer={reviewer} claim="admin" signInHeading="Admin sign-in" signInBlurb="Sign in with the DrivX administrator account to manage fare rules.">
     {(signedIn) => <>
-      <ConsoleHeader title="Fare settings" blurb="Live backend pricing for new quotes and bookings." reviewer={signedIn} links={[{ href: '/', label: 'Overview' }, { href: '/bookings', label: 'Bookings & dispatch' }, { href: '/verification', label: 'Driver reviews' }, { href: '/dues', label: 'Earnings & dues' }, { href: '/pricing', label: 'Fare settings' }]} />
+      <ConsoleHeader title="Fare settings" blurb="Live backend pricing for new quotes and bookings." reviewer={signedIn} links={[{ href: '/', label: 'Overview' }, { href: '/bookings', label: 'Bookings & dispatch' }, { href: '/verification', label: 'Driver reviews' }, { href: '/dues', label: 'Earnings & dues' }, { href: '/invoices', label: 'Trip invoices' }, { href: '/pricing', label: 'Fare settings' }]} />
       <main className="console-content mx-auto w-full max-w-6xl px-6 py-8">
         <section className="rounded-card border border-line bg-surface p-5 shadow-card">
           <div className="flex flex-wrap items-start justify-between gap-4">
@@ -237,9 +267,19 @@ export default function PricingPage() {
           </label>
           <div className="mt-4 flex flex-wrap items-center gap-3"><button type="button" onClick={() => void savePickupArea()} disabled={busy === 'serviceArea'} className="rounded-control bg-accent px-4 py-2.5 text-sm font-semibold text-ink-on-brand disabled:opacity-50">{busy === 'serviceArea' ? 'Saving…' : 'Save pickup areas'}</button><span className="text-xs text-ink-muted">Current default: Delhi, Gurugram, Noida, Greater Noida, Ghaziabad and Faridabad.</span></div>
         </section>
+        <section className="mt-5 rounded-card border border-line bg-surface p-5 shadow-card">
+          <h2 className="text-lg font-semibold">Invoice issuer details</h2>
+          <p className="mt-1 text-sm text-ink-muted">Company name and GSTIN have not been provided yet. Until they are saved, PDFs are marked as trip receipts with issuer details pending.</p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <label className="text-sm font-medium">Legal business name<input aria-label="Invoice issuer business name" maxLength={120} value={invoiceBusinessName} onChange={(event) => setInvoiceBusinessName(event.target.value)} className="mt-1 block w-full rounded-control border border-line bg-surface px-3 py-2" placeholder="Add when company is registered" /></label>
+            <label className="text-sm font-medium">GSTIN<input aria-label="Invoice issuer GSTIN" maxLength={15} autoCapitalize="characters" value={invoiceGstin} onChange={(event) => setInvoiceGstin(event.target.value.toUpperCase())} className="mt-1 block w-full rounded-control border border-line bg-surface px-3 py-2 uppercase" placeholder="15-character GSTIN" /></label>
+            <label className="text-sm font-medium sm:col-span-2">Registered address<textarea aria-label="Invoice issuer registered address" maxLength={300} rows={2} value={invoiceAddress} onChange={(event) => setInvoiceAddress(event.target.value)} className="mt-1 block w-full rounded-control border border-line bg-surface px-3 py-2" placeholder="Registered business address" /></label>
+          </div>
+          <button type="button" onClick={() => void saveInvoiceIssuer()} disabled={busy === 'invoiceIssuer'} className="mt-4 rounded-control bg-accent px-4 py-2.5 text-sm font-semibold text-ink-on-brand disabled:opacity-50">{busy === 'invoiceIssuer' ? 'Saving…' : 'Save issuer details'}</button>
+        </section>
         <section className="rounded-card border border-line bg-surface p-5 shadow-card">
-          <h2 className="text-lg font-semibold">Platform commission</h2><p className="mt-1 text-sm text-ink-muted">This is stored on the backend and snapshotted when each booking is created.</p>
-          <div className="mt-4 flex flex-wrap items-end gap-3"><label className="text-sm font-medium">Commission (%)<input aria-label="Commission percent" type="number" min="0" max="100" step="0.1" value={commission} onChange={(event) => setCommission(event.target.value)} className="mt-1 block w-32 rounded-control border border-line bg-surface px-3 py-2" /></label><label className="text-sm font-medium">Tax on commission (%)<input aria-label="Commission tax percent" type="number" min="0" max="100" step="0.1" value={commissionTax} onChange={(event) => setCommissionTax(event.target.value)} className="mt-1 block w-32 rounded-control border border-line bg-surface px-3 py-2" /></label><button type="button" onClick={() => void saveCommission()} disabled={busy === 'commission'} className="rounded-control bg-accent px-4 py-2.5 text-sm font-semibold text-ink-on-brand disabled:opacity-50">{busy === 'commission' ? 'Saving…' : 'Save commission'}</button></div>
+          <h2 className="text-lg font-semibold">Driver trip settlement</h2><p className="mt-1 text-sm text-ink-muted">Commission GST and TDS are saved per trip. Customer fare GST is passed through from the trip fare.</p>
+          <div className="mt-4 flex flex-wrap items-end gap-3"><label className="text-sm font-medium">Commission (%)<input aria-label="Commission percent" type="number" min="0" max="100" step="0.1" value={commission} onChange={(event) => setCommission(event.target.value)} className="mt-1 block w-32 rounded-control border border-line bg-surface px-3 py-2" /></label><label className="text-sm font-medium">GST on commission (%)<input aria-label="Commission GST percent" type="number" min="0" max="100" step="0.1" value={commissionTax} onChange={(event) => setCommissionTax(event.target.value)} className="mt-1 block w-32 rounded-control border border-line bg-surface px-3 py-2" /></label><label className="text-sm font-medium">TDS on driver share (%)<input aria-label="TDS percent" type="number" min="0" max="100" step="0.1" value={tdsRate} onChange={(event) => setTdsRate(event.target.value)} className="mt-1 block w-32 rounded-control border border-line bg-surface px-3 py-2" /></label><button type="button" onClick={() => void saveCommission()} disabled={busy === 'commission'} className="rounded-control bg-accent px-4 py-2.5 text-sm font-semibold text-ink-on-brand disabled:opacity-50">{busy === 'commission' ? 'Saving…' : 'Save settlement rates'}</button></div>
         </section>
         <section className="mt-5 rounded-card border border-line bg-surface p-5 shadow-card">
           <h2 className="text-lg font-semibold">Driver onboarding fee</h2>

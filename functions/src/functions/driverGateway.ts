@@ -13,6 +13,7 @@ import { claimDriverReferralCodeForCaller, claimReferralCodeForCaller, getReward
 import { createTripTrackingShareForCaller, readPublicTripTracking, trackingSharePage } from './tripTrackingShare';
 import { manageAdminAnnouncementsForCaller } from './adminAnnouncements';
 import { getAdminDriverEarningsReportForCaller, getDriverEarningsSummaryForCaller } from './driverEarnings';
+import { getTripInvoiceArchiveForCaller, getTripInvoiceDownloadUrlForCaller } from '../lib/tripInvoices';
 
 const handlers = {
   acceptDutyTerms: async (uid: string, claims: Record<string, unknown>, data: unknown) =>
@@ -63,6 +64,10 @@ const handlers = {
     getDriverEarningsSummaryForCaller(requireDriverCaller(callerFromVerifiedToken(uid, claims))),
   getAdminDriverEarningsReport: async (uid: string, claims: Record<string, unknown>, data: unknown) =>
     getAdminDriverEarningsReportForCaller(requireAdminCaller(callerFromVerifiedToken(uid, claims)), data),
+  getTripInvoiceDownloadUrl: async (uid: string, claims: Record<string, unknown>, data: unknown) =>
+    getTripInvoiceDownloadUrlForCaller(callerFromVerifiedToken(uid, claims), data),
+  getTripInvoiceArchive: async (uid: string, claims: Record<string, unknown>, data: unknown) =>
+    getTripInvoiceArchiveForCaller(callerFromVerifiedToken(uid, claims), data),
   createTripTrackingShare: async (uid: string, claims: Record<string, unknown>, data: unknown) =>
     createTripTrackingShareForCaller(callerFromVerifiedToken(uid, claims), data),
 };
@@ -75,7 +80,7 @@ const driverActions = new Set(['claimDriverReferralCode', 'requestDriverRewardPa
 const adminActions = new Set(['manageRewardsAdmin', 'manageAdminAnnouncements', 'getAdminDriverEarningsReport']);
 // Device-token operations need a valid Firebase identity but are available to
 // both customer and driver accounts. Helpers scope writes to that token's uid.
-const selfServiceActions = new Set(['registerDeviceToken', 'unregisterDeviceToken', 'createTripTrackingShare']);
+const selfServiceActions = new Set(['registerDeviceToken', 'unregisterDeviceToken', 'createTripTrackingShare', 'getTripInvoiceDownloadUrl', 'getTripInvoiceArchive']);
 
 const httpStatus: Record<string, number> = {
   'invalid-argument': 400,

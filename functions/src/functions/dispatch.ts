@@ -7,6 +7,7 @@ import {
   COLLECTIONS,
   DRIVER_ON_DUTY_STATUSES,
   DUTY_TERMS,
+  emailSchema,
   hasAcceptedDutyTerms,
   RTDB_PATHS,
   RTDB_RETENTION,
@@ -206,6 +207,13 @@ export async function respondToAssignmentForCaller(caller: Caller, raw: unknown)
         : [null, null];
       if (currentOffer.status !== 'offered') {
         throw failedPrecondition('Another action already closed this offer. Refresh Duty for the latest trips.');
+      }
+      if (typeof currentProfile.fullName !== 'string' || currentProfile.fullName.trim().length < 2) {
+        throw failedPrecondition('Add your full name to your driver profile before accepting a trip.');
+      }
+      const customerFullName = customerProfile?.get('fullName');
+      if (typeof customerFullName !== 'string' || customerFullName.trim().length < 2) {
+        throw failedPrecondition('The customer needs to complete their full name before this trip can be assigned.');
       }
       if (currentProfile.accountStatus === 'suspended') {
         throw failedPrecondition('Your account is paused by DrivX support. Contact support before accepting trips.');
@@ -509,8 +517,8 @@ function assignedCustomerContact(
  * Driver: stand in the queue or step out of it.
  *
  * Going online is what puts a driver in front of dispatch, so it carries the same
- * three gates as accepting a trip: approved documents, the current duty terms, and
- * nothing unpaid. Stepping away never does — a driver who owes the office money
+ * gates as accepting a trip: a contact email, approved documents, current duty
+ * terms, and nothing unpaid. Stepping away never does — a driver who owes the office money
  * must always be able to stop taking work, and refusing that would hold a person
  * in a job they are trying to leave.
  *
@@ -524,6 +532,12 @@ export async function setAvailabilityForCaller(caller: Caller, raw: unknown) {
   const zoneId = typeof profile.zoneId === 'string' ? profile.zoneId : null;
 
   if (input.state === 'online') {
+    if (typeof profile.fullName !== 'string' || profile.fullName.trim().length < 2) {
+      throw failedPrecondition('Add your full name to your driver profile before going online.');
+    }
+    if (!emailSchema.safeParse(profile.email).success) {
+      throw failedPrecondition('Add a valid email address to your driver profile before going online.');
+    }
     if (profile.accountStatus === 'suspended') {
       throw failedPrecondition('Your account is paused by DrivX support. Contact support before going online.');
     }
@@ -543,7 +557,7 @@ export async function setAvailabilityForCaller(caller: Caller, raw: unknown) {
     const work = await workFactsFor(caller.uid);
     if (work.outstandingPaise > 0) {
       throw failedPrecondition(
-        `You have ₹${(work.outstandingPaise / 100).toFixed(2)} in commission outstanding, so new trips are held until the office records the payment.`,
+        `You have ₹${(work.outstandingPaise / 100).toFixed(2)} in trip remittances outstanding, so new trips are held until the office records the payment.`,
       );
     }
     if (work.carryingBooking) {

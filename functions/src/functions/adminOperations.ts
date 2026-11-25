@@ -30,13 +30,15 @@ export const resetDriverOnboarding = onCall(CALLABLE_OPTIONS, async (request) =>
   const active = bookings.docs.find((row) => isActiveTrip(String(row.get('status') ?? '') as BookingStatus));
   if (active) throw failedPrecondition(`Finish active booking ${String(active.get('reference') ?? active.id)} before resetting this driver.`);
   const unpaidCommission = dues.docs.find((row) => row.get('kind') === 'commission' && row.get('status') === 'unpaid');
-  if (unpaidCommission) throw failedPrecondition('Clear this driver’s trip commission dues before resetting onboarding.');
+  if (unpaidCommission) throw failedPrecondition('Clear this driver’s trip remittances before resetting onboarding.');
   const fee = onboardingDue.data() ?? {};
   if (onboardingDue.exists && fee.status === 'unpaid' && fee.providerOrderId) {
     throw failedPrecondition('A Cashfree onboarding order is still attached to this fee. Let its webhook settle or expire before resetting.');
   }
 
-  const filePaths = documents.docs.map((row) => row.get('storagePath')).filter((path): path is string => typeof path === 'string' && path.length > 0);
+  const filePaths = documents.docs
+    .flatMap((row) => [row.get('storagePath'), row.get('backStoragePath')])
+    .filter((path): path is string => typeof path === 'string' && path.length > 0);
   await Promise.all(filePaths.map((path) => bucket().file(path).delete({ ignoreNotFound: true })));
   await bucket().deleteFiles({ prefix: `avatars/${input.driverUid}/` });
   await db().recursiveDelete(profileRef.collection('documents'));

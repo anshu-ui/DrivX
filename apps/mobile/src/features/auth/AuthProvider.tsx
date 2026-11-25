@@ -7,6 +7,7 @@ import {
   CLAIM_DEFAULTS,
   COLLECTIONS,
   holdsRole,
+  signUpProfileInputSchema,
   type AuthClaims,
 } from '@drivx/domain';
 import { isDeadSession, callFunction } from '@drivx/firebase-client';
@@ -47,7 +48,7 @@ export type Session = {
   setProfileDraft: (draft: { fullName: string; email: string }) => void;
   signOut: () => Promise<void>;
   /** Creates the profile document the rules let a user open for themselves. */
-  bootstrapProfile: (input: { fullName: string; email?: string }) => Promise<void>;
+  bootstrapProfile: (input: { fullName: string; email: string }) => Promise<void>;
   /** Moves this device to the other account on the same number. */
   chooseSurface: (surface: Surface) => Promise<SurfaceState | null>;
   refresh: () => Promise<void>;
@@ -217,9 +218,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // missing document and a nameless one both mean the first-run step is due.
     const fullName = (snap.data() as { fullName?: unknown } | undefined)?.fullName;
     const email = (snap.data() as { email?: unknown } | undefined)?.email;
-    const due = !snap.exists() || String(fullName ?? '').trim().length === 0;
+    const validEmail = signUpProfileInputSchema.shape.email.safeParse(email).success;
+    const due = !snap.exists() || String(fullName ?? '').trim().length === 0 || !validEmail;
+    if (snap.exists()) {
+      setProfileDraft({
+        fullName: typeof fullName === 'string' ? fullName : '',
+        email: typeof email === 'string' ? email : '',
+      });
+    }
     if (!due) {
-      setProfileDraft({ fullName: String(fullName), email: typeof email === 'string' ? email : '' });
       void AsyncStorage.removeItem(profileDraftKey(next.uid)).catch(() => undefined);
     }
     setNeedsProfile(due);
@@ -257,12 +264,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [adopt]);
 
   const bootstrapProfile = useCallback(
-    async (input: { fullName: string; email?: string }) => {
+    async (input: { fullName: string; email: string }) => {
       if (!user) throw new Error('Sign in before creating a profile.');
       const isDriver = surface === 'driver';
-      const fullName = input.fullName.trim();
-      if (fullName.length < 2) throw new Error('Enter your full name.');
-      const email = input.email?.trim().toLowerCase() ?? null;
+      const profileInput = signUpProfileInputSchema.safeParse(input);
+      if (!profileInput.success) {
+        throw new Error(profileInput.error.issues[0]?.message ?? 'Enter your name and a valid email address.');
+      }
+      const { fullName, email } = profileInput.data;
 
       const ref = doc(firebase().firestore, profileCollection(surface), user.uid);
       // Provisioning may already have opened the document. The rules forbid a
@@ -280,7 +289,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               },
         );
         setNeedsProfile(false);
-        setProfileDraft({ fullName, email: email ?? '' });
+        setProfileDraft({ fullName, email });
         void AsyncStorage.removeItem(profileDraftKey(user.uid)).catch(() => undefined);
         return;
       }
@@ -337,7 +346,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       setNeedsProfile(false);
-      setProfileDraft({ fullName, email: email ?? '' });
+      setProfileDraft({ fullName, email });
       void AsyncStorage.removeItem(profileDraftKey(user.uid)).catch(() => undefined);
     },
     [claims, surface, user],

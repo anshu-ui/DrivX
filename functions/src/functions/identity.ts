@@ -1,7 +1,7 @@
 import { region } from 'firebase-functions/v1';
 import { onCall } from 'firebase-functions/v2/https';
 import type { CallableRequest } from 'firebase-functions/v2/https';
-import { CLAIM_DEFAULTS } from '@drivx/domain';
+import { CLAIM_DEFAULTS, DRIVER_REQUIRED_DOCUMENT_TYPES, driverDocumentNeedsBack } from '@drivx/domain';
 import { z } from 'zod';
 import { authAdmin, db, serverTimestamp, writeAuditLog } from '../lib/admin';
 import { CALLABLE_OPTIONS, REGION } from '../lib/config';
@@ -305,7 +305,7 @@ export const submitDriverApplication = onCall(
     const caller = requireDriver(request);
     const profileRef = db().collection('driverProfiles').doc(caller.uid);
     const feeRef = profileRef.collection('dues').doc('onboarding_fee');
-    const required = ['driver_photograph', 'photo_id', 'driving_licence'];
+    const required = DRIVER_REQUIRED_DOCUMENT_TYPES;
     const documentRefs = required.map((id) => profileRef.collection('documents').doc(id));
 
     const result = await db().runTransaction(async (tx) => {
@@ -318,19 +318,24 @@ export const submitDriverApplication = onCall(
       const profile = profileSnap.data() ?? {};
       const state = String(profile.verificationStatus ?? 'not_started');
       if (state === 'approved') throw failedPrecondition('Your driver account is already approved.');
+      if (!driverApplicationInput.shape.email.safeParse(profile.email).success) {
+        throw failedPrecondition('Add a valid email address to your driver profile before submitting your application.');
+      }
       if (state === 'pending_review' && profile.applicationSubmittedAtMs) {
         return { alreadySubmitted: true, status: state };
       }
       if (feeSnap.data()?.status !== 'paid') {
         throw failedPrecondition('The one-time Cashfree payment must be confirmed before you submit.');
       }
-      const missing = required.filter((_, index) => {
+      const missing = required.filter((type, index) => {
         const document = documentSnaps[index];
         const data = document?.data();
-        return !document?.exists || data?.status !== 'pending_review' || typeof data.storagePath !== 'string';
+        return !document?.exists || data?.status !== 'pending_review' ||
+          typeof data.storagePath !== 'string' ||
+          (driverDocumentNeedsBack(type) && typeof data.backStoragePath !== 'string');
       });
       if (missing.length > 0) {
-        throw failedPrecondition('Upload or replace all three required documents before submitting.');
+        throw failedPrecondition('Upload the profile photo, Aadhaar, driving licence and PAN card. Each card needs front and reverse photos.');
       }
 
       tx.update(profileRef, {
@@ -349,7 +354,7 @@ export const submitDriverApplication = onCall(
         targetType: 'driver',
         targetId: caller.uid,
         before: { verificationStatus: result.previousStatus },
-        after: { verificationStatus: 'pending_review', documents: ['driver_photograph', 'photo_id', 'driving_licence'] },
+        after: { verificationStatus: 'pending_review', documents: [...DRIVER_REQUIRED_DOCUMENT_TYPES] },
       });
     }
     return { status: result.status, alreadySubmitted: result.alreadySubmitted };

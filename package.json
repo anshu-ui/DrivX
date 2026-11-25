@@ -27,6 +27,7 @@
     "verify:driver-onboarding": "node scripts/verify-driver-onboarding.mjs",
     "verify:driver-dues": "node scripts/verify-driver-dues.mjs",
     "verify:trip-loop": "node scripts/verify-trip-loop.mjs",
+    "verify:trip-invoices": "node scripts/verify-trip-invoices.mjs",
     "verify:ratings": "node scripts/verify-ratings.mjs",
     "verify:payments": "node scripts/verify-cashfree.mjs",
     "verify:firebase-config": "node --disable-warning=ExperimentalWarning --experimental-strip-types scripts/verify-firebase-config.mjs",

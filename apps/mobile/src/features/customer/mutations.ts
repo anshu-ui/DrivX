@@ -83,6 +83,7 @@ export function useCreateBooking() {
       couponCode?: string;
       redeemWalletPaise?: number;
       redeemMilesPoints?: number;
+      customerTaxDetails?: { businessName: string; gstin: string };
     }) => {
       const payload: CreateBookingInput = {
         ...input,

@@ -132,15 +132,15 @@ export default function CustomerAccount() {
           <Text variant="subheading" tone="brand">
             Your details
           </Text>
-          <Field label="Full name" value={fullName} onChangeText={setFullName} />
+          <Field label="Full name (required)" value={fullName} onChangeText={setFullName} helper="Required for bookings and customer invoices." />
           <Field
-            label="Email"
+            label="Email address (required)"
             value={email}
             onChangeText={setEmail}
             keyboardType="email-address"
             autoCapitalize="none"
             autoCorrect={false}
-            helper="Receipts and trip updates go here."
+            helper="Required for bookings and trip updates."
           />
           <Field
             label="Contact number"

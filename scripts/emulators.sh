@@ -85,6 +85,14 @@ echo "Using $("$JAVA_HOME/bin/java" -version 2>&1 | head -1)"
 # that output, so build the domain package first.
 echo "Building @drivx/domain and @drivx/functions for the Functions emulator…"
 npm run build --prefix "$root" --workspace @drivx/domain --if-present
+# The Functions workspace consumes the packed domain tarball, which can lag the
+# workspace source until a deployment predeploy runs. Refresh the local runtime
+# copy so emulator checks execute the same settlement code we just built.
+domain_runtime="$root/functions/node_modules/@drivx/domain"
+rm -rf "$domain_runtime"
+mkdir -p "$domain_runtime"
+cp "$root/packages/domain/package.json" "$domain_runtime/package.json"
+cp -R "$root/packages/domain/dist" "$domain_runtime/dist"
 npm run build --prefix "$root" --workspace @drivx/functions --if-present
 
 cd "$root"

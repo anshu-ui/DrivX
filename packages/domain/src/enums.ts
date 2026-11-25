@@ -23,21 +23,28 @@ export type VerificationStatus = (typeof VERIFICATION_STATUSES)[number];
 /**
  * The paperwork a DrivX driver files, and the only kinds the app will accept.
  *
- * The owner's rule of 2026-10-27: "sirf adhar card driving license chaiye aur
- * ni kuch aur". Vehicle registration, insurance, fitness and police
- * verification were removed rather than hidden, because under "Safar aapka,
- * driver hamara" the car is the customer's — those certificates are not the
- * driver's to produce, and a checklist that demanded them was asking every
- * applicant for documents belonging to a different owner's vehicle.
- *
- * The photograph stays because the driver's own rule of 2026-10-25 allows
- * exactly one ("Aadhaar + driving licence + one more photo, nothing beyond
- * these"), and because it is the face the customer is shown when a driver is
- * assigned — the Aadhaar image cannot serve that purpose, since it carries a
- * number the customer must never see.
+ * The checklist contains the driver's face photo, Aadhaar, driving licence,
+ * and PAN card. Identity cards are held as separate front and reverse images;
+ * the face photo remains its own single image for the customer-facing driver
+ * card and is never substituted with an identity document.
  */
-export const DOCUMENT_TYPES = ['driving_licence', 'photo_id', 'driver_photograph'] as const;
+export const DOCUMENT_TYPES = ['driving_licence', 'photo_id', 'driver_photograph', 'pan_card'] as const;
 export type DocumentType = (typeof DOCUMENT_TYPES)[number];
+
+/** Driver onboarding requires these four records before review can begin. */
+export const DRIVER_REQUIRED_DOCUMENT_TYPES = [
+  'driver_photograph',
+  'photo_id',
+  'driving_licence',
+  'pan_card',
+] as const satisfies readonly DocumentType[];
+
+/** Identity cards are stored as separate front and reverse images. */
+export const TWO_SIDED_DOCUMENT_TYPES = ['photo_id', 'driving_licence', 'pan_card'] as const satisfies readonly DocumentType[];
+
+export function driverDocumentNeedsBack(type: DocumentType): boolean {
+  return (TWO_SIDED_DOCUMENT_TYPES as readonly string[]).includes(type);
+}
 
 /**
  * The name each kind of paperwork is shown under, in the driver's checklist and
@@ -49,6 +56,7 @@ export const DOCUMENT_LABELS: Record<DocumentType, string> = {
   driving_licence: 'Driving licence',
   photo_id: 'Aadhaar card',
   driver_photograph: 'Profile photograph',
+  pan_card: 'PAN card',
 };
 
 /**

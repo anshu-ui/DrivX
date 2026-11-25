@@ -29,8 +29,7 @@ const DAY_MS = 86_400_000;
  * and parking are separately disclosed actuals; waiting beyond the included time
  * is not charged until an Admin configures a rate.
  *
- * Tax is not assumed by this catalogue: Admin configures a rate only after tax
- * review. The platform fee is 0: the business takes its
+ * Fare GST defaults to 5% and remains Admin-controlled per tariff. The platform fee is 0: the business takes its
  * cut as commission on the driver's fare, not as a line on the customer's bill.
  *
  * Outstation one-way uses the exact distance chart through 3,000 km; odometer
@@ -64,8 +63,7 @@ export function launchCatalogue(nowMs = Date.now()) {
     includedWaitMinutes: 10,
     waitChargePerMinutePaise,
     platformFeeRate: 0,
-    // Tax treatment is an admin policy, not an assumed GST rate.
-    gstRate: 0,
+    gstRate: 0.05,
     nightSurcharge: CITY_NIGHT,
     surge: { enabled: true, maxMultiplier: 1.5 },
     minimumFarePaise: 0,
@@ -115,7 +113,7 @@ export function launchCatalogue(nowMs = Date.now()) {
       waitChargePerMinutePaise: 0,
       overtimeGraceMinutes: 0,
       platformFeeRate: 0,
-      gstRate: 0,
+      gstRate: 0.05,
       nightSurcharge: CITY_NIGHT,
       surge: { enabled: false, maxMultiplier: 1 },
       minimumFarePaise: 0,
@@ -149,7 +147,7 @@ export function launchCatalogue(nowMs = Date.now()) {
       includedWaitMinutes: 10,
       waitChargePerMinutePaise: 0,
       platformFeeRate: 0,
-      gstRate: 0,
+      gstRate: 0.05,
       nightSurcharge: OUTSTATION_NIGHT,
       surge: { enabled: false, maxMultiplier: 1 },
       minimumFarePaise: 0,
@@ -178,7 +176,7 @@ export function launchCatalogue(nowMs = Date.now()) {
       waitChargePerMinutePaise: 0,
       overtimeGraceMinutes: 0,
       platformFeeRate: 0,
-      gstRate: 0,
+      gstRate: 0.05,
       nightSurcharge: OUTSTATION_NIGHT,
       surge: { enabled: false, maxMultiplier: 1 },
       minimumFarePaise: 0,

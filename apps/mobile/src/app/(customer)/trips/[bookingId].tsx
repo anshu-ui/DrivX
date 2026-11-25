@@ -1,6 +1,7 @@
+import { useState } from 'react';
 import { View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { Card, Divider, Screen, ScreenHeader, StateView, StatusPill, Text, useTheme } from '@drivx/ui';
+import { Button, Card, Divider, Screen, ScreenHeader, StateView, StatusPill, Text, useTheme } from '@drivx/ui';
 import { CancelTripAction } from '../../../features/customer/CancelTripPanel';
 import { DriverCardPanel } from '../../../features/customer/DriverCardPanel';
 import { RateDriverPanel } from '../../../features/customer/RateDriverPanel';
@@ -9,6 +10,7 @@ import { TripMapPanel } from '../../../features/customer/TripMapPanel';
 import { TripTrackingShare } from '../../../features/customer/TripTrackingShare';
 import { useLiveCustomerFix, useLiveDriverFix, usePublishCustomerLocation } from '../../../features/customer/liveLocation';
 import { useBookingDetail } from '../../../features/customer/queries';
+import { openTripInvoice } from '../../../features/tripInvoices';
 import {
   addressLine,
   cancellationReasonLabel,
@@ -24,6 +26,8 @@ import {
  */
 export default function TripDetail() {
   const theme = useTheme();
+  const [invoiceBusy, setInvoiceBusy] = useState(false);
+  const [invoiceError, setInvoiceError] = useState<string | null>(null);
   const { bookingId } = useLocalSearchParams<{ bookingId: string }>();
   const detail = useBookingDetail(bookingId);
   const bookingForLocation = detail.data?.booking;
@@ -162,6 +166,20 @@ export default function TripDetail() {
           <Card tone="inset" style={{ gap: theme.spacing.xs }}>
             <Text variant="subheading" tone="brand">Thanks for riding with DrivX</Text>
             <Text variant="caption" tone="muted">Your trip is complete. The final fare and trip record are saved here. Thank you for choosing DrivX.</Text>
+            <Button
+              label={invoiceBusy ? 'Preparing invoice…' : 'Download customer invoice PDF'}
+              appearance="secondary"
+              loading={invoiceBusy}
+              disabled={invoiceBusy}
+              onPress={async () => {
+                setInvoiceBusy(true);
+                setInvoiceError(null);
+                try { await openTripInvoice(booking.id, 'customer'); }
+                catch (error) { setInvoiceError(error instanceof Error ? error.message : 'Invoice PDF is not available yet.'); }
+                finally { setInvoiceBusy(false); }
+              }}
+            />
+            {invoiceError ? <Text variant="caption" tone="danger" accessibilityRole="alert">{invoiceError}</Text> : null}
           </Card>
         ) : null}
 

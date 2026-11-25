@@ -5186,7 +5186,7 @@ function HomePage() {
         "x-component": "span",
         "x-id": "App_72_124",
         "x-dynamic": "false",
-        children: "\xA9 2024 DrivX Technologies"
+        children: "\xA9 2026 DrivX"
       }, void 0, false, {
         fileName: _jsxFileName,
         lineNumber: 72,

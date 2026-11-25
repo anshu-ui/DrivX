@@ -289,7 +289,7 @@ export function useEndTrip() {
         durationSeconds: number;
         quotedTotalPaise: number;
         finalFare: FareBreakdown;
-        commissionPaise: number | null;
+        remittancePaise: number | null;
       }>('confirmCompletion', input, refresh),
   });
 }

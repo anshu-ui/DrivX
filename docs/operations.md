@@ -47,12 +47,38 @@ Order for a release (rules before code, so no client ever sees an unprotected su
 npm run typecheck && npm run test:rules      # must pass, against the local emulator
 npm run verify:phone-otp                     # the auth trigger still mints the claim on a fresh number
 npm run verify:customer-paths                # every shipped client query still clears the rules
-npm run verify:driver-onboarding             # the ₹315 fee still gates activation, and cleans up after itself
-npm run verify:driver-dues                   # the office's cut (13% default) + 5% still raises one row per finished trip, and holds new work
+npm run verify:driver-onboarding             # required contact details, four documents, both card sides, and fee gate
+npm run verify:driver-dues                   # commission GST, customer GST pass-through, rate-based TDS, one row per trip, and the dispatch hold
+npm run verify:trip-invoices                 # PDFs, separate emails, idempotency, and admin ZIP export
 firebase deploy --project drivx-116de --only firestore:rules,firestore:indexes,database,storage
 firebase deploy --project drivx-116de --only functions
-npm --workspace @drivx/admin run build    # deploy the dashboard to its own host
+firebase deploy --project drivx-116de --only hosting
 ```
+
+### Verified live rollout — 2026-11-25
+
+The customer, driver, and admin web apps are released to Firebase Hosting. The root, `/customer`,
+`/driver`, and `/admin` routes on `https://drivx-116de.web.app` returned HTTP 200. Firestore rules and
+indexes, Realtime Database rules, and Storage rules were released before the functions and Hosting
+bundle.
+
+The trip invoice triggers, customer/driver invoice archive gateway, trip completion and settlement
+functions, driver onboarding/verification functions, and the document-review triggers are `ACTIVE` in
+`asia-south1`. The invoice triggers have the `RESEND_API_KEY` and `RESEND_FROM_EMAIL` secret bindings;
+their secret values were not read during verification. A Firebase Functions list was used to confirm
+the live states. A broad function rollout initially hit the project's Cloud Run regional CPU quota, so
+the functions needed by this release were retried one at a time. Several unchanged helper functions
+reported quota failures during that first pass; their prior active revisions remain in place.
+
+Local release checks passed before deploy: workspace typecheck, 223 domain tests, 120 rules tests,
+customer booking paths, driver onboarding (including all front/back documents), driver dues, and the
+trip invoice/PDF/email-idempotency/admin-export flow. The invoice verifier uses a mocked email sender;
+no production trip was created to send real customer or driver mail. Set the legal issuer name, GSTIN,
+and address in Admin before issuing tax invoices; those values are intentionally blank until supplied.
+
+Firebase Hosting does not update the native iOS/Android binaries. No TestFlight build was created or
+uploaded. The source changes also need to be committed and pushed before another developer can pull
+them for a native build.
 
 Build and upload native iOS archives separately using the TestFlight workflow in
 [`apps/mobile/BUILDING.md`](../apps/mobile/BUILDING.md).
@@ -304,7 +330,7 @@ rather than hardcoded.
    - **Whether the cut is of the fare before tax or of the receipt.** It is currently the configured
      rate of the booking's own GST-exclusive `subtotalPaise` — minus any `platform_fee` line, which is
      the office's charge and not a fare the driver took — plus Admin-configured tax on that share, with 0.13 as the
-     fallback in `COMMISSION_TERMS` and pinned by the 37 cases in `packages/domain/tests/dues.test.ts`.
+     fallback in `COMMISSION_TERMS` and pinned by the 38 cases in `packages/domain/tests/dues.test.ts`.
      At these two rates the readings differ by exactly nothing (13% of ₹1,008.00 = ₹124.80 + ₹6.24),
      which is why the checks assert `basePaise` and the excluded lines rather than the total: if the
      intent was 13% *of the receipt*, that is one field, and rows billed before the change read as
@@ -322,7 +348,7 @@ rather than hardcoded.
 ## 8. Known limitations of this repository right now
 
 - **The rules are now proven by execution, and were not before.** Running the suite for the first
-  time (JDK 21 + `npm run emulators` + `npm run test:rules` → 79 passed at that point, 115 now)
+  time (JDK 21 + `npm run emulators` + `npm run test:rules` → 79 passed at that point, 120 now)
   immediately found five defects that review had missed: an `in` operator in the RTDB rules (a
   language the Realtime Database does not support, which would have failed `firebase deploy`), two
   `let` bindings written inside `match` blocks where the Firestore grammar does not allow them, a
@@ -350,7 +376,7 @@ rather than hardcoded.
   rendered "Not set" against them, which is the worst possible first impression of real data. Both
   are now built from the `@drivx/domain` types.
 - **The dues ledger was the first thing built twice — once as a rule, once as money — and the second
-  pass corrected the fixture, not the code.** `npm run verify:driver-dues` (38 checks) completes a real
+  pass corrected the fixture, not the code.** `npm run verify:driver-dues` (42 checks) completes a real
   booking through the Functions emulator and reads back the row the trigger raised; the findings:
   1. The seed marked its approved driver `availabilityState: 'online'` while their commission rows sat
      unpaid — precisely the state the new hold exists to make unreachable, and visible as a
@@ -369,7 +395,7 @@ rather than hardcoded.
      `subtotalPaise`; configured tax applies to that commission only. Fare tax is excluded from the base.
      `packages/domain/tests/dues.test.ts` pins the derivation instead; see decision 19 above.
 - **What the suite still does not cover.** `packages/rules-tests` exercises rules only. Fares and the
-  commission share are unit-tested (54 + 37 cases, in `packages/rules-tests` and `packages/domain/tests/dues.test.ts`), and the money paths are
+  commission share are unit-tested (54 + 38 cases, in `packages/rules-tests` and `packages/domain/tests/dues.test.ts`), and the money paths are
   executed end to end by `verify:driver-onboarding` and `verify:driver-dues`. The trip loop is covered
   by neither a rules case nor a unit test alone: `npm run verify:trip-loop` runs the whole chain
   against the emulator — both codes, both dial readings, the running meter, the metered receipt and

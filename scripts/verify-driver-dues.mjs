@@ -2,8 +2,9 @@
  * Proves the trip-commission ledger against the emulator, with rules on.
  *
  * The owner's rule is the office's configured cut — 13% unless `appConfig/commission`
- * says otherwise — of the fare before its GST, plus 5% GST on that share, per
- * completed booking, and a driver who has not cleared what they owe stops
+ * says otherwise — of the pre-tax driver fare, plus configured GST on the
+ * commission, customer fare GST passed through, and TDS on the driver's
+ * remaining share, per completed booking. A driver who has not cleared what they owe stops
  * receiving bookings. There
  * is no payment gateway here and no trip-completion callable yet — Phase 4 owns
  * that — so what this script exercises is the part that is real today:
@@ -63,17 +64,15 @@ const CONFIG = {
 const PASSWORD = 'drivx-dev-password';
 
 /**
- * Trip fares and what the office's 13% makes of them.
+ * Trip fares and what the office's settlement rates make of them.
  *
- * On the ₹960.00 pre-GST subtotal of the first trip, 13% is ₹124.80 and 5% GST
- * on that share is ₹6.24, so the driver owes ₹131.04. Commissioning the
- * ₹1,008.00 GST-inclusive receipt instead would also print ₹131.04 — with the
- * customer's tax and the platform's GST both at 5%, the two totals coincide to
- * the paisa. That is why the checks read `basePaise` and not only the total:
- * ₹124.80 is only reachable from a base the GST was taken out of.
+ * On the ₹960 pre-tax subtotal, 13% commission is ₹124.80; 18% commission GST
+ * is ₹22.46; customer fare GST passed through is ₹48; and 1% TDS on the
+ * ₹835.20 driver share is ₹8.35. Total remittance is ₹203.61. Each component
+ * is recorded separately and rounded to paise.
  */
-const TRIP_ONE = { base: 96_000, gst: 4_800, total: 100_800, commissionBase: 12_480, commissionGst: 624, commissionTotal: 13_104 };
-const TRIP_TWO = { base: 30_500, gst: 1_525, total: 32_025, commissionBase: 3_965, commissionGst: 198, commissionTotal: 4_163 };
+const TRIP_ONE = { base: 96_000, gst: 4_800, total: 100_800, commissionBase: 12_480, commissionGst: 2_246, tdsBase: 83_520, tds: 835, commissionTotal: 20_361 };
+const TRIP_TWO = { base: 30_500, gst: 1_525, total: 32_025, commissionBase: 3_965, commissionGst: 714, tdsBase: 26_535, tds: 265, commissionTotal: 6_469 };
 
 /** The same ₹960.00 subtotal with ₹50.00 of it being the office's own platform fee. */
 const TRIP_WITH_FEE = {
@@ -83,12 +82,14 @@ const TRIP_WITH_FEE = {
     { key: 'platform_fee', label: 'Platform fee', amountPaise: 5_000 },
   ],
   commissionBase: 11_830,
-  commissionGst: 592,
-  commissionTotal: 12_422,
+  commissionGst: 2_130,
+  tdsBase: 79_170,
+  tds: 792,
+  commissionTotal: 19_552,
 };
 
 /** TRIP_TWO priced while the office has set its cut to 10%. */
-const TRIP_AT_TEN = { ...TRIP_TWO, commissionBase: 3_050, commissionGst: 153, commissionTotal: 3_203 };
+const TRIP_AT_TEN = { ...TRIP_TWO, commissionBase: 3_050, commissionGst: 549, tdsBase: 27_450, tds: 275, commissionTotal: 5_399 };
 
 const failures = [];
 function check(label, ok, detail) {
@@ -249,10 +250,10 @@ const throwawayDrivers = [];
 /** The office's own cut, as the seed left it, so the finally can put it back. */
 let commissionConfig = null;
 commissionConfig = (await db.doc('appConfig/commission').get()).data() ?? null;
-// Exercise the configured 5% GST on the office share without changing the
+// Exercise the configured 18% commission GST and 1% driver-share TDS without changing the
 // repository's default commission config or any production pricing.
 await db.doc('appConfig/commission').set(
-  { rate: 0.13, gstRate: 0.05, updatedByUid: 'verify-dues', updatedAtMs: Date.now() },
+  { rate: 0.13, gstRate: 0.18, tdsRate: 0.01, settlementVersion: 2, updatedByUid: 'verify-dues', updatedAtMs: Date.now() },
   { merge: true },
 );
 
@@ -289,6 +290,7 @@ async function makeDriver(label) {
   await db.doc(`driverProfiles/${uid}`).set({
     uid,
     fullName: `Dues Driver ${label} ${tag}`,
+    email,
     phoneE164: `+91900000009${throwawayDrivers.length}`,
     verificationStatus: 'approved',
     driverId: `DRV-${label.toUpperCase()}-${tag.toUpperCase()}`,
@@ -300,6 +302,14 @@ async function makeDriver(label) {
     ratingCount: 12,
     lifetimeTrips: 2,
     createdAtMs: Date.now() - 86_400_000,
+    updatedAtMs: Date.now(),
+  });
+  // Online eligibility checks require a registered driver push device before
+  // they reach the unpaid-remittance hold. This fake token is emulator-only.
+  await db.doc(`users/${uid}/deviceTokens/verify-driver`).set({
+    token: `verify-${label}-${tag}`.padEnd(32, 'x'),
+    surface: 'driver',
+    platform: 'android',
     updatedAtMs: Date.now(),
   });
   const made = { uid, email, label, ...(await session(`dues-driver-${label}`, email)) };
@@ -324,12 +334,16 @@ try {
 
   const one = dueOne?.data ?? {};
   check(
-    'at the office’s 13% of the fare before its own GST, plus 5% GST on that',
+    '13% commission + 18% commission GST + 5% fare GST pass-through + 1% TDS on the remainder',
     one.basePaise === TRIP_ONE.commissionBase &&
-      one.gstRate === 0.05 &&
+      one.gstRate === 0.18 &&
       one.gstPaise === TRIP_ONE.commissionGst &&
+      one.fareTaxPaise === TRIP_ONE.gst &&
+      one.tdsRate === 0.01 &&
+      one.tdsBasePaise === TRIP_ONE.tdsBase &&
+      one.tdsPaise === TRIP_ONE.tds &&
       one.totalPaise === TRIP_ONE.commissionTotal,
-    `${one.basePaise}+${one.gstPaise}=${one.totalPaise} paise, expected ${TRIP_ONE.commissionBase}+${TRIP_ONE.commissionGst}=${TRIP_ONE.commissionTotal}`,
+    `${one.basePaise}+${one.gstPaise}+${one.fareTaxPaise}+${one.tdsPaise}=${one.totalPaise} paise, expected ${TRIP_ONE.commissionBase}+${TRIP_ONE.commissionGst}+${TRIP_ONE.gst}+${TRIP_ONE.tds}=${TRIP_ONE.commissionTotal}`,
   );
   check(
     'so the customer’s tax is never part of the base',
@@ -430,8 +444,8 @@ try {
   });
   const online = await callFailure(callable(driver, 'setAvailability', onlinePayload()));
   check('going online is refused', online.code === 'failed-precondition', `${online.code}: ${online.message.slice(0, 120)}`);
-  check('the refusal names the amount and that it is commission',
-    /172\.67/.test(online.message) && /commission/i.test(online.message), online.message.slice(0, 140));
+  check('the refusal names the total trip remittance owed',
+    /₹268\.30/.test(online.message) && /trip remittances/i.test(online.message), online.message.slice(0, 140));
 
   const accept = await callFailure(
     callable(driver, 'respondToAssignment', { bookingId: bookingOne, decision: 'accept' }),
@@ -563,7 +577,7 @@ try {
       `expected ${TRIP_WITH_FEE.commissionBase} on 91000`);
 
   await db.doc('appConfig/commission').set(
-    { rate: 0.1, gstRate: 0.05, updatedByUid: 'verify-dues', updatedAtMs: Date.now() },
+    { rate: 0.1, gstRate: 0.18, tdsRate: 0.01, settlementVersion: 2, updatedByUid: 'verify-dues', updatedAtMs: Date.now() },
     { merge: true },
   );
   await db.doc(`bookings/${bookingReRated}`).set(
@@ -576,13 +590,18 @@ try {
 
   // Every booking `createBooking` takes carries the terms it was quoted on, and
   // the ledger bills from them rather than from today's figure — a driver who
-  // agreed ₹131.04 on a trip cannot be re-billed ₹96.00 because the office
+  // agreed ₹203.61 on a trip cannot be re-billed at today's rate because the office
   // changed its mind after the trip was driven.
   await db.doc(`bookings/${bookingPinned}`).set(
     bookingBody(bookingPinned, `DRX-${tag.toUpperCase()}G`, TRIP_ONE, 'completed', { assignedDriverUid: rateDriver.uid }, {
       commission: {
         rate: 0.13,
-        gstRate: 0.05,
+        gstRate: 0.18,
+        fareTaxPaise: TRIP_ONE.gst,
+        fareTaxRate: 0.05,
+        tdsRate: 0.01,
+        tdsBasePaise: TRIP_ONE.tdsBase,
+        tdsPaise: TRIP_ONE.tds,
         commissionablePaise: TRIP_ONE.base,
         basePaise: TRIP_ONE.commissionBase,
         gstPaise: TRIP_ONE.commissionGst,

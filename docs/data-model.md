@@ -30,7 +30,7 @@ V2 rule that a driver pays before they work, which the original spec never cover
 | `bookings/{id}/events/{eventId}` | `<event_type>-<nonce>`; a replayed write collides instead of duplicating |
 | `bookings/{id}/assignments/{assignmentId}` | Server-generated per offer attempt |
 | `tripSummaries/{bookingId}` | Equal to the booking id — a 1:1 immutable receipt |
-| `driverProfiles/{uid}/documents/{documentId}` | Must equal the last path segment of `storagePath`; the rules enforce `storagePath == 'drivers/' + userId + '/' + documentId`, so a client cannot point a metadata row at someone else's file |
+| `driverProfiles/{uid}/documents/{documentId}` | Must equal the document type (`photo_id`, `driving_license`, or `pan_card`). `storagePath` points to the front image; two-sided identity cards also carry `backStoragePath` for the reverse image. Both paths are constrained to that driver's private Storage folder. |
 | `driverProfiles/{uid}/dues/{dueId}` | **Deterministic** — `onboarding_fee` for the one-time charge, `commission_{bookingId}` for one trip's share. A retried trigger, a replayed event or an import of the same trip therefore collide on one document instead of billing twice |
 | `otpCodes/{bookingId}_{purpose}` | Composite so exactly one live code exists per purpose per booking |
 | `serviceTypes/{id}` | One of the five `ServiceTypeId` literals; three are `enabled: true` today — `chauffeur_own_car` (Local), `chauffeur_hourly` (Hourly) and `chauffeur_outstation` |
@@ -41,8 +41,8 @@ V2 rule that a driver pays before they work, which the original spec never cover
 | Spec store | Physical path | Written by | Readable by |
 | --- | --- | --- | --- |
 | users | `users/{uid}` | `provisionNewAccount` or `provisionSelf` (whichever provisions the account first), `setRole`, `registerDeviceToken` | self, staff |
-| customerProfiles | `customerProfiles/{uid}` | self (create + limited update; `privacy.preciseLocationWhileIdle` is pinned to `false` by rule), functions for aggregates | self, staff |
-| driverProfiles | `driverProfiles/{uid}` | self (create + limited update), `setDriverVerification` for approval, `flagDriverOnFirstUpload`/`flagDriverOnResubmission` for `pending_review` | self, staff |
+| customerProfiles | `customerProfiles/{uid}` | self (create + limited update; a valid contact email is required; `privacy.preciseLocationWhileIdle` is pinned to `false` by rule), functions for aggregates | self, staff |
+| driverProfiles | `driverProfiles/{uid}` | self (create + limited update; a valid contact email is required), `setDriverVerification` for approval, `flagDriverOnFirstUpload`/`flagDriverOnResubmission` for `pending_review` | self, staff |
 | driverDocuments | `driverProfiles/{uid}/documents/{docId}` | self (`pending_review` only), `setDriverVerification` for the decision | self, staff |
 | *(extra)* driverDues | `driverProfiles/{uid}/dues/{dueId}` | `ensureOnboardingDue` via `flagDriverOnFirstUpload`, `chargeCommissionDue` via the two `bookings/{id}` triggers, `recordDriverDuePayment` for the collection | self, staff — **no client write of any kind** |
 | serviceTypes | `serviceTypes/{id}` | admin via functions | signed-in, if `enabled`, plus staff |
@@ -274,16 +274,15 @@ place without it simply has no such key.
 
 ## Driver dues: two charges, one hold, and the id approval issues
 
-The driver clears a one-time ₹500 + 5% GST onboarding fee (₹525 default) and the Admin verifies the documents before the driver can work. The fee is editable by Admin. After completed trips the platform takes the configured 13% commission by default; any tax on the fare or commission is an Admin setting and defaults to zero. Cashfree settles driver dues through a signed webhook:
+The driver clears a one-time ₹500 + 5% GST onboarding fee (₹525 default) and the Admin verifies the documents before the driver can work. The fee is editable by Admin. On a completed trip the default settlement is 13% commission on the commissionable fare base, 18% GST on that commission, the customer fare GST collected by the driver, and 1% TDS on the fare remaining after commission. Admin can change commission, commission GST, and TDS; each completed trip keeps its own rate snapshot. Fare GST is set on each pricing rule (seeded rules default to 5%). Cashfree settles driver remittances through a signed webhook:
 
 - **The fee** is `driverProfiles/{uid}/dues/onboarding_fee` — ₹500 base (`50_000` paise), 5% GST (`2_500` paise), and ₹525 total by default; the amount is in `ONBOARDING_FEE` in
   `packages/domain/src/records-identity.ts` so the app, the admin console and the trigger cannot
   quote different figures. The document id is deterministic, so a retried trigger re-uses the row
   instead of billing the driver twice.
-- **The commission** is `driverProfiles/{uid}/dues/commission_{bookingId}` — one row per *completed*
-  trip, the office's rate of the booking's own `subtotalPaise` plus an Admin-configured tax on that share; all four
-  numbers are produced by `commissionDueFor` in the same domain module the fare engine lives in
-  (`COMMISSION_TERMS` holds the default 0.13 / 0 tax pair, and the 37 cases in
+- **The trip remittance** is `driverProfiles/{uid}/dues/commission_{bookingId}` — one row per *completed*
+  trip. It stores commission, GST on commission, fare GST passed through by the driver, TDS and the total; `commissionDueFor` computes those amounts in the shared domain module
+  (`COMMISSION_TERMS` holds the default 0.13 / 0.18 / 0.01 rates, and the cases in
   `packages/domain/tests/dues.test.ts` pin the arithmetic). The rate a trip is billed at is the one
   written on the booking as its `commission` block when `createBooking` quoted it; only a booking
   older than that block reads `appConfig/commission` at billing time, and a stored rate that is not
@@ -313,8 +312,8 @@ The driver clears a one-time ₹500 + 5% GST onboarding fee (₹525 default) and
   would take a share of a share; `cancellation_fee` — nobody drove), then the Admin-configured tax on that share. The
   customer's tax is out of the commission base by construction, because `totalPaise === subtotalPaise + taxPaise`.
   Tolls, parking and tips have no line in a breakdown at all: the customer hands those over on the
-  spot, so they are outside the fare and therefore outside the base. On a ₹960.00 subtotal the default 13%
-  commission is ₹124.80 before any separately configured tax on commission. The commission is derived
+  spot, so they are outside the fare and therefore outside the base. On a ₹960.00 subtotal with 5% fare GST, the default 13%
+  commission is ₹124.80, commission GST is ₹22.46, fare GST passed through is ₹48.00, and TDS is ₹8.35 on the remaining ₹835.20 driver share, for ₹203.61 to remit. The commission is derived
   from the pre-tax subtotal rather than from a tax-inclusive total, so changing fare tax cannot change
   the commission base.
   `verify:driver-dues` asserts `basePaise` (₹124.80) and the ₹910.00 base under a ₹50.00 platform
@@ -351,8 +350,8 @@ The driver clears a one-time ₹500 + 5% GST onboarding fee (₹525 default) and
 What is *not* here: no payment has ever been taken in the app. `createPaymentOrder` answers
 `unavailable` while `CASHFREE_APP_ID` / `CASHFREE_SECRET_KEY` are unset, and `paymentWebhook` answers
 `503`, so neither can settle a row; both proof scripts assert exactly that —
-`npm run verify:driver-onboarding` (36 checks) at the end of an otherwise successful onboarding run,
-`npm run verify:driver-dues` (38 checks) after clearing two commission rows and confirming the hold
+`npm run verify:driver-onboarding` (40 checks) at the end of an otherwise successful onboarding run,
+`npm run verify:driver-dues` (42 checks) after clearing two commission rows and confirming the hold
 lifts. `npm run verify:payments` (14 checks) covers the gateway seam itself: the order amount always
 comes from the stored due, and a webhook that is tampered with, replayed, signed with another secret
 or unsigned is refused before it touches the ledger. A settled row would keep its own
@@ -459,7 +458,7 @@ booking. That function is what bounds any leak from a crashed app or a killed ba
 
 | Path | Contents | Access |
 | --- | --- | --- |
-| `drivers/{uid}/{documentId}` | Aadhaar, driving licence and the driver's own photograph — the only three kinds the app accepts | owner + staff; never public, never listable by another user |
+| `drivers/{uid}/{documentId}` | Driver identity document front images and single profile photo; Aadhaar and driving licence use a matching `{documentId}_back` path, and PAN card is also required with front and reverse images | owner + staff; never public, never listable by another user |
 | `avatars/{uid}/{file}` | profile photograph shown to the counterparty | any signed-in read, owner write |
 | `trip-traces/{bookingId}/{file}` | recorded GPS trace for disputes | staff read; **no client write path, not even staff** |
 

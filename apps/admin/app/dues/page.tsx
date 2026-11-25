@@ -52,6 +52,11 @@ type DueRow = {
   commissionablePaise: number | null;
   gstPaise: number;
   gstRate: number;
+  fareTaxPaise: number;
+  fareTaxRate: number;
+  tdsBasePaise: number;
+  tdsRate: number;
+  tdsPaise: number;
   totalPaise: number;
   createdAtMs: number | null;
   recordedAtMs: number | null;
@@ -85,7 +90,7 @@ type DriverReport = {
 
 const KIND_LABEL: Record<DriverDueKind, string> = {
   onboarding_fee: 'Onboarding fee',
-  commission: 'Trip commission',
+  commission: 'Trip remittance',
   late_arrival_penalty: 'Late start penalty',
 };
 
@@ -108,6 +113,11 @@ function readDue(snap: { id: string; ref: { path: string }; data: () => Document
     commissionablePaise: typeof data.commissionablePaise === 'number' ? data.commissionablePaise : null,
     gstPaise: Number(data.gstPaise ?? 0),
     gstRate: Number(data.gstRate ?? 0),
+    fareTaxPaise: Number(data.fareTaxPaise ?? 0),
+    fareTaxRate: Number(data.fareTaxRate ?? 0),
+    tdsBasePaise: Number(data.tdsBasePaise ?? 0),
+    tdsRate: Number(data.tdsRate ?? 0),
+    tdsPaise: Number(data.tdsPaise ?? 0),
     totalPaise: Number(data.totalPaise ?? 0),
     createdAtMs: toEpochMs(data.createdAtMs),
     recordedAtMs: toEpochMs(data.recordedAtMs),
@@ -162,7 +172,7 @@ export default function ClearDues() {
             title="Clear dues"
             blurb="Live unpaid driver charges and Cashfree-confirmed payment receipts."
             reviewer={signedIn}
-            links={[{ href: '/', label: 'Overview' }, { href: '/bookings', label: 'Bookings & dispatch' }, { href: '/verification', label: 'Driver reviews' }, { href: '/dues', label: 'Earnings & dues' }, { href: '/pricing', label: 'Fare settings' }]}
+            links={[{ href: '/', label: 'Overview' }, { href: '/bookings', label: 'Bookings & dispatch' }, { href: '/verification', label: 'Driver reviews' }, { href: '/dues', label: 'Earnings & dues' }, { href: '/invoices', label: 'Trip invoices' }, { href: '/pricing', label: 'Fare settings' }]}
           />
           <div className="console-content mx-auto w-full max-w-5xl px-6 py-8"><DuesBoard reviewer={signedIn} /></div>
         </>}
@@ -310,11 +320,11 @@ function DuesBoard({ reviewer }: { reviewer: Reviewer }) {
           </div>
           <div>
             <dt className="text-xs uppercase tracking-[0.14em] text-ink-faint">
-              Trip commission (
+              Trip settlement (
               {billedRates.length > 0
                 ? billedRates.map((rate) => `${Math.round(rate * 100)}%`).join(' or ')
                 : `${Math.round(COMMISSION_TERMS.rate * 100)}%`}{' '}
-              of fare + {Math.round(COMMISSION_TERMS.gstRate * 100)}% tax)
+              of fare + GST + customer fare GST + TDS)
             </dt>
             <dd className="mt-1 font-mono text-xl">{rows === null ? '—' : formatINR(commissionPaise)}</dd>
           </div>
@@ -333,7 +343,7 @@ function DuesBoard({ reviewer }: { reviewer: Reviewer }) {
 
       <section className="mt-6 rounded-card border border-line bg-surface p-6 shadow-card">
         <div className="flex flex-wrap items-end justify-between gap-3">
-          <div><h2 className="text-lg font-semibold">Driver earnings & trip history</h2><p className="mt-1 text-sm text-ink-muted">Choose a driver to review bookings, cancellations, trip fares and commission settled or outstanding.</p></div>
+          <div><h2 className="text-lg font-semibold">Driver earnings & trip history</h2><p className="mt-1 text-sm text-ink-muted">Choose a driver to review bookings, cancellations, trip fares and driver remittances settled or outstanding.</p></div>
           <label className="grid gap-1 text-xs font-semibold text-ink-muted">Find driver<input value={driverFilter} onChange={(event) => setDriverFilter(event.target.value)} placeholder="Name, phone or driver ID" className="min-h-10 w-64 rounded-control border border-line bg-surface px-3 text-sm text-ink" /></label>
         </div>
         <div className="mt-4 max-h-56 overflow-y-auto divide-y divide-line rounded-xl border border-line">
@@ -345,7 +355,7 @@ function DuesBoard({ reviewer }: { reviewer: Reviewer }) {
         {driverReport ? <div className="mt-5 border-t border-line pt-5">
           <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-xl font-bold">{driverReport.driver.name}</h3><p className="mt-1 text-sm text-ink-muted">{driverReport.driver.driverId ?? 'No driver ID'} · {driverReport.driver.phone ?? 'No phone on file'} · {driverReport.driver.uid}</p></div><button type="button" onClick={() => { setSelectedDriverUid(null); setDriverReport(null); }} className="rounded-control border border-line px-3 py-2 text-xs font-semibold">Close details</button></div>
           <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{[
-            ['Bookings', driverReport.totals.bookingCount], ['Completed', driverReport.totals.completedCount], ['Cancelled', driverReport.totals.cancelledCount], ['Trip fares', formatINR(driverReport.totals.grossFarePaise)], ['Driver net', formatINR(driverReport.totals.driverNetPaise)], ['Commission billed', formatINR(driverReport.totals.commissionTotalPaise)], ['Commission paid', formatINR(driverReport.totals.commissionPaidPaise)], ['Commission outstanding', formatINR(driverReport.totals.commissionOutstandingPaise)],
+            ['Bookings', driverReport.totals.bookingCount], ['Completed', driverReport.totals.completedCount], ['Cancelled', driverReport.totals.cancelledCount], ['Trip fares', formatINR(driverReport.totals.grossFarePaise)], ['Driver net', formatINR(driverReport.totals.driverNetPaise)], ['Remittance billed', formatINR(driverReport.totals.commissionTotalPaise)], ['Remittance paid', formatINR(driverReport.totals.commissionPaidPaise)], ['Remittance outstanding', formatINR(driverReport.totals.commissionOutstandingPaise)],
           ].map(([label, value]) => <div key={String(label)} className="rounded-xl bg-surface-muted p-3"><dt className="text-xs text-ink-muted">{label}</dt><dd className="mt-1 font-mono text-lg font-bold">{value}</dd></div>)}</dl>
           {driverReport.limited ? <p className="mt-3 text-xs text-badge-warning">Showing totals and the latest 5,000 assigned bookings; older trip rows exceed the report limit.</p> : null}
           <DriverLiveLocation
@@ -353,7 +363,7 @@ function DuesBoard({ reviewer }: { reviewer: Reviewer }) {
             activeBookingId={driverReport.bookings.find((row) => ['assigned', 'driver_en_route', 'driver_arrived', 'trip_started', 'in_progress', 'destination_reached'].includes(row.status))?.id ?? null}
             profileAvailability={drivers.find((row) => row.uid === driverReport.driver.uid)?.availabilityState ?? null}
           />
-          <div className="mt-5 overflow-x-auto"><table className="w-full min-w-[680px] text-left text-sm"><thead><tr className="border-b border-line text-xs uppercase text-ink-muted"><th className="py-2 pr-3">Booking</th><th className="py-2 pr-3">Status</th><th className="py-2 pr-3">Created / completed</th><th className="py-2 pr-3">Fare</th><th className="py-2 pr-3">Commission</th></tr></thead><tbody>{driverReport.bookings.slice(0, 100).map((row) => <tr key={row.id} className="border-b border-line"><td className="py-2 pr-3 font-medium">{row.reference}<span className="block text-[10px] text-ink-faint">{row.id}</span></td><td className="py-2 pr-3 capitalize">{row.status.replaceAll('_', ' ')}</td><td className="py-2 pr-3 text-xs text-ink-muted">{stamp(row.createdAtMs)}{row.completedAtMs ? <span className="block">Done {stamp(row.completedAtMs)}</span> : null}</td><td className="py-2 pr-3 font-mono">{row.farePaise > 0 ? <>{formatINR(row.farePaise)}<span className="block text-[10px] text-ink-faint">{row.fareKind}</span></> : '—'}</td><td className="py-2 pr-3 font-mono">{row.commissionPaise === null ? '—' : `${formatINR(row.commissionPaise)} · ${row.commissionStatus}`}</td></tr>)}</tbody></table>{driverReport.bookings.length > 100 ? <p className="mt-2 text-xs text-ink-muted">Showing latest 100 of {driverReport.bookings.length} booking rows; totals above include all loaded rows.</p> : null}</div>
+          <div className="mt-5 overflow-x-auto"><table className="w-full min-w-[680px] text-left text-sm"><thead><tr className="border-b border-line text-xs uppercase text-ink-muted"><th className="py-2 pr-3">Booking</th><th className="py-2 pr-3">Status</th><th className="py-2 pr-3">Created / completed</th><th className="py-2 pr-3">Fare</th><th className="py-2 pr-3">Driver remittance</th></tr></thead><tbody>{driverReport.bookings.slice(0, 100).map((row) => <tr key={row.id} className="border-b border-line"><td className="py-2 pr-3 font-medium">{row.reference}<span className="block text-[10px] text-ink-faint">{row.id}</span></td><td className="py-2 pr-3 capitalize">{row.status.replaceAll('_', ' ')}</td><td className="py-2 pr-3 text-xs text-ink-muted">{stamp(row.createdAtMs)}{row.completedAtMs ? <span className="block">Done {stamp(row.completedAtMs)}</span> : null}</td><td className="py-2 pr-3 font-mono">{row.farePaise > 0 ? <>{formatINR(row.farePaise)}<span className="block text-[10px] text-ink-faint">{row.fareKind}</span></> : '—'}</td><td className="py-2 pr-3 font-mono">{row.commissionPaise === null ? '—' : `${formatINR(row.commissionPaise)} · ${row.commissionStatus}`}</td></tr>)}</tbody></table>{driverReport.bookings.length > 100 ? <p className="mt-2 text-xs text-ink-muted">Showing latest 100 of {driverReport.bookings.length} booking rows; totals above include all loaded rows.</p> : null}</div>
         </div> : selectedDriverUid && !reportLoading && !reportError ? <p className="mt-4 text-sm text-ink-muted">No report available.</p> : null}
       </section>
 
@@ -363,7 +373,7 @@ function DuesBoard({ reviewer }: { reviewer: Reviewer }) {
 
       {rows !== null && rows.length === 0 ? (
         <p className="mt-6 rounded-card border border-line bg-surface p-6 text-sm text-ink-muted">
-          Nobody owes anything. A commission row appears here on its own once a trip is marked
+          Nobody owes anything. A trip remittance row appears here on its own once a trip is marked
           completed, and the onboarding fee appears when a driver first files a document.
         </p>
       ) : null}
@@ -440,13 +450,11 @@ function DriverDues({ group, canRecord }: { group: Group; canRecord: boolean }) 
                 {row.bookingId ? ` · booking ${row.bookingId}` : ''} ·{' '}
                 {row.createdAtMs === null ? 'no date on the row' : `billed ${stamp(row.createdAtMs)}`}
               </p>
+              {row.kind === 'commission' ? <p className="mt-1 text-xs text-ink-muted">Commission GST {formatINR(row.gstPaise)} · Customer fare GST {Math.round(row.fareTaxRate * 100)}% to remit {formatINR(row.fareTaxPaise)} · TDS {Math.round(row.tdsRate * 100)}% of {formatINR(row.tdsBasePaise)} = {formatINR(row.tdsPaise)}</p> : null}
             </div>
             <p className="font-mono text-sm">
-              {formatINR(row.basePaise)}
-              <span className="text-ink-faint">
-                {' '}
-                + {Math.round(row.gstRate * 100)}% tax {formatINR(row.gstPaise)} ={' '}
-              </span>{' '}
+              {formatINR(row.basePaise)} + {Math.round(row.gstRate * 100)}% commission GST {formatINR(row.gstPaise)}
+              {row.kind === 'commission' ? ` + fare GST ${formatINR(row.fareTaxPaise)} + TDS ${formatINR(row.tdsPaise)} = ` : ' = '}
               <span className="font-semibold">{formatINR(row.totalPaise)}</span>
             </p>
           </li>

@@ -1,4 +1,5 @@
 import { onDocumentCreated, onDocumentUpdated } from 'firebase-functions/v2/firestore';
+import { DRIVER_REQUIRED_DOCUMENT_TYPES, driverDocumentNeedsBack } from '@drivx/domain';
 import { db, readDoc, serverTimestamp } from '../lib/admin';
 import { REGION } from '../lib/config';
 import { ensureOnboardingDue } from '../lib/dues';
@@ -32,12 +33,16 @@ export async function queueDriverApplicationIfReady(driverUid: string, reason: s
     readDoc(`driverProfiles/${driverUid}/dues/onboarding_fee`),
     db().collection(`driverProfiles/${driverUid}/documents`).get(),
   ]);
-  const required = ['driver_photograph', 'photo_id', 'driving_licence'];
-  const filed = new Set(documents.docs.map((row) => row.id));
+  const required = DRIVER_REQUIRED_DOCUMENT_TYPES;
+  const filed = new Map(documents.docs.map((row) => [row.id, row]));
   if (
     !profile.applicationSubmittedAtMs ||
     fee?.status !== 'paid' ||
-    required.some((id) => !filed.has(id) || documents.docs.find((row) => row.id === id)?.get('status') !== 'pending_review')
+    required.some((type) => {
+      const row = filed.get(type);
+      return !row || row.get('status') !== 'pending_review' || typeof row.get('storagePath') !== 'string' ||
+        (driverDocumentNeedsBack(type) && typeof row.get('backStoragePath') !== 'string');
+    })
   ) return false;
 
   await db().collection('driverProfiles').doc(driverUid).update({

@@ -107,7 +107,7 @@ describe('driver documents', () => {
   });
 
   it('shows a document only to its owner and to reviewing staff', async () => {
-    const path = `drivers/${DRIVER_ONE}/doc-1`;
+    const path = `drivers/${DRIVER_ONE}/driving_licence`;
     // The emulator percent-encodes the object name in the download URL.
     const url = decodeURIComponent(await expectAllowed(getDownloadURL(storageRef(bucket(DRIVER_ONE, 'driver'), path))));
     expect(url).toContain(`/o/${path}`);

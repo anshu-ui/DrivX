@@ -2,8 +2,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { driverDocumentDownloadUrl, toEpochMs, uploadAvatar, uploadDriverDocument } from '@drivx/firebase-client';
 import {
   COLLECTIONS,
+  DRIVER_REQUIRED_DOCUMENT_TYPES,
   SUBCOLLECTIONS,
   documentNumberSchema,
+  driverDocumentNeedsBack,
   driverDocumentUploadInputSchema,
   type DocumentType,
   type VerificationStatus,
@@ -15,14 +17,14 @@ import { firebase } from '../../lib/firebase';
 /**
  * The driver's own paperwork.
  *
- * Two writes per document, in this order: the file to Cloud Storage at
- * `drivers/{uid}/{type}`, then the Firestore pointer at
- * `driverProfiles/{uid}/documents/{type}`. The order matters because the rules
- * rebuild the storage path from the caller's uid and the document id, so a
- * pointer can only ever describe a file the same driver is allowed to write.
+ * Identity cards are written to separate front and back Cloud Storage paths,
+ * followed by one Firestore pointer at `driverProfiles/{uid}/documents/{type}`.
+ * The order matters because the rules rebuild both storage paths from the
+ * caller's uid and document id, so the pointer can only describe files the same
+ * driver is allowed to write.
  *
- * The photograph is written three times. Its third write is the copy at
- * `avatars/{uid}/profile.jpg` — the one object in the bucket a signed-in
+ * The face photo is written to private storage, copied to
+ * `avatars/{uid}/profile.jpg`, then filed to Firestore — the one object in the bucket a signed-in
  * customer may read, and therefore the only face a customer's driver card can
  * point at.
  *
@@ -34,12 +36,14 @@ import { firebase } from '../../lib/firebase';
 /** One row of the checklist, with whatever the driver has already filed. */
 export type DriverDocumentView = {
   type: DocumentType;
-  status: VerificationStatus | 'not_uploaded';
+  status: VerificationStatus | 'not_uploaded' | 'incomplete';
   numberMasked: string | null;
   uploadedAtMs: number | null;
   rejectionNote: string | null;
   /** True once a file exists, so the screen can offer "view your upload". */
   hasFile: boolean;
+  hasFrontFile: boolean;
+  hasBackFile: boolean;
 };
 
 export type PickedAsset = {
@@ -106,16 +110,24 @@ export function useDriverDocuments() {
               uploadedAtMs: null,
               rejectionNote: null,
               hasFile: false,
+              hasFrontFile: false,
+              hasBackFile: false,
             };
           }
           const data = snap.data();
+          const hasFrontFile = typeof data.storagePath === 'string' && data.storagePath.length > 0;
+          const hasBackFile = typeof data.backStoragePath === 'string' && data.backStoragePath.length > 0;
+          const hasFile = hasFrontFile && (!driverDocumentNeedsBack(type) || hasBackFile);
+          const savedStatus = (data.status as VerificationStatus) ?? 'not_uploaded';
           return {
             type,
-            status: (data.status as VerificationStatus) ?? 'not_uploaded',
+            status: savedStatus === 'pending_review' && !hasFile ? 'incomplete' : savedStatus,
             numberMasked: (data.numberMasked as string | null) ?? null,
             uploadedAtMs: toEpochMs(data.uploadedAtMs),
             rejectionNote: (data.rejectionNote as string | null) ?? null,
-            hasFile: typeof data.storagePath === 'string' && data.storagePath.length > 0,
+            hasFile,
+            hasFrontFile,
+            hasBackFile,
           };
         }),
       );
@@ -138,24 +150,35 @@ export function useUploadDriverDocument() {
   return useMutation({
     mutationFn: async (input: {
       type: DocumentType;
-      asset: PickedAsset;
+      frontAsset: PickedAsset;
+      backAsset?: PickedAsset;
       /** Typed by the driver; stored only as its last four characters. */
       number?: string | null;
     }) => {
       const uid = user?.uid;
       if (!uid) throw new Error('Sign in again to upload a document.');
 
-      const blob = await assetBlob(input.asset);
-      const contentType = input.asset.mimeType ?? 'image/jpeg';
-      const sizeBytes = blob.size;
+      if (driverDocumentNeedsBack(input.type) && !input.backAsset) {
+        throw new Error('Choose both the front and back photos before uploading this document.');
+      }
 
-      const file = driverDocumentUploadInputSchema.safeParse({
-        type: input.type,
-        fileName: input.asset.fileName ?? input.type,
-        sizeBytes,
-        contentType,
-      });
-      if (!file.success) throw new Error(file.error.issues[0]?.message ?? 'That file cannot be uploaded.');
+      const frontBlob = await assetBlob(input.frontAsset);
+      const backBlob = input.backAsset ? await assetBlob(input.backAsset) : null;
+      const validateImage = (asset: PickedAsset, blob: Blob, side: string) => {
+        const contentType = asset.mimeType ?? 'image/jpeg';
+        const file = driverDocumentUploadInputSchema.safeParse({
+          type: input.type,
+          fileName: asset.fileName ?? `${input.type}-${side}`,
+          sizeBytes: blob.size,
+          contentType,
+        });
+        if (!file.success) throw new Error(file.error.issues[0]?.message ?? `The ${side} photo cannot be uploaded.`);
+        return contentType;
+      };
+      const frontContentType = validateImage(input.frontAsset, frontBlob, 'front');
+      const backContentType = backBlob && input.backAsset
+        ? validateImage(input.backAsset, backBlob, 'back')
+        : null;
 
       const existing = await getDoc(documentRef(uid, input.type));
       const status = existing.exists() ? (existing.data().status as VerificationStatus) : null;
@@ -166,7 +189,15 @@ export function useUploadDriverDocument() {
       }
 
       const clients = firebase();
-      const storagePath = await uploadDriverDocument(clients, { uid, documentId: input.type }, blob, contentType);
+      const [frontUpload, backUpload] = await Promise.all([
+        uploadDriverDocument(clients, { uid, documentId: input.type }, frontBlob, frontContentType),
+        backBlob && backContentType
+          ? uploadDriverDocument(clients, { uid, documentId: `${input.type}_back` }, backBlob, backContentType)
+          : Promise.resolve(null),
+      ]);
+      if (!frontUpload || (driverDocumentNeedsBack(input.type) && !backUpload)) {
+        throw new Error('Both document photos must upload successfully before the record can be submitted.');
+      }
 
       // The face the customer is shown cannot be the file the office reviews:
       // `drivers/{uid}/…` is readable only by its owner and staff, so a
@@ -175,7 +206,7 @@ export function useUploadDriverDocument() {
       // and the profile stores that path rather than a minted URL.
       let publicPhotoPath: string | null = null;
       if (input.type === 'driver_photograph') {
-        publicPhotoPath = (await uploadAvatar(clients, { uid }, blob, contentType)).path;
+        publicPhotoPath = (await uploadAvatar(clients, { uid }, frontBlob, frontContentType)).path;
       }
 
       const numberMasked =
@@ -187,7 +218,8 @@ export function useUploadDriverDocument() {
         id: input.type,
         driverUid: uid,
         type: input.type,
-        storagePath: storagePath.path,
+        storagePath: frontUpload.path,
+        backStoragePath: backUpload?.path ?? null,
         status: 'pending_review' as VerificationStatus,
         numberMasked,
         // A native Timestamp, like every other `*Ms` field in this database: the
@@ -234,8 +266,9 @@ export function useUploadDriverDocument() {
  * A download URL for the driver's own upload, so they can confirm the photo is
  * legible before the office looks at it. Rules refuse another driver's path.
  */
-export async function ownDocumentUrl(uid: string, type: DocumentType): Promise<string> {
-  return driverDocumentDownloadUrl(firebase(), { uid, documentId: type });
+export async function ownDocumentUrl(uid: string, type: DocumentType, side: 'front' | 'back' = 'front'): Promise<string> {
+  const documentId = side === 'back' ? `${type}_back` : type;
+  return driverDocumentDownloadUrl(firebase(), { uid, documentId });
 }
 
 /**
@@ -244,5 +277,5 @@ export async function ownDocumentUrl(uid: string, type: DocumentType): Promise<s
  * standing between a phone camera and a usable image.
  */
 export function driverDocumentTypes(): DocumentType[] {
-  return ['driver_photograph', 'photo_id', 'driving_licence'];
+  return [...DRIVER_REQUIRED_DOCUMENT_TYPES];
 }

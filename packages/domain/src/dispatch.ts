@@ -25,7 +25,7 @@ export const DUTY_TERMS = {
     'The start code and the end code belong to the customer. You enter what they read out to you — a code you guessed, kept or reused is not an arrival, it is a false trip.',
     'The bill is priced from the odometer you report at pickup and at the drop. Enter the dial as it stands; DrivX meters the difference between the two readings.',
     `DrivX keeps its commission share of every completed trip plus GST on that share. The rate the trip was billed at is on the trip itself, and it does not change afterwards.`,
-    'While that commission is unpaid, new trips are held. Pay in the app or hand the amount at the office — the hold lifts as soon as nothing is owed.',
+    'While this trip remittance is unpaid, new trips are held. Pay in the app or hand the amount at the office — the hold lifts as soon as nothing is owed.',
     'Only the customer can cancel a trip. If you cannot drive one, decline it: the booking goes back to be offered again instead of ending, so the customer still gets a driver.',
     'Your Aadhaar and driving licence stay on the office record. If they are sent back or lapse, your approval ends and duty stops with it.',
   ],

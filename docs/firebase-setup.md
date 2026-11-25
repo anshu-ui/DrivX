@@ -294,12 +294,13 @@ Spec §9 requires it, and it is configuration rather than code:
 
 ```bash
 npm run emulators              # :4000 UI, auth :9099, firestore :8080, RTDB :9000, functions :5001, storage :9199
-npm run test:rules             # 112 cases against the three rule files
-npm run seed                   # 6 accounts with minted claims + 41 records
+npm run test:rules             # 120 cases against the three rule files
+npm run seed                   # 6 accounts with minted claims + 44 records
 npm run verify:phone-otp       # the sign-in path, through the RN build of the JS SDK
 npm run verify:customer-paths  # every read/write the customer screens issue, rules enforced
-npm run verify:driver-onboarding  # the ₹10.50 fee: raised by the first upload, cleared only by an admin
-npm run verify:driver-dues     # the office's cut (13% default) + 5% per completed trip, and the hold on new work
+npm run verify:driver-onboarding  # required email, four documents, front/back card uploads, and the fee gate
+npm run verify:driver-dues     # commission GST, fare GST pass-through, rate-based TDS, and the work hold
+npm run verify:trip-invoices   # two PDFs, mocked email delivery, idempotency, and the admin ZIP archive
 ```
 
 `firebase.json` runs `singleProjectMode` with `.firebaserc`'s `drivx-local`, and
@@ -322,7 +323,7 @@ The rules suite no longer needs to run before the seed. `singleProjectMode` stil
 `drivx-rules-test` the same database as the app's `drivx-local`, but the suite now writes its
 fixtures under a per-run uid namespace (`cust-1-<run>`, `drv-1-<run>`, `bk-<run>-…`), so
 `npm run seed`'s `bk-demo-*` bookings and `chauffeur_*` service types cannot land inside its list
-assertions any more — 112 cases pass against a seeded emulator, re-run and confirmed on 2026-10-25.
+assertions any more — 120 cases pass against a seeded emulator, re-run and confirmed on 2026-11-25.
 Two of them stay membership checks rather than row counts (the ops whole-board read and the customer's
 enabled-catalogue query), because those reads legitimately see the demo rows; everything else asserts
 the exact set. Export `RULES_RUN_ID` to reproduce a run against one fixed fixture set.
@@ -391,10 +392,11 @@ Steps 1, 3, 4 and 7 need no live project, and all four pass on this machine:
   the ledger rows those three raise are derived by `commissionDueFor` from the same fixtures rather
   than typed out, so the seeded bill cannot disagree with the seeded receipt); the claims arrive in
   the ID token (`role: customer`, `driverVerified: false`), which is what the rules read.
-- **Money** — `npm run verify:driver-onboarding` (36 checks) and `npm run verify:driver-dues`
-  (46 checks) run the two charges end to end through the Functions emulator with the rules on: the
-  ₹10.50 fee raised by a first document upload and cleared only by an admin's recorded cash/UPI
-  handover, and the office's cut — 13% unless `appConfig/commission` says otherwise — plus 5% GST per completed trip, held idempotently to one row per booking, gating
+- **Money** — `npm run verify:driver-onboarding` (40 checks) and `npm run verify:driver-dues`
+  (42 checks) run the charges end to end through the Functions emulator with the rules on: the
+  ₹525 onboarding fee raised by the first upload and cleared only by an admin's recorded cash/UPI
+  handover, and the office's configured commission plus commission GST, fare GST pass-through, and
+  TDS on the remaining driver share. Each trip is held idempotently to one row per booking, gating
   `respondToAssignment` and going online while anything is unpaid. Both clean up after themselves —
   throwaway accounts, bookings, dues and audit rows are deleted on the way out.
 - **4, as far as a laptop allows** — `npm run verify:customer-paths` signs in four real sessions at

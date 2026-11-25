@@ -691,6 +691,7 @@ export const confirmCompletion = onCall(CALLABLE_OPTIONS, async (request) => {
     { ...booking, status: 'completed', id: input.bookingId, finalFare },
     commissionTerms.rate,
     commissionTerms.gstRate,
+    commissionTerms.tdsRate,
   );
   if (!billable) {
     // Tripwire, like the state-machine check above: a booking this far through
@@ -783,6 +784,7 @@ export const confirmCompletion = onCall(CALLABLE_OPTIONS, async (request) => {
         id: dueId, driverUid: caller.uid, kind: 'late_arrival_penalty', title: 'Late start penalty',
         bookingId: input.bookingId, currency: 'INR', basePaise: penaltyPaise, rate: null,
         commissionablePaise: null, gstRate, gstPaise, totalPaise: penaltyPaise + gstPaise,
+        fareTaxPaise: 0, tdsBasePaise: 0, tdsRate: 0, tdsPaise: 0,
         status: 'unpaid', method: null, reference: null, recordedByUid: null, recordedAtMs: null,
         createdAtMs: serverTimestamp(), updatedAtMs: serverTimestamp(),
       });
@@ -859,7 +861,7 @@ export const confirmCompletion = onCall(CALLABLE_OPTIONS, async (request) => {
     durationSeconds,
     quotedTotalPaise: quote.totalPaise,
     finalFare,
-    commissionPaise: billable?.due.totalPaise ?? null,
+    remittancePaise: billable?.due.totalPaise ?? null,
   };
 });
 

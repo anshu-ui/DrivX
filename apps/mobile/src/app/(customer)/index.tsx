@@ -184,6 +184,10 @@ export default function CustomerHome() {
   const [couponPreviewError, setCouponPreviewError] = useState<string | null>(null);
   const [useWallet, setUseWallet] = useState(false);
   const [useMiles, setUseMiles] = useState(false);
+  const [gstDetailsOpen, setGstDetailsOpen] = useState(false);
+  const [gstBusinessName, setGstBusinessName] = useState('');
+  const [gstin, setGstin] = useState('');
+  const [gstDetailsError, setGstDetailsError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -1033,10 +1037,38 @@ export default function CustomerHome() {
                         Add both places to see the fare.
                       </Text>
                     )}
+                    <Card tone="inset" style={{ gap: theme.spacing.xs }}>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityState={{ expanded: gstDetailsOpen }}
+                        onPress={() => { setGstDetailsOpen((open) => !open); setGstDetailsError(null); }}
+                        style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacing.sm }}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text variant="label" tone="brand">Add GST details for your invoice</Text>
+                          <Text variant="caption" tone="muted">Optional business GSTIN for the 5% fare GST line.</Text>
+                        </View>
+                        <Ionicons name={gstDetailsOpen ? 'chevron-up' : 'chevron-down'} size={18} color={theme.colors.primary} />
+                      </Pressable>
+                      {gstDetailsOpen ? <View style={{ gap: theme.spacing.sm }}>
+                        <TextInput value={gstBusinessName} onChangeText={setGstBusinessName} placeholder="Business name" placeholderTextColor={theme.colors.textFaint} accessibilityLabel="GST invoice business name" maxLength={120} style={{ minHeight: 44, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 12, paddingHorizontal: 12, color: theme.colors.text }} />
+                        <TextInput value={gstin} onChangeText={(value) => setGstin(value.toUpperCase().replace(/\s/g, ''))} placeholder="15-character GSTIN" placeholderTextColor={theme.colors.textFaint} accessibilityLabel="Customer GSTIN" autoCapitalize="characters" maxLength={15} style={{ minHeight: 44, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 12, paddingHorizontal: 12, color: theme.colors.text }} />
+                        <Text variant="caption" tone="faint">Leave both empty for a personal invoice. If you add GST details, both fields must be valid.</Text>
+                        {gstDetailsError ? <Text variant="caption" tone="danger" accessibilityRole="alert">{gstDetailsError}</Text> : null}
+                      </View> : null}
+                    </Card>
                     <Button
                       label="Confirm DrivX ride"
                       onPress={() => {
                         if (!service || !pickup || !destination) return;
+                        const cleanBusinessName = gstBusinessName.trim();
+                        const cleanGstin = gstin.trim().toUpperCase();
+                        const hasTaxDetails = cleanBusinessName.length > 0 || cleanGstin.length > 0;
+                        if (hasTaxDetails && (!cleanBusinessName || !/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(cleanGstin))) {
+                          setGstDetailsOpen(true);
+                          setGstDetailsError('Enter both a business name and a valid 15-character GSTIN, or leave both empty.');
+                          return;
+                        }
                         booking.mutate(
                           {
                             pickup,
@@ -1054,6 +1086,7 @@ export default function CustomerHome() {
                             couponCode: activeCoupon?.couponCode,
                             redeemWalletPaise: useWallet ? (rewardCheckout?.walletPaise ?? 0) : 0,
                             redeemMilesPoints: useMiles ? (rewardCheckout?.milesPoints ?? 0) : 0,
+                            ...(hasTaxDetails ? { customerTaxDetails: { businessName: cleanBusinessName, gstin: cleanGstin } } : {}),
                             idempotencyKey,
                           },
                           {

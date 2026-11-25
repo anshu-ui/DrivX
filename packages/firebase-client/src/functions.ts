@@ -67,6 +67,8 @@ const hostingCallableNames = new Set([
   'createTripTrackingShare',
   'getDriverEarningsSummary',
   'getAdminDriverEarningsReport',
+  'getTripInvoiceDownloadUrl',
+  'getTripInvoiceArchive',
 ]);
 
 /**

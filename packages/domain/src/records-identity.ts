@@ -162,7 +162,7 @@ export type DriverDocumentRecord = {
  *
  * Money a driver owes the platform, one document per charge. The id is derived,
  * never generated: `onboarding_fee` for the one-time charge, `commission_{bookingId}`
- * for a trip's share. That is what makes billing idempotent — however many
+ * for a trip's remittance. That is what makes billing idempotent — however many
  * uploads, retries or triggers fire around a driver, there is exactly one row for
  * the fee and one row per booking.
  */
@@ -172,7 +172,7 @@ export type DriverDueRecord = {
   kind: DriverDueKind;
   /** What the driver and the office both read the charge as. */
   title: string;
-  /** The trip a commission row came from; null for the one-time fee. */
+  /** The trip remittance came from; null for the one-time fee. */
   bookingId: string | null;
   currency: 'INR';
   /** The charge before tax. */
@@ -188,7 +188,17 @@ export type DriverDueRecord = {
   /** Admin-configured tax fraction, stored per due row to preserve its history. */
   gstRate: number;
   gstPaise: MoneyPaise;
-  /** What must actually be handed over: `basePaise + gstPaise`. */
+  /** Fare GST collected from the customer and passed through by the driver. */
+  fareTaxPaise?: MoneyPaise;
+  /** Effective fare GST rate captured from the completed fare snapshot. */
+  fareTaxRate?: number;
+  /** Driver's post-commission share that forms the TDS base. */
+  tdsBasePaise?: MoneyPaise;
+  /** Admin-configured TDS fraction snapshotted on this due. */
+  tdsRate?: number;
+  /** TDS on the driver's post-commission share. */
+  tdsPaise?: MoneyPaise;
+  /** Full driver remittance: commission, commission GST, customer fare GST and TDS. */
   totalPaise: MoneyPaise;
   status: DriverDueStatus;
   /**
@@ -231,22 +241,24 @@ export const ONBOARDING_FEE_TOTAL_PAISE = (ONBOARDING_FEE.basePaise +
 /**
  * The platform's share of every trip the driver actually completes.
  *
- * 13% of the **commissionable** fare plus any Admin-configured tax on that share. The rate here is
+ * 13% of the **commissionable** fare plus 18% GST on that share. The rate here is
  * the fallback: the operator's own figure lives in `appConfig/commission` and is
  * read when a booking is created, so the trip keeps the rate it was quoted at
  * even after the office changes it. `commissionDueFor` and `commissionSnapshotFor`
  * both take the rate as an argument rather than reaching for a document, so this
  * object stays the only place a default is written down.
  *
- * The commissionable base is the fare subtotal, not the customer's tax line. Tax is applied to the office's share only when an Admin configures it.
+ * The commissionable base is the fare subtotal, not the customer's tax line. Customer fare GST is passed through separately; TDS is based on the driver's share after commission.
  */
 export const COMMISSION_TERMS = {
   kind: 'commission' as DriverDueKind,
   /** The platform's cut of the trip fare, unless the office has configured another. */
   rate: 0.13,
-  // No tax is inferred. Admin configures a rate only after tax review.
-  gstRate: 0,
-  title: 'Trip commission',
+  /** GST on the platform's commission. */
+  gstRate: 0.18,
+  /** TDS percentage of the driver's share after commission. */
+  tdsRate: 0.01,
+  title: 'Driver trip remittance',
 };
 
 /**
@@ -280,38 +292,65 @@ export type CommissionSnapshot = {
   /** The rate this trip was billed at, not whatever the office sets tomorrow. */
   rate: number;
   gstRate: number;
+  /** Customer fare GST, collected by the driver and remitted to DrivX. */
+  fareTaxPaise?: MoneyPaise;
+  /** Effective customer fare GST rate on this trip. */
+  fareTaxRate?: number;
+  /** TDS fraction applied to the fare remaining after commission. */
+  tdsRate?: number;
+  /** Driver's pre-TDS share of the commissionable base. */
+  tdsBasePaise?: MoneyPaise;
+  /** TDS collected on that share. */
+  tdsPaise?: MoneyPaise;
   /** The fare the rate was applied to — the subtotal minus every excluded line. */
   commissionablePaise: MoneyPaise;
   /** `rate × commissionablePaise`, rounded once. */
   basePaise: MoneyPaise;
   gstPaise: MoneyPaise;
-  /** What the driver owes for this trip. */
+  /** Commission + commission GST + customer fare GST + driver-share TDS. */
   totalPaise: MoneyPaise;
 };
 
 /**
- * ₹144.00 on a ₹960.00 commissionable fare at 15% when no tax is configured.
+ * Commission, commission GST, customer fare GST, and TDS rounded at paise.
  *
  * Rounding is `Math.round` at paise, matching the fare engine, and configured tax is
  * computed from the rounded commission rather than from the un-rounded product,
- * so the rupee the driver is billed is the one the receipt of the row adds up to.
+ * so each statement line adds to the amount the driver remits.
  */
 export function commissionDueFor(
   fareBasePaise: MoneyPaise | number,
   rate: number = COMMISSION_TERMS.rate,
   gstRate: number = COMMISSION_TERMS.gstRate,
-): { rate: number; basePaise: MoneyPaise; gstPaise: MoneyPaise; totalPaise: MoneyPaise } {
+  fareTaxPaise: MoneyPaise | number = 0,
+  tdsRate: number = COMMISSION_TERMS.tdsRate,
+): {
+  rate: number;
+  basePaise: MoneyPaise;
+  gstPaise: MoneyPaise;
+  fareTaxPaise: MoneyPaise;
+  tdsRate: number;
+  tdsBasePaise: MoneyPaise;
+  tdsPaise: MoneyPaise;
+  totalPaise: MoneyPaise;
+} {
   const basePaise = Math.round(Number(fareBasePaise) * rate) as MoneyPaise;
   const gstPaise = Math.round(basePaise * gstRate) as MoneyPaise;
-  return { rate, basePaise, gstPaise, totalPaise: (basePaise + gstPaise) as MoneyPaise };
+  const tdsBasePaise = Math.max(0, Math.round(Number(fareBasePaise) - basePaise)) as MoneyPaise;
+  const tdsPaise = Math.round(tdsBasePaise * tdsRate) as MoneyPaise;
+  const fareTax = Math.max(0, Math.round(Number(fareTaxPaise))) as MoneyPaise;
+  return {
+    rate, basePaise, gstPaise, fareTaxPaise: fareTax, tdsRate, tdsBasePaise, tdsPaise,
+    totalPaise: (basePaise + gstPaise + fareTax + tdsPaise) as MoneyPaise,
+  };
 }
 
 /**
  * The commission terms of one quoted trip.
  *
  * Produced by the server at booking time and stored on the booking, so the
- * ledger, the driver's earnings screen and the office all read the *same* four
- * numbers instead of recomputing a rate that may have moved since.
+ * ledger, the driver's earnings screen and the office all read the *same* fare
+ * and settlement snapshot instead of recomputing rates that may have moved since.
  */
 export function commissionSnapshotFor(
   breakdown: {
@@ -321,12 +360,19 @@ export function commissionSnapshotFor(
   },
   rate: number = COMMISSION_TERMS.rate,
   gstRate: number = COMMISSION_TERMS.gstRate,
+  tdsRate: number = COMMISSION_TERMS.tdsRate,
 ): CommissionSnapshot {
   const base = commissionablePaise(breakdown);
-  const { basePaise, gstPaise, totalPaise } = commissionDueFor(base, rate, gstRate);
+  const { basePaise, gstPaise, fareTaxPaise, tdsBasePaise, tdsPaise, totalPaise } =
+    commissionDueFor(base, rate, gstRate, breakdown.taxPaise, tdsRate);
   return {
     rate,
     gstRate,
+    fareTaxPaise,
+    fareTaxRate: breakdown.subtotalPaise > 0 ? Number(breakdown.taxPaise) / Number(breakdown.subtotalPaise) : 0,
+    tdsRate,
+    tdsBasePaise,
+    tdsPaise,
     commissionablePaise: base,
     basePaise,
     gstPaise,
@@ -370,11 +416,27 @@ export function readCommissionSnapshot(value: unknown): CommissionSnapshot | nul
   );
   if (rate === null || gstRate === null || paise.some((amount) => amount === null)) return null;
   const [commissionable, base, gst, total] = paise as [number, number, number, number];
-  // A row whose parts do not add up is not a snapshot, it is a corrupt document.
-  if (base + gst !== total) return null;
+  const tdsRate = row.tdsRate === undefined ? 0 : commissionRateFrom(row.tdsRate);
+  const fareTaxRate = row.fareTaxRate === undefined ? null : commissionRateFrom(row.fareTaxRate);
+  const optionalPaise = (field: unknown): number | null => field === undefined
+    ? null
+    : typeof field === 'number' && Number.isFinite(field) && field >= 0 ? field : Number.NaN;
+  const fareTaxPaise = optionalPaise(row.fareTaxPaise);
+  const tdsBasePaise = optionalPaise(row.tdsBasePaise);
+  const tdsPaise = optionalPaise(row.tdsPaise);
+  if (tdsRate === null || (row.fareTaxRate !== undefined && fareTaxRate === null) || [fareTaxPaise, tdsBasePaise, tdsPaise].some((amount) => Number.isNaN(amount))) return null;
+  // Legacy snapshots only recorded commission and its tax. New snapshots also
+  // account for customer fare GST and driver-share TDS in the same total.
+  const expectedTotal = base + gst + (fareTaxPaise ?? 0) + (tdsPaise ?? 0);
+  if (expectedTotal !== total) return null;
   return {
     rate,
     gstRate,
+    ...(fareTaxPaise === null ? {} : { fareTaxPaise: fareTaxPaise as MoneyPaise }),
+    ...(fareTaxRate === null ? {} : { fareTaxRate }),
+    ...(tdsBasePaise === null ? {} : { tdsBasePaise: tdsBasePaise as MoneyPaise }),
+    ...(row.tdsRate === undefined ? {} : { tdsRate }),
+    ...(tdsPaise === null ? {} : { tdsPaise: tdsPaise as MoneyPaise }),
     commissionablePaise: commissionable as MoneyPaise,
     basePaise: base as MoneyPaise,
     gstPaise: gst as MoneyPaise,
@@ -382,26 +444,34 @@ export function readCommissionSnapshot(value: unknown): CommissionSnapshot | nul
   };
 }
 
-/** One commission row per booking, keyed by its id so a retry cannot bill twice. */
+/** One trip remittance row per booking, keyed by its id so a retry cannot bill twice. */
 export function commissionDueId(bookingId: string): string {
   return `commission_${bookingId}`;
 }
 
-/** The title on a commission row, naming the trip it came from. */
+/** The title on a trip remittance row, naming the trip it came from. */
 export function commissionTitleFor(reference: string): string {
-  return `Commission on trip ${reference}`;
+  return `Driver remittance for trip ${reference}`;
 }
 
-/** The four numbers of a completed trip, in the order a driver reads them. */
+/** The fare and settlement amounts of a completed trip, in the order a driver reads them. */
 export type DriverTripSplit = {
   /** What the customer paid, including any configured tax. */
   fareTotalPaise: MoneyPaise;
-  /** The tax inside that bill, if configured. */
+  /** Customer fare tax included in the fare total. */
   gstPaise: MoneyPaise;
+  commissionBasePaise: MoneyPaise;
+  commissionGstPaise: MoneyPaise;
+  fareTaxPaise: MoneyPaise;
+  fareTaxRate: number;
+  tdsBasePaise: MoneyPaise;
+  tdsRate: number;
+  tdsPaise: MoneyPaise;
+  totalDuePaise: MoneyPaise;
   /** The rate this trip's commission was taken at, as it was billed. */
   rate: number;
   gstRate: number;
-  /** The platform's share, exactly as the dues ledger raised it. */
+  /** Commission before GST, kept as a separate display line. */
   commissionPaise: MoneyPaise;
   /** What the driver keeps, in cash at the end of the trip. */
   netPaise: MoneyPaise;
@@ -410,11 +480,10 @@ export type DriverTripSplit = {
 /**
  * Splits one completed trip between the platform and the driver.
  *
- * The commission is the trip's own stored snapshot rather than a recomputation,
- * so a driver can never be shown a take-home figure that disagrees with the
- * charge the ledger raised against them — even after the office changes the rate.
- * Everything the ledger did not take is the driver's: the customer's GST is not
- * commissionable and is not held back twice. A booking with no snapshot has no
+ * Uses the trip's own stored snapshot rather than current Admin rates, so a
+ * later rate change cannot rewrite the settlement. The customer GST is passed
+ * through to DrivX and TDS is calculated on the fare left after commission.
+ * A booking with no snapshot has no
  * honest number to show, so this returns null instead of assuming a rate.
  */
 export function driverTripSplitFor(
@@ -423,7 +492,10 @@ export function driverTripSplitFor(
     taxPaise: MoneyPaise;
     totalPaise: MoneyPaise;
   },
-  commission: Pick<CommissionSnapshot, 'rate' | 'gstRate' | 'totalPaise'> | null | undefined,
+  commission: Pick<CommissionSnapshot,
+    'rate' | 'gstRate' | 'totalPaise' | 'basePaise' | 'gstPaise' | 'commissionablePaise'
+    | 'fareTaxPaise' | 'fareTaxRate' | 'tdsRate' | 'tdsBasePaise' | 'tdsPaise'
+  > | null | undefined,
 ): DriverTripSplit | null {
   if (!commission) return null;
   return {
@@ -431,8 +503,16 @@ export function driverTripSplitFor(
     gstPaise: fare.taxPaise,
     rate: commission.rate,
     gstRate: commission.gstRate,
-    commissionPaise: commission.totalPaise,
-    netPaise: (fare.totalPaise - commission.totalPaise) as MoneyPaise,
+    commissionPaise: commission.basePaise,
+    commissionBasePaise: commission.basePaise,
+    commissionGstPaise: commission.gstPaise,
+    fareTaxPaise: commission.fareTaxPaise ?? fare.taxPaise,
+    fareTaxRate: commission.fareTaxRate ?? (fare.subtotalPaise > 0 ? fare.taxPaise / fare.subtotalPaise : 0),
+    tdsBasePaise: commission.tdsBasePaise ?? Math.max(0, commission.commissionablePaise - commission.basePaise) as MoneyPaise,
+    tdsRate: commission.tdsRate ?? 0,
+    tdsPaise: commission.tdsPaise ?? 0 as MoneyPaise,
+    totalDuePaise: commission.totalPaise + (commission.fareTaxPaise === undefined ? fare.taxPaise : 0),
+    netPaise: (fare.totalPaise - commission.totalPaise - (commission.fareTaxPaise === undefined ? fare.taxPaise : 0)) as MoneyPaise,
   };
 }
 

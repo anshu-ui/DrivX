@@ -30,6 +30,7 @@ export { rateTrip } from './functions/ratings';
 export { remindDriverBeforePickup, sweepExpiredDriverOffers, sweepStaleDispatchPins, sweepStaleLocationData } from './functions/scheduled';
 export { setRole } from './functions/roles';
 export { chargeCommissionOnCompletion, chargeCommissionOnImportedTrip } from './functions/tripCommission';
+export { sendTripInvoicesOnCompletion, sendTripInvoicesOnImportedTrip } from './functions/tripInvoices';
 export { claimDriverReferralCode, claimReferralCode, getRewards, manageRewardsAdmin, requestDriverRewardPayout, settleRewardsOnTripCompletion } from './functions/rewards';
 export {
   confirmArrival,

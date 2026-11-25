@@ -194,6 +194,11 @@ export const couponPreviewInputSchema = quoteFields
 export const createBookingInputSchema = quoteFields
   .extend({
     preferences: customerPreferencesSchema,
+    /** Optional business GST details printed on the completed-trip customer invoice. */
+    customerTaxDetails: z.object({
+      businessName: z.string().trim().min(1).max(120),
+      gstin: z.string().trim().toUpperCase().regex(/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/, 'Enter a valid 15-character GSTIN'),
+    }).optional(),
     /** Optional reward selections. Values are requests only; the backend recomputes them. */
     couponCode: z.string().trim().max(24).nullish().transform((v) => v || undefined),
     redeemWalletPaise: z.number().int().min(0).max(10_000_000).default(0),
@@ -203,11 +208,11 @@ export const createBookingInputSchema = quoteFields
   })
   .refine((value) => value.tripDirection === 'round_trip' || distinctEndpoints(value), { message: NOT_THE_SAME_PLACE, path: ['destination'] })
   .refine(
-    (value) => value.scheduledForMs !== null && value.scheduledForMs >= Date.now() + 30 * 60 * 1000,
+    (value) => value.scheduledForMs === null || value.scheduledForMs >= Date.now() + 30 * 60 * 1000,
     { message: 'Pickups must be scheduled at least 30 minutes ahead', path: ['scheduledForMs'] },
   )
   .refine(
-    (value) => value.scheduledForMs !== null && value.scheduledForMs <= latestBookingDateEndMs(Date.now()),
+    (value) => value.scheduledForMs === null || value.scheduledForMs <= latestBookingDateEndMs(Date.now()),
     { message: 'Bookings can be scheduled up to 6 months ahead', path: ['scheduledForMs'] },
   );
 

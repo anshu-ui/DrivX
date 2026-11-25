@@ -239,7 +239,7 @@ export default function DriverAccount() {
             <Text variant="subheading" tone="brand">
               Your details and your car
             </Text>
-            <Field label="Full name" value={fullName} onChangeText={setFullName} />
+            <Field label="Full name (required)" value={fullName} onChangeText={setFullName} helper="Required for your driver profile and trip statements." />
             <Field
               label="Contact number"
               value={profile.phoneE164 ?? ''}

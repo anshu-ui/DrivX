@@ -30,6 +30,7 @@ const HOST = process.env.FIREBASE_EMULATOR_HOST ?? '127.0.0.1';
 const AUTH_PORT = Number(process.env.AUTH_EMULATOR_PORT ?? 9099);
 const FIRESTORE_PORT = Number(process.env.FIRESTORE_EMULATOR_PORT ?? 8080);
 const FUNCTIONS_PORT = Number(process.env.FUNCTIONS_EMULATOR_PORT ?? 5001);
+const STORAGE_PORT = Number(process.env.STORAGE_EMULATOR_PORT ?? 9199);
 const REGION = process.env.FUNCTIONS_REGION ?? 'asia-south1';
 
 let PROJECT_ID = 'drivx-local';
@@ -94,15 +95,17 @@ async function deleteDocument(path) {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const [authUp, storeUp, fnUp] = await Promise.all([
+const [authUp, storeUp, fnUp, storageUp] = await Promise.all([
   reachable(AUTH_PORT),
   reachable(FIRESTORE_PORT),
   reachable(FUNCTIONS_PORT),
+  reachable(STORAGE_PORT),
 ]);
-if (!authUp || !storeUp || !fnUp) {
+if (!authUp || !storeUp || !fnUp || !storageUp) {
   console.error(
     `Emulator not reachable (auth ${authUp ? 'ok' : 'DOWN'}, firestore ${storeUp ? 'ok' : 'DOWN'}, ` +
-      `functions ${fnUp ? 'ok' : 'DOWN'} on ${HOST}).\nStart it with \`npm run emulators\`, then \`npm run seed\`.`,
+      `functions ${fnUp ? 'ok' : 'DOWN'}, storage ${storageUp ? 'ok' : 'DOWN'} on ${HOST}).\n` +
+      `Start it with \`npm run emulators\`, then \`npm run seed\`.`,
   );
   process.exit(1);
 }
@@ -111,6 +114,7 @@ const { initializeApp, deleteApp } = await import('firebase/app');
 const authMod = await import('firebase/auth');
 const fs = await import('firebase/firestore');
 const fn = await import('firebase/functions');
+const storageMod = await import('firebase/storage');
 
 /** Sign in one account into its own app, so sessions can overlap. */
 async function session(name, email) {
@@ -135,6 +139,17 @@ async function session(name, email) {
 const admin = await session('onboarding-admin', 'admin@drivx.test');
 const seededDriver = await session('onboarding-seeded-driver', 'suna@example.test');
 const nosyCustomer = await session('onboarding-customer', 'amit@example.test');
+let driverStorage;
+const uploadedStoragePaths = [];
+
+async function uploadTestImage(storagePath) {
+  await storageMod.uploadBytes(
+    storageMod.ref(driverStorage, storagePath),
+    new Uint8Array([0xff, 0xd8, 0xff, 0xd9]),
+    { contentType: 'image/jpeg' },
+  );
+  uploadedStoragePaths.push(storagePath);
+}
 
 const callable = (session, name, payload) => fn.httpsCallable(session.functions, name)(payload);
 
@@ -259,11 +274,14 @@ await authAdmin.setCustomUserClaims(fresh.uid, {
 });
 
 const driver = await session('onboarding-fresh-driver', freshEmail);
+driverStorage = storageMod.getStorage(driver.app);
+storageMod.connectStorageEmulator(driverStorage, HOST, STORAGE_PORT);
 
 try {
   await fs.setDoc(fs.doc(driver.firestore, 'driverProfiles', driver.uid), {
     uid: driver.uid,
     fullName: `Fresh Driver ${tag}`,
+    email: freshEmail,
     phoneE164: '+919000000099',
     photoUrl: null,
     languages: ['hi', 'en'],
@@ -290,23 +308,37 @@ try {
     updatedAtMs: new Date(),
   });
 
-  const dlRef = fs.doc(driver.firestore, 'driverProfiles', driver.uid, 'documents', 'driving_licence');
-  await fs.setDoc(dlRef, {
-    id: 'driving_licence',
-    driverUid: driver.uid,
-    type: 'driving_licence',
-    storagePath: `drivers/${driver.uid}/driving_licence`,
-    sha256: null,
-    status: 'pending_review',
-    numberMasked: 'DL-****-1122',
-    issuedBy: 'Haryana RTO',
-    validFromMs: null,
-    validUntilMs: null,
-    uploadedAtMs: new Date(),
-    reviewedAtMs: null,
-    reviewedByUid: null,
-    rejectionNote: null,
-  });
+  const docsCollection = fs.collection(driver.firestore, 'driverProfiles', driver.uid, 'documents');
+  const documentSpecs = [
+    { id: 'driver_photograph', numberMasked: null, back: false, issuedBy: null },
+    { id: 'photo_id', numberMasked: 'ID-****-1122', back: true, issuedBy: null },
+    { id: 'driving_licence', numberMasked: 'DL-****-1122', back: true, issuedBy: 'Haryana RTO' },
+    { id: 'pan_card', numberMasked: 'PAN-****-1122', back: true, issuedBy: null },
+  ];
+  for (const spec of documentSpecs) {
+    const storagePath = `drivers/${driver.uid}/${spec.id}`;
+    const backStoragePath = spec.back ? `${storagePath}_back` : null;
+    await uploadTestImage(storagePath);
+    if (backStoragePath) await uploadTestImage(backStoragePath);
+    await fs.setDoc(fs.doc(docsCollection, spec.id), {
+      id: spec.id,
+      driverUid: driver.uid,
+      type: spec.id,
+      storagePath,
+      ...(backStoragePath ? { backStoragePath } : {}),
+      sha256: null,
+      status: 'pending_review',
+      numberMasked: spec.numberMasked,
+      issuedBy: spec.issuedBy,
+      validFromMs: null,
+      validUntilMs: null,
+      uploadedAtMs: new Date(),
+      reviewedAtMs: null,
+      reviewedByUid: null,
+      rejectionNote: null,
+    });
+  }
+  const dlRef = fs.doc(docsCollection, 'driving_licence');
 
   // The billing happens in `flagDriverOnFirstUpload`, a Firestore trigger, so it
   // arrives asynchronously. Polling proves the trigger ran rather than the seed.
@@ -325,16 +357,14 @@ try {
     (await fs.getDoc(fs.doc(driver.firestore, 'driverProfiles', driver.uid))).data()
       ?.verificationStatus === 'not_started');
 
-  for (const [id, numberMasked] of [['driver_photograph', null], ['photo_id', 'ID-****-1122']]) {
-    await fs.setDoc(fs.doc(driver.firestore, 'driverProfiles', driver.uid, 'documents', id), {
-      id, driverUid: driver.uid, type: id, storagePath: `drivers/${driver.uid}/${id}`,
-      sha256: null, status: 'pending_review', numberMasked, issuedBy: null,
-      validFromMs: null, validUntilMs: null, uploadedAtMs: new Date(),
-      reviewedAtMs: null, reviewedByUid: null, rejectionNote: null,
-    });
-  }
-  check('all three required document records are filed before review',
-    (await fs.getDocs(fs.collection(driver.firestore, 'driverProfiles', driver.uid, 'documents'))).size === 3);
+  const filedDocuments = await fs.getDocs(docsCollection);
+  check('the profile photo, Aadhaar, driving licence and PAN are all filed', filedDocuments.size === 4,
+    filedDocuments.docs.map((row) => row.id).sort().join(', '));
+  check('Aadhaar, driving licence and PAN each have separate front and back files',
+    ['photo_id', 'driving_licence', 'pan_card'].every((id) => {
+      const row = filedDocuments.docs.find((docSnap) => docSnap.id === id)?.data();
+      return Boolean(row?.storagePath && row?.backStoragePath);
+    }));
 
   const shortReference = await callFailure(
     callable(admin, 'recordDriverDuePayment', {
@@ -438,6 +468,11 @@ try {
   );
   check('collecting the same fee twice is refused', twice.code === 'failed-precondition', twice.code);
 
+  const submitted = await callable(driver, 'submitDriverApplication', {});
+  check('the driver can submit after a valid email, all document sides and payment are present',
+    submitted.data.status === 'pending_review' && submitted.data.alreadySubmitted === false,
+    `${submitted.data.status} · alreadySubmitted=${submitted.data.alreadySubmitted}`);
+
   console.log('\n5. Activation, and the id it issues');
 
   // Read straight from the call rather than `callFailure`: the driver id is in
@@ -450,7 +485,7 @@ try {
       driverUid: driver.uid,
       decision: 'approved',
       reason: 'Licence legible and the onboarding fee is on the record',
-      documentIds: ['driver_photograph', 'photo_id', 'driving_licence'],
+      documentIds: ['driver_photograph', 'photo_id', 'driving_licence', 'pan_card'],
     });
   } catch (error) {
     approvalFailure = error;
@@ -506,10 +541,15 @@ try {
     `${stillOwed?.status}${stillOwed?.providerOrderId ? ` + order ${stillOwed.providerOrderId}` : ''}`);
 } finally {
   console.log('\n7. Cleanup');
+  await Promise.all(uploadedStoragePaths.map((storagePath) =>
+    storageMod.deleteObject(storageMod.ref(driverStorage, storagePath)).catch(() => {})));
   await deleteApp(driver.app).catch(() => {});
   for (const path of [
     `driverProfiles/${fresh.uid}/dues/onboarding_fee`,
+    `driverProfiles/${fresh.uid}/documents/driver_photograph`,
+    `driverProfiles/${fresh.uid}/documents/photo_id`,
     `driverProfiles/${fresh.uid}/documents/driving_licence`,
+    `driverProfiles/${fresh.uid}/documents/pan_card`,
     `driverProfiles/${fresh.uid}`,
   ]) {
     await deleteDocument(path);

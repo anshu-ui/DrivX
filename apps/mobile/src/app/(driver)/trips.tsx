@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { View } from 'react-native';
 import { router } from 'expo-router';
 import {
@@ -17,6 +18,7 @@ import { RequireApproval } from '../../components/RequireApproval';
 import { useDriverTrip } from '../../features/driver/trip-control';
 import { useDriverDues } from '../../features/driver/profile';
 import { useDrivenTrips, type DrivenTrip } from '../../features/driver/trips';
+import { openTripInvoice } from '../../features/tripInvoices';
 import { addressLine, dateTime, money, statusLabel, statusTone } from '../../features/customer/labels';
 
 /**
@@ -64,6 +66,8 @@ function dialLine(trip: DrivenTrip): string | null {
 
 export default function DriverTrips() {
   const theme = useTheme();
+  const [invoiceBusyFor, setInvoiceBusyFor] = useState<string | null>(null);
+  const [invoiceErrorFor, setInvoiceErrorFor] = useState<{ bookingId: string; message: string } | null>(null);
   const live = useDriverTrip();
   const trips = useDrivenTrips();
   const dues = useDriverDues();
@@ -168,7 +172,7 @@ export default function DriverTrips() {
                       </View>
                     ))}
                     <Row label="Subtotal" value={money(trip.finalFare.subtotalPaise)} />
-                    <Row label="Tax" value={money(trip.finalFare.taxPaise)} />
+                    <Row label={`Customer fare GST ${trip.finalFare.subtotalPaise > 0 ? (trip.finalFare.taxPaise / trip.finalFare.subtotalPaise * 100).toFixed(0) : '0'}%`} value={money(trip.finalFare.taxPaise)} />
                   </View>
                 ) : null}
 
@@ -176,17 +180,18 @@ export default function DriverTrips() {
                   <>
                     <Divider />
                     <Row label="Fare the customer paid" value={formatINR(trip.split.fareTotalPaise)} />
-                    <Row label="tax inside that bill" value={formatINR(trip.split.gstPaise)} />
-                    <Row
-                      label={`Commission ${Math.round(trip.split.rate * 100)}% + tax on it`}
-                      value={`− ${formatINR(trip.split.commissionPaise)}`}
-                    />
+                    <Row label={`Customer fare GST ${Math.round(trip.split.fareTaxRate * 100)}% to remit`} value={formatINR(trip.split.fareTaxPaise)} />
+                    <Row label={`Commission ${Math.round(trip.split.rate * 100)}%`} value={formatINR(trip.split.commissionBasePaise)} />
+                    <Row label={`GST on commission ${Math.round(trip.split.gstRate * 100)}%`} value={formatINR(trip.split.commissionGstPaise)} />
+                    <Row label={`TDS base after commission (${Math.round(trip.split.tdsRate * 100)}%)`} value={formatINR(trip.split.tdsBasePaise)} />
+                    <Row label={`TDS ${Math.round(trip.split.tdsRate * 100)}%`} value={formatINR(trip.split.tdsPaise)} />
+                    <Row label="Total to remit to DrivX" value={formatINR(trip.split.totalDuePaise)} />
                     <Row label="You kept" value={formatINR(trip.split.netPaise)} />
                     {due ? (
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 }}>
                         <Text variant="caption" tone="faint">
                           {due.status === 'paid'
-                            ? `Commission cleared${due.method ? ` · ${due.method}` : ''}`
+                            ? `Remittance cleared${due.method ? ` · ${due.method}` : ''}`
                             : 'To pay before the next booking'}
                         </Text>
                         <Text variant="caption" tone={due.status === 'paid' ? 'success' : 'warning'}>
@@ -201,6 +206,21 @@ export default function DriverTrips() {
                     reference.
                   </Text>
                 )}
+                <Button
+                  label={invoiceBusyFor === trip.id ? 'Preparing invoice…' : 'Download driver invoice PDF'}
+                  appearance="secondary"
+                  size="sm"
+                  loading={invoiceBusyFor === trip.id}
+                  disabled={invoiceBusyFor !== null}
+                  onPress={async () => {
+                    setInvoiceBusyFor(trip.id);
+                    setInvoiceErrorFor(null);
+                    try { await openTripInvoice(trip.id, 'driver'); }
+                    catch (error) { setInvoiceErrorFor({ bookingId: trip.id, message: error instanceof Error ? error.message : 'Invoice PDF is not available yet.' }); }
+                    finally { setInvoiceBusyFor(null); }
+                  }}
+                />
+                {invoiceErrorFor?.bookingId === trip.id ? <Text variant="caption" tone="danger" accessibilityRole="alert">{invoiceErrorFor.message}</Text> : null}
               </Card>
             );
           })}
@@ -209,7 +229,7 @@ export default function DriverTrips() {
             <Card tone="inset">
               <Text variant="caption" tone="faint">
                 {rows.length} completed trip{rows.length === 1 ? '' : 's'} on this account. Fares and
-                commission are written by DrivX, and what the office recorded against each one is
+                settlement amounts are written by DrivX, and what the office recorded against each one is
                 shown beside it — {formatINR(dues.outstandingPaise)} is still outstanding.
               </Text>
             </Card>

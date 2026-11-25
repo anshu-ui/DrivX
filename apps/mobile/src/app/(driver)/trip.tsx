@@ -403,7 +403,7 @@ function CloseForm({ trip }: { trip: DriverTripView }) {
   const close = useEndTrip();
   const [code, setCode] = useState('');
   const [km, setKm] = useState('');
-  const [outcome, setOutcome] = useState<null | string | { fare: FareBreakdown; commissionPaise: number | null }>(
+  const [outcome, setOutcome] = useState<null | string | { fare: FareBreakdown; remittancePaise: number | null }>(
     null,
   );
 
@@ -422,9 +422,9 @@ function CloseForm({ trip }: { trip: DriverTripView }) {
         <Text variant="caption" tone="faint">
           Subtotal {money(outcome.fare.subtotalPaise)} · tax {money(outcome.fare.taxPaise)}
         </Text>
-        {outcome.commissionPaise !== null ? (
+        {outcome.remittancePaise !== null ? (
           <Text variant="caption" tone="warning">
-            DrivX&apos;s share of this trip is {money(outcome.commissionPaise)}, and it is on your dues
+            Your full remittance for this trip is {money(outcome.remittancePaise)}, and it is on your dues
             until it is paid.
           </Text>
         ) : null}
@@ -459,7 +459,7 @@ function CloseForm({ trip }: { trip: DriverTripView }) {
       setCode('');
       setOutcome({
         fare: result.result.finalFare,
-        commissionPaise: result.result.commissionPaise,
+        remittancePaise: result.result.remittancePaise,
       });
     });
   };

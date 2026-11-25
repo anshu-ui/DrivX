@@ -97,8 +97,8 @@ export function requireVerifiedDriverCaller(caller: Caller): Caller {
  * bookings, placed on the two calls that put a driver in front of a customer —
  * going online and accepting an offer. It deliberately does not guard the trip
  * itself: a driver mid-journey with a customer in the car is never cut off over
- * money, and finishing the trip is what produces the fare the commission is
- * charged on.
+ * money, and finishing the trip is what produces the fare that determines the
+ * driver remittance.
  */
 export async function requireDriverForNewWork(request: CallableRequest<unknown>): Promise<Caller> {
   const caller = requireVerifiedDriver(request);
@@ -108,6 +108,10 @@ export async function requireDriverForNewWork(request: CallableRequest<unknown>)
 export async function requireDriverForNewWorkCaller(caller: Caller): Promise<Caller> {
   const profile = await db().doc(`driverProfiles/${caller.uid}`).get();
   if (!profile.exists) throw failedPrecondition('Your driver profile is missing, so no new trip can be offered.');
+  const fullName = profile.get('fullName');
+  if (typeof fullName !== 'string' || fullName.trim().length < 2) {
+    throw failedPrecondition('Add your full name to your driver profile before going online or accepting a trip.');
+  }
   if (profile.get('accountStatus') === 'suspended') {
     throw failedPrecondition('Your account is paused by DrivX support. Contact support before taking new trips.');
   }

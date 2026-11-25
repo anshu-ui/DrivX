@@ -1,5 +1,49 @@
 import { describe, expect, it } from 'vitest';
-import { emailSchema, signUpProfileInputSchema } from '../src/validation';
+import { createBookingInputSchema, emailSchema, signUpProfileInputSchema } from '../src/validation';
+
+const bookingInput = {
+  serviceTypeId: 'chauffeur_own_car',
+  pickup: {
+    label: 'Connaught Place, New Delhi', addressLine1: 'Connaught Place', city: 'New Delhi', state: 'Delhi',
+    pincode: '110001', location: { lat: 28.6315, lng: 77.2167 }, source: 'map_pin',
+  },
+  destination: {
+    label: 'India Gate, New Delhi', addressLine1: 'India Gate', city: 'New Delhi', state: 'Delhi',
+    pincode: '110001', location: { lat: 28.6129, lng: 77.2295 }, source: 'map_pin',
+  },
+  preferences: { transmission: 'either', carType: 'either' },
+  idempotencyKey: '123e4567-e89b-42d3-a456-426614174000',
+};
+
+describe('createBookingInputSchema scheduling', () => {
+  it('accepts an ASAP booking with a null schedule', () => {
+    expect(createBookingInputSchema.safeParse({ ...bookingInput, scheduledForMs: null }).success).toBe(true);
+  });
+
+  it('requires scheduled pickups to be at least 30 minutes ahead', () => {
+    const result = createBookingInputSchema.safeParse({
+      ...bookingInput,
+      scheduledForMs: Date.now() + 10 * 60 * 1000,
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.some((issue) => issue.message === 'Pickups must be scheduled at least 30 minutes ahead'))
+      .toBe(true);
+  });
+
+  it('accepts an in-range scheduled booking and rejects dates beyond six months', () => {
+    expect(createBookingInputSchema.safeParse({
+      ...bookingInput,
+      scheduledForMs: Date.now() + 60 * 60 * 1000,
+    }).success).toBe(true);
+    const result = createBookingInputSchema.safeParse({
+      ...bookingInput,
+      scheduledForMs: Date.now() + 210 * 24 * 60 * 60 * 1000,
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.some((issue) => issue.message === 'Bookings can be scheduled up to 6 months ahead'))
+      .toBe(true);
+  });
+});
 
 describe('emailSchema', () => {
   it('stores the address lowercased and trimmed', () => {

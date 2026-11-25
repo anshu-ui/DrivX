@@ -106,6 +106,7 @@ export async function seedFirestore(ctx: RulesTestContext): Promise<void> {
     put(['customerProfiles', CUSTOMER_TWO], {
       uid: CUSTOMER_TWO,
       fullName: 'Priya',
+      email: 'priya@example.test',
       defaultPickup: null,
       preferredTransmission: 'either',
       preferredCarTypes: [],
@@ -124,6 +125,7 @@ export async function seedFirestore(ctx: RulesTestContext): Promise<void> {
     put(['driverProfiles', DRIVER_ONE], {
       uid: DRIVER_ONE,
       fullName: 'Rakesh',
+      email: 'rakesh@example.test',
       verificationStatus: 'approved',
       verifiedAtMs: now,
       verifiedByUid: ADMIN_UID,
@@ -139,6 +141,7 @@ export async function seedFirestore(ctx: RulesTestContext): Promise<void> {
     put(['driverProfiles', DRIVER_TWO], {
       uid: DRIVER_TWO,
       fullName: 'Suna',
+      email: 'suna@example.test',
       verificationStatus: 'pending_review',
       verifiedAtMs: null,
       verifiedByUid: null,
@@ -203,11 +206,12 @@ export async function seedFirestore(ctx: RulesTestContext): Promise<void> {
       recordedByUid: null,
       createdAtMs: now,
     }),
-    put(['driverProfiles', DRIVER_ONE, 'documents', 'doc-1'], {
+    put(['driverProfiles', DRIVER_ONE, 'documents', 'driving_licence'], {
       driverUid: DRIVER_ONE,
       type: 'driving_licence',
       status: 'rejected',
-      storagePath: `drivers/${DRIVER_ONE}/doc-1`,
+      storagePath: `drivers/${DRIVER_ONE}/driving_licence`,
+      backStoragePath: `drivers/${DRIVER_ONE}/driving_licence_back`,
       reviewedByUid: ADMIN_UID,
       reviewedAtMs: now,
     }),
@@ -527,7 +531,8 @@ export async function seedStorage(ctx: RulesTestContext): Promise<void> {
     uploadString(storageRef(storage, path), 'ZmFrZS1ieXRlcy1mb3ItcmVhdGluZw==', 'base64', { contentType });
 
   await Promise.all([
-    upload(`drivers/${DRIVER_ONE}/doc-1`, 'application/pdf'),
+    upload(`drivers/${DRIVER_ONE}/driving_licence`, 'image/jpeg'),
+    upload(`drivers/${DRIVER_ONE}/driving_licence_back`, 'image/jpeg'),
     upload(`avatars/${DRIVER_ONE}/photo.png`, 'image/png'),
     upload(`trip-traces/${BOOKING_ONE}/trace.json`, 'application/json'),
   ]);

@@ -157,11 +157,11 @@ export function AdminOperationsPanel({ onError }: { onError: (message: string) =
     {section === 'money' ? <Panel title="Money & platform take" subtitle="Recent 40 bookings/payments only; figures come from server records, not client estimates.">
       <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap' }}>
         <View style={{ flex: 1, minWidth: 140, borderRadius: 14, padding: 13, backgroundColor: surface }}><Text style={{ color: muted }}>Verified customer collections</Text><Text style={{ color: ink, fontSize: 20, fontWeight: '900', marginTop: 6 }}>{formatINR(paidPaise)}</Text></View>
-        <View style={{ flex: 1, minWidth: 140, borderRadius: 14, padding: 13, backgroundColor: surface }}><Text style={{ color: muted }}>Commission on recent trips</Text><Text style={{ color: ink, fontSize: 20, fontWeight: '900', marginTop: 6 }}>{formatINR(commissionTotal)}</Text><Text style={{ color: muted, marginTop: 4 }}>Recorded as collected: {formatINR(collectedCommission)}</Text></View>
+        <View style={{ flex: 1, minWidth: 140, borderRadius: 14, padding: 13, backgroundColor: surface }}><Text style={{ color: muted }}>Driver remittances on recent trips</Text><Text style={{ color: ink, fontSize: 20, fontWeight: '900', marginTop: 6 }}>{formatINR(commissionTotal)}</Text><Text style={{ color: muted, marginTop: 4 }}>Recorded as collected: {formatINR(collectedCommission)}</Text></View>
       </View>
     </Panel> : null}
 
-    {section === 'bookings' ? <Panel title="Bookings · live ledger" subtitle="Status, customer, assigned driver, fare and commission collected state.">
+    {section === 'bookings' ? <Panel title="Bookings · live ledger" subtitle="Status, customer, assigned driver, fare and driver remittance collected state.">
       {bookings.length ? bookings.slice(0, 20).map((row) => {
         const eligible = drivers.filter((driver) => driver.verification === 'approved' && driver.availability === 'online' && driver.zoneId === row.zoneId && driver.serviceTypeIds.includes(row.serviceTypeId));
         const canAssign = !row.driverUid && ['requested', 'searching_driver'].includes(row.status);
@@ -169,7 +169,7 @@ export function AdminOperationsPanel({ onError }: { onError: (message: string) =
           <Text style={{ color: ink, fontWeight: '900' }}>{row.reference} · {row.status.replaceAll('_', ' ')}</Text>
           <Text style={{ color: muted }}>{row.pickup} → {row.destination}</Text>
           <Text style={{ color: muted }}>Customer: {row.customerName ?? row.customerUid}{row.customerPhone ? ` · ${row.customerPhone}` : ''} · Driver: {row.driverName ?? row.driverUid ?? 'Not assigned'}</Text>
-          <Text style={{ color: muted }}>Payment: {row.paymentStatus} · Fare: {formatINR(row.totalPaise)} · Commission: {formatINR(row.commissionPaise)} {row.commissionRate === null ? '' : `(${Math.round(row.commissionRate * 100)}%)`} · driver paid commission: {row.commissionStatus}</Text>
+          <Text style={{ color: muted }}>Payment: {row.paymentStatus} · Fare: {formatINR(row.totalPaise)} · Driver remittance: {formatINR(row.commissionPaise)} {row.commissionRate === null ? '' : `(${Math.round(row.commissionRate * 100)}% commission)`} · payment: {row.commissionStatus}</Text>
           {canAssign ? <View style={{ gap: 7 }}><Text style={{ color: muted, fontWeight: '700' }}>Choose a verified, online driver. Server also checks service area, unpaid dues and trip conflicts.</Text><View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7 }}>{eligible.length ? eligible.map((driver) => <TouchableOpacity key={driver.uid} onPress={() => setSelected((current) => ({ ...current, [row.id]: driver.uid }))} style={{ borderWidth: 1, borderColor: selected[row.id] === driver.uid ? blue : border, borderRadius: 10, paddingHorizontal: 9, paddingVertical: 7, backgroundColor: selected[row.id] === driver.uid ? '#E9F0FF' : 'white' }}><Text style={{ color: ink, fontSize: 12, fontWeight: '700' }}>{driver.name} · {driver.phone}</Text></TouchableOpacity>) : <Text style={{ color: muted }}>No matching verified, online drivers loaded.</Text>}</View><AdminAction title={busy === row.id ? 'Assigning…' : 'Send assignment offer'} disabled={!selected[row.id] || !!busy} onPress={() => void assign(row)} /></View> : null}
         </View>;
       }) : <Text style={{ color: muted }}>No booking records yet.</Text>}

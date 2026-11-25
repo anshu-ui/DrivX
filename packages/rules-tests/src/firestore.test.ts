@@ -244,6 +244,8 @@ describe('profiles', () => {
     await expectAllowed(
       setDoc(doc(driver.firestore(), 'driverProfiles', fresh), {
         uid: fresh,
+        fullName: 'New Driver',
+        email: 'new-driver@example.test',
         verificationStatus: 'not_started',
         availabilityState: 'offline',
         ratingCount: 0,
@@ -261,11 +263,13 @@ describe('profiles', () => {
     const db = ctx.firestore();
 
     await expectAllowed(
-      setDoc(doc(db, 'customerProfiles', uid), { uid, fullName: 'Amit C', lifetimeBookings: 0 }),
+      setDoc(doc(db, 'customerProfiles', uid), { uid, fullName: 'Amit C', email: 'amit.c@example.test', lifetimeBookings: 0 }),
     );
     await expectAllowed(
       setDoc(doc(db, 'driverProfiles', uid), {
         uid,
+        fullName: 'Amit Driver',
+        email: 'amit.driver@example.test',
         verificationStatus: 'not_started',
         availabilityState: 'offline',
         ratingCount: 0,
@@ -334,6 +338,7 @@ describe('profiles', () => {
     await expectDenied(
       updateDoc(doc(db, 'driverProfiles', DRIVER_ONE), { fullName: 'Rakesh Y.', updatedAtMs: 1 }),
     );
+    await expectDenied(updateDoc(doc(db, 'driverProfiles', DRIVER_ONE), { fullName: '  ' }));
     // Pointing driverId at another driver would redirect the dispatcher, the
     // customer's driver card and the dues ledger.
     await expectDenied(
@@ -361,12 +366,14 @@ describe('driver documents', () => {
   it('accepts an upload pointer only on the driver’s own private path', async () => {
     const ctx = ctxFor(env, DRIVER_ONE, 'driver');
     await expectAllowed(
-      setDoc(doc(ctx.firestore(), 'driverProfiles', DRIVER_ONE, 'documents', 'doc-9'), {
+      setDoc(doc(ctx.firestore(), 'driverProfiles', DRIVER_ONE, 'documents', 'pan_card'), {
+        id: 'pan_card',
         driverUid: DRIVER_ONE,
-        type: 'driving_licence',
+        type: 'pan_card',
         status: 'pending_review',
         reviewedByUid: null,
-        storagePath: `drivers/${DRIVER_ONE}/doc-9`,
+        storagePath: `drivers/${DRIVER_ONE}/pan_card`,
+        backStoragePath: `drivers/${DRIVER_ONE}/pan_card_back`,
       }),
     );
   });
@@ -403,12 +410,12 @@ describe('driver documents', () => {
   it('keeps review outcomes out of the driver’s hands', async () => {
     const ctx = ctxFor(env, DRIVER_ONE, 'driver');
     await expectDenied(
-      updateDoc(doc(ctx.firestore(), 'driverProfiles', DRIVER_ONE, 'documents', 'doc-1'), {
+      updateDoc(doc(ctx.firestore(), 'driverProfiles', DRIVER_ONE, 'documents', 'driving_licence'), {
         status: 'approved',
       }),
     );
     await expectDenied(
-      updateDoc(doc(ctx.firestore(), 'driverProfiles', DRIVER_ONE, 'documents', 'doc-1'), {
+      updateDoc(doc(ctx.firestore(), 'driverProfiles', DRIVER_ONE, 'documents', 'driving_licence'), {
         reviewedByUid: DRIVER_ONE,
       }),
     );
@@ -417,7 +424,7 @@ describe('driver documents', () => {
   it('lets a rejected document be resubmitted for review', async () => {
     const ctx = ctxFor(env, DRIVER_ONE, 'driver');
     await expectAllowed(
-      updateDoc(doc(ctx.firestore(), 'driverProfiles', DRIVER_ONE, 'documents', 'doc-1'), {
+      updateDoc(doc(ctx.firestore(), 'driverProfiles', DRIVER_ONE, 'documents', 'driving_licence'), {
         status: 'pending_review',
       }),
     );
@@ -425,11 +432,11 @@ describe('driver documents', () => {
 
   it('keeps documents private to the owner and to staff', async () => {
     const other = ctxFor(env, DRIVER_TWO, 'driver');
-    await expectDenied(getDoc(doc(other.firestore(), 'driverProfiles', DRIVER_ONE, 'documents', 'doc-1')));
+    await expectDenied(getDoc(doc(other.firestore(), 'driverProfiles', DRIVER_ONE, 'documents', 'driving_licence')));
 
     const ops = ctxFor(env, OPS_UID, 'ops');
     expect(
-      (await expectAllowed(getDoc(doc(ops.firestore(), 'driverProfiles', DRIVER_ONE, 'documents', 'doc-1')))).exists(),
+      (await expectAllowed(getDoc(doc(ops.firestore(), 'driverProfiles', DRIVER_ONE, 'documents', 'driving_licence')))).exists(),
     ).toBe(true);
   });
 });

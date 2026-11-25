@@ -84,6 +84,18 @@ service cloud.firestore {
         || data.privacy.preciseLocationWhileIdle == false;
     }
 
+    /** Contact email is required before a customer or driver can use their profile. */
+    function hasValidContactEmail(data) {
+      return data.email is string &&
+        data.email.matches('^[^\\s@]+@[^\\s@]+\\.[^\\s@]{2,}$');
+    }
+
+    /** Names are required so receipts and trip invoices identify both parties. */
+    function hasValidFullName(data) {
+      return data.fullName is string && data.fullName.size() >= 2 &&
+        data.fullName.size() <= 100 && data.fullName.matches('.*\\S.*');
+    }
+
     /** The write must not modify any key outside `allowed`. Update rules only. */
     function onlyKeysAre(allowed) {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowed);
@@ -151,13 +163,15 @@ service cloud.firestore {
     // -------------------------------------------------------- customerProfiles
     match /customerProfiles/{userId} {
       allow read: if signedIn() && (uid() == userId || isStaff());
-      allow create: if isCustomer() && uid() == userId && idleLocationStaysOff(request.resource.data);
+      allow create: if isCustomer() && uid() == userId &&
+        hasValidFullName(request.resource.data) && hasValidContactEmail(request.resource.data) && idleLocationStaysOff(request.resource.data);
       allow update: if signedIn() && uid() == userId &&
         // Aggregates and lifecycle flags are server-owned.
         untouched([
           'ratingAverage', 'ratingCount', 'lifetimeBookings',
           'createdAtMs', 'updatedAtMs', 'uid'
         ]) &&
+        hasValidFullName(request.resource.data) && hasValidContactEmail(request.resource.data) &&
         idleLocationStaysOff(request.resource.data);
       allow delete: if isAdmin();
     }
@@ -169,7 +183,8 @@ service cloud.firestore {
       allow create: if isDriver() && uid() == userId &&
         request.resource.data.verificationStatus == 'not_started' &&
         request.resource.data.availabilityState == 'offline' &&
-        request.resource.data.ratingCount == 0;
+        request.resource.data.ratingCount == 0 &&
+        hasValidFullName(request.resource.data) && hasValidContactEmail(request.resource.data);
 
       allow update: if signedIn() && uid() == userId &&
         // A driver can never self-approve, self-rate, or enter an
@@ -191,7 +206,7 @@ service cloud.firestore {
           'onTimeArrivalRate', 'acceptanceRate', 'driverId', 'uid', 'createdAtMs', 'updatedAtMs',
           'dutyTermsVersion', 'dutyTermsAcceptedAtMs',
           'availabilityState', 'availabilitySinceMs'
-        ]);
+        ]) && hasValidFullName(request.resource.data) && hasValidContactEmail(request.resource.data);
 
       allow delete: if isAdmin();
 
@@ -216,12 +231,21 @@ service cloud.firestore {
           request.resource.data.driverUid == userId &&
           request.resource.data.status == 'pending_review' &&
           request.resource.data.reviewedByUid == null &&
-          request.resource.data.storagePath == 'drivers/' + userId + '/' + documentId;
+          request.resource.data.storagePath == 'drivers/' + userId + '/' + documentId &&
+          ((documentId == 'driver_photograph' &&
+            (!('backStoragePath' in request.resource.data) || request.resource.data.backStoragePath == null)) ||
+           (documentId in ['photo_id', 'driving_licence', 'pan_card'] &&
+            request.resource.data.backStoragePath == 'drivers/' + userId + '/' + documentId + '_back'));
 
         // Re-submitting after rejection keeps the review fields untouched.
         allow update: if signedIn() && uid() == userId &&
           resource.data.status in ['pending_review', 'rejected'] &&
           request.resource.data.status == 'pending_review' &&
+          request.resource.data.storagePath == 'drivers/' + userId + '/' + documentId &&
+          ((documentId == 'driver_photograph' &&
+            (!('backStoragePath' in request.resource.data) || request.resource.data.backStoragePath == null)) ||
+           (documentId in ['photo_id', 'driving_licence', 'pan_card'] &&
+            request.resource.data.backStoragePath == 'drivers/' + userId + '/' + documentId + '_back')) &&
           untouched(['reviewedByUid', 'reviewedAtMs', 'driverUid', 'storagePath']);
 
         allow delete: if signedIn() && uid() == userId &&
@@ -311,6 +335,18 @@ service cloud.firestore {
     match /tripSummaries/{bookingId} {
       allow read: if isBookingParticipant(bookingId);
       allow write: if false;
+    }
+
+    // -------------------------------------------------------------- tripInvoices
+    // Invoices carry customer GSTIN/email and driver settlement data. Only
+    // operations staff may list them; participants receive just their own PDF
+    // through a short-lived, server-authorized Storage URL.
+    match /tripInvoices/{bookingId} {
+      allow read: if isStaff();
+      allow write: if false;
+    }
+    match /invoiceCounters/{counterId} {
+      allow read, write: if isAdmin();
     }
 
     // ---------------------------------------------------------------- payments

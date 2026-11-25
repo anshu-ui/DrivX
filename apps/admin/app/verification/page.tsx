@@ -15,7 +15,9 @@ import {
 import {
   COLLECTIONS,
   DOCUMENT_LABELS,
+  DRIVER_REQUIRED_DOCUMENT_TYPES,
   SUBCOLLECTIONS,
+  driverDocumentNeedsBack,
   formatINR,
   type DocumentType,
   type VerificationStatus,
@@ -71,9 +73,10 @@ type ReviewDocument = {
   uploadedAtMs: number | null;
   /** The reviewer's own earlier note, shown when a driver re-submitted. */
   rejectionNote: string | null;
-  previewUrl: string | null;
-  /** Why there is no preview, said out loud instead of leaving a blank box. */
-  previewError: string | null;
+  frontPreviewUrl: string | null;
+  frontPreviewError: string | null;
+  backPreviewUrl: string | null;
+  backPreviewError: string | null;
   selected: boolean;
 };
 
@@ -215,19 +218,33 @@ export default function DriverVerification() {
     for (const snap of filed.docs) {
       const docData = snap.data();
       const type = (docData.type ?? snap.id) as DocumentType;
-      const storagePath = typeof docData.storagePath === 'string' ? docData.storagePath : null;
-      let previewUrl: string | null = null;
-      let previewError: string | null = null;
-      if (storagePath) {
+      const frontStoragePath = typeof docData.storagePath === 'string' ? docData.storagePath : null;
+      const backStoragePath = typeof docData.backStoragePath === 'string' ? docData.backStoragePath : null;
+      let frontPreviewUrl: string | null = null;
+      let frontPreviewError: string | null = null;
+      let backPreviewUrl: string | null = null;
+      let backPreviewError: string | null = null;
+      if (frontStoragePath) {
         try {
-          previewUrl = await driverDocumentDownloadUrl(clients, { uid, documentId: snap.id });
+          frontPreviewUrl = await driverDocumentDownloadUrl(clients, { uid, documentId: snap.id });
         } catch (error) {
           // A seeded pointer has no bytes behind it. Say so, rather than show
           // an empty frame the reviewer reads as a failed upload.
-          previewError = `No file could be opened at ${storagePath} (${describe(error)})`;
+          frontPreviewError = `No file could be opened at ${frontStoragePath} (${describe(error)})`;
         }
       } else {
-        previewError = 'This record has no file attached to it.';
+        frontPreviewError = 'This record has no front photo attached to it.';
+      }
+      if (driverDocumentNeedsBack(type)) {
+        if (backStoragePath) {
+          try {
+            backPreviewUrl = await driverDocumentDownloadUrl(clients, { uid, documentId: `${snap.id}_back` });
+          } catch (error) {
+            backPreviewError = `No file could be opened at ${backStoragePath} (${describe(error)})`;
+          }
+        } else {
+          backPreviewError = 'The back / reverse photo is required.';
+        }
       }
       documents.push({
         id: snap.id,
@@ -236,8 +253,10 @@ export default function DriverVerification() {
         numberMasked: (docData.numberMasked as string | null) ?? null,
         uploadedAtMs: toEpochMs(docData.uploadedAtMs),
         rejectionNote: (docData.rejectionNote as string | null) ?? null,
-        previewUrl,
-        previewError,
+        frontPreviewUrl,
+        frontPreviewError,
+        backPreviewUrl,
+        backPreviewError,
         // Only a document that is actually waiting can join a decision.
         selected: docData.status === 'pending_review',
       });
@@ -301,6 +320,11 @@ export default function DriverVerification() {
   const driver = driverInfo && driverInfo.uid === selectedUid ? driverInfo : null;
 
   const chosen = documents.filter((document) => document.selected && document.status === 'pending_review');
+  const requiredDocumentsReady = DRIVER_REQUIRED_DOCUMENT_TYPES.every((type) => {
+    const document = documents.find((item) => item.id === type);
+    return document?.status === 'pending_review' && !!document.frontPreviewUrl &&
+      (!driverDocumentNeedsBack(type) || !!document.backPreviewUrl);
+  });
 
   const dues = duesView && 'rows' in duesView ? duesView.rows : null;
   const duesError = duesView && 'error' in duesView ? duesView.error : null;
@@ -551,23 +575,47 @@ export default function DriverVerification() {
                             key={document.id}
                             className="grid gap-4 rounded-card border border-line bg-surface-muted p-4 sm:grid-cols-[16rem_1fr]"
                           >
-                            <div className="overflow-hidden rounded-control border border-line bg-surface">
-                              {document.previewUrl ? (
-                                <a href={document.previewUrl} target="_blank" rel="noreferrer">
-                                  <Image
-                                    src={document.previewUrl}
-                                    alt={`${document.label} uploaded by ${driver?.fullName ?? 'the driver'}`}
-                                    width={640}
-                                    height={420}
-                                    unoptimized
-                                    className="h-40 w-full object-contain"
-                                  />
-                                </a>
-                              ) : (
-                                <p className="flex h-40 items-center justify-center px-3 text-center text-xs text-ink-faint">
-                                  {document.previewError}
-                                </p>
-                              )}
+                            <div className={`grid gap-2 ${driverDocumentNeedsBack(document.id as DocumentType) ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                              <div className="overflow-hidden rounded-control border border-line bg-surface">
+                                <p className="border-b border-line px-2 py-1 text-xs font-medium text-ink-muted">Front</p>
+                                {document.frontPreviewUrl ? (
+                                  <a href={document.frontPreviewUrl} target="_blank" rel="noreferrer">
+                                    <Image
+                                      src={document.frontPreviewUrl}
+                                      alt={`${document.label} front uploaded by ${driver?.fullName ?? 'the driver'}`}
+                                      width={640}
+                                      height={420}
+                                      unoptimized
+                                      className="h-40 w-full object-contain"
+                                    />
+                                  </a>
+                                ) : (
+                                  <p className="flex h-40 items-center justify-center px-3 text-center text-xs text-ink-faint">
+                                    {document.frontPreviewError}
+                                  </p>
+                                )}
+                              </div>
+                              {driverDocumentNeedsBack(document.id as DocumentType) ? (
+                                <div className="overflow-hidden rounded-control border border-line bg-surface">
+                                  <p className="border-b border-line px-2 py-1 text-xs font-medium text-ink-muted">Back / reverse</p>
+                                  {document.backPreviewUrl ? (
+                                    <a href={document.backPreviewUrl} target="_blank" rel="noreferrer">
+                                      <Image
+                                        src={document.backPreviewUrl}
+                                        alt={`${document.label} back uploaded by ${driver?.fullName ?? 'the driver'}`}
+                                        width={640}
+                                        height={420}
+                                        unoptimized
+                                        className="h-40 w-full object-contain"
+                                      />
+                                    </a>
+                                  ) : (
+                                    <p className="flex h-40 items-center justify-center px-3 text-center text-xs text-ink-faint">
+                                      {document.backPreviewError}
+                                    </p>
+                                  )}
+                                </div>
+                              ) : null}
                             </div>
                             <div>
                               <div className="flex flex-wrap items-center gap-2">
@@ -738,7 +786,7 @@ export default function DriverVerification() {
                           <div className="mt-4 flex flex-wrap items-center gap-3">
                             <button
                               type="button"
-                              disabled={busy || reason.trim().length < 8 || outstandingPaise > 0}
+                              disabled={busy || reason.trim().length < 8 || outstandingPaise > 0 || !requiredDocumentsReady}
                               onClick={() => void record('approved')}
                               className="rounded-control bg-accent px-5 py-2.5 text-sm font-semibold text-ink-on-brand hover:bg-accent-pressed disabled:bg-disabled-surface disabled:text-disabled-ink"
                             >
@@ -758,6 +806,10 @@ export default function DriverVerification() {
                                 collected. Trip commission is not on this panel — Clear dues lists it
                                 row by row. The server refuses the approval either way; this only saves
                                 you from finding that out by pressing it.
+                              </p>
+                            ) : !requiredDocumentsReady ? (
+                              <p className="text-xs text-ink-faint">
+                                Approval needs the profile photo, Aadhaar, driving licence and PAN card, with front and reverse photos for each card.
                               </p>
                             ) : reason.trim().length < 8 ? (
                               <p className="text-xs text-ink-faint">

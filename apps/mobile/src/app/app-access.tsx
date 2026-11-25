@@ -72,7 +72,7 @@ export default function AppAccess() {
                 Phone verified: {user?.phoneNumber ?? 'your signed-in number'}
               </Text>
               <Field
-                label="Full name"
+                label="Full name (required)"
                 autoCapitalize="words"
                 value={fullName}
                 onChangeText={(value) => {
@@ -82,7 +82,7 @@ export default function AppAccess() {
                 accessibilityLabel="Driver full name"
               />
               <Field
-                label="Email address"
+                label="Email address (required)"
                 value={email}
                 onChangeText={(value) => {
                   setEmail(value);
@@ -91,6 +91,7 @@ export default function AppAccess() {
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
+                helper="Required to continue with your driver application."
                 accessibilityLabel="Driver email address"
               />
               {error ? (

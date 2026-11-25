@@ -144,7 +144,7 @@ function SupportInbox({ reviewer }: { reviewer: { label: string; admin: boolean;
 
   return <>
     <div className="mb-6 grid gap-3 sm:grid-cols-3">
-      {[['Open', tickets.filter((row) => row.status === 'open').length], ['In progress', tickets.filter((row) => row.status === 'in_progress').length], ['Waiting / closed', tickets.filter((row) => row.status === 'awaiting_customer' || row.status === 'resolved' || row.status === 'closed').length]].map(([label, count]) => <div key={label} className="rounded-2xl border border-line bg-surface p-4"><p className="text-xs font-semibold text-ink-muted">{label}</p><p className="mt-2 text-2xl font-extrabold text-brand">{count}</p></div>)}
+      {[['Open', tickets.filter((row) => row.status === 'open').length], ['In progress', tickets.filter((row) => row.status === 'in_progress').length], ['Waiting / closed', tickets.filter((row) => row.status === 'awaiting_customer' || row.status === 'resolved' || row.status === 'closed').length]].map(([label, count]) => <div key={label} className="rounded-2xl border border-line bg-surface p-4"><p className="text-xs font-semibold text-ink-muted">{label}</p><p className="mt-2 text-2xl font-extrabold text-accent">{count}</p></div>)}
     </div>
     <div className="grid gap-5 xl:grid-cols-[minmax(300px,.8fr)_minmax(0,1.2fr)]">
       <section className="overflow-hidden rounded-2xl border border-line bg-surface shadow-card">

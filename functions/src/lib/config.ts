@@ -10,7 +10,7 @@ const raw = process.env;
 /** Cashfree credentials live in Secret Manager and are bound only to payment functions. */
 export const CASHFREE_APP_ID = defineSecret('CASHFREE_APP_ID');
 export const CASHFREE_SECRET_KEY = defineSecret('CASHFREE_SECRET_KEY');
-/** Customer assignment email credentials are bound only to the booking notification trigger. */
+/** Resend credentials are bound only to customer support and completed-trip invoice mail triggers. */
 export const RESEND_API_KEY = defineSecret('RESEND_API_KEY');
 export const RESEND_FROM_EMAIL = defineSecret('RESEND_FROM_EMAIL');
 

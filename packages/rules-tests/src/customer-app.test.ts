@@ -290,6 +290,16 @@ describe('profile — useCustomerProfile, useUpdateProfile', () => {
     );
   });
 
+  it('refuses a blank customer name on profile creation or edit', async () => {
+    const uid = 'cust-blank-name';
+    const db = ctxFor(env, uid, 'customer').firestore();
+    await expectDenied(setDoc(doc(db, 'customerProfiles', uid), {
+      uid, fullName: '   ', email: 'name@example.test',
+      privacy: { preciseLocationWhileIdle: false },
+    }));
+    await expectDenied(updateDoc(doc(customer(), 'customerProfiles', CUSTOMER_ONE), { fullName: '  ' }));
+  });
+
   it('refuses the server-owned aggregates the screen displays read-only', async () => {
     const db = customer();
     const ref = doc(db, 'customerProfiles', CUSTOMER_ONE);

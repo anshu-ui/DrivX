@@ -24,7 +24,7 @@ const CUSTOMER_TERMS: LegalDocument = {
       heading: 'What you are booking',
       lines: [
         'DrivX supplies a verified chauffeur to drive. On the chauffeur services the car is yours — "Safar aapka, driver hamara" — and you stay responsible for it while it is being driven. Cab services shown as disabled in the app are not bookable yet.',
-        'A driver reaches you only after the office has verified their Aadhaar, driving licence and photograph and recorded the one-time registration fee.',
+        'A driver reaches you only after the office has verified their Aadhaar, driving licence, PAN card and photograph and recorded the one-time registration fee.',
       ],
     },
     {
@@ -89,7 +89,7 @@ const CUSTOMER_PRIVACY: LegalDocument = {
     {
       heading: 'What we collect about you',
       lines: [
-        'Your mobile number, which is your sign-in. Your name and email, if you add them. Saved places you choose to keep. The pickup and drop of each trip, with the coordinates you selected. Your trip record: the codes issued, the fare quoted, the fare billed.',
+        'Your mobile number, which is your sign-in, and the name and valid email address required for your account. Saved places you choose to keep. The pickup and drop of each trip, with the coordinates you selected. Your trip record: the codes issued, the fare quoted, the fare billed.',
         'The rating you give a driver once a trip has closed. It is stored against that trip with the score, the chips you ticked and your words, and the driver they were about reads them. Your name is not on that row — the rules give a driver no read on your profile, so a rating reaches them with the trip reference and nothing about you.',
         'An emergency contact if you choose to record one.',
       ],
@@ -142,8 +142,8 @@ const DRIVER_TERMS: LegalDocument = {
     {
       heading: 'Joining',
       lines: [
-        'Three things are required and nothing else: your photograph, your Aadhaar card, and your driving licence. The office reviews them; DrivX does not accept an insurance certificate, a vehicle registration, a fitness certificate or a police verification from a driver, because on a chauffeur trip the car belongs to the customer.',
-        'A one-time registration fee is raised when you first upload a document. The current default is ₹500 plus 5% GST (₹525 total); the amount shown in your account is the amount payable through Cashfree. Upload all required documents and wait for Admin approval before bookings are enabled.',
+        'Four things are required: your photograph, Aadhaar card, driving licence and PAN card. Upload the front and reverse of each card; the photograph is a single clear face photo. The office reviews them; DrivX does not accept an insurance certificate, a vehicle registration, a fitness certificate or a police verification from a driver, because on a chauffeur trip the car belongs to the customer.',
+        'A one-time registration fee is raised when you first upload a document. The current default is ₹500 plus 5% GST (₹525 total); the amount shown in your account is the amount payable through Cashfree. Upload all four required documents with both sides of every card and wait for Admin approval before bookings are enabled.',
         'Approval mints your driver reference. It is the identity that appears on a customer\'s trip.',
       ],
     },
@@ -173,7 +173,7 @@ const DRIVER_TERMS: LegalDocument = {
     {
       heading: 'What the customer sees of you',
       lines: [
-        'Your name, phone number, photograph, driver reference, the car, and your rating and trip count are published to the customer for the duration of the trip. Your Aadhaar number, your licence number, what you owe and where you live are not.',
+        'Your name, phone number, photograph, driver reference, the car, and your rating and trip count are published to the customer for the duration of the trip. Your Aadhaar, licence and PAN numbers, email address, what you owe and where you live are not.',
         'The contact number is shared for that trip. Do not use it for anything else.',
       ],
     },
@@ -194,8 +194,8 @@ const DRIVER_PRIVACY: LegalDocument = {
     {
       heading: 'What we hold about you',
       lines: [
-        'Your mobile number and name, your languages and work zone, your verification status and the date it was decided, your driver reference, and the make, model and plate you or the office record for the car you drive.',
-        'Your three documents: the photograph, the Aadhaar image and the licence image, uploaded by you.',
+        'Your mobile number, name and required email address, your languages and work zone, your verification status and the date it was decided, your driver reference, and the make, model and plate you or the office record for the car you drive.',
+        'Your four documents: the profile photograph, Aadhaar, driving licence and PAN card. Aadhaar, licence and PAN are uploaded as front and reverse photos; the profile photograph is a single face photo.',
       ],
     },
     {
@@ -203,7 +203,7 @@ const DRIVER_PRIVACY: LegalDocument = {
       lines: [
         'The files you upload sit at a path only you and DrivX staff can open. The reviewer sees them; the customer never does.',
         'A customer sees your profile photograph and nothing else from your files. That photograph is a separate copy, in a place any signed-in user may read, and no download link to it is ever stored on the record.',
-        'Your Aadhaar and licence numbers are not put on your booking, your trip card, or any screen a customer opens.',
+        'Your Aadhaar, licence and PAN numbers are not put on your booking, your trip card, or any screen a customer opens.',
       ],
     },
     {

@@ -82,12 +82,17 @@ export const ACCESS_COPY: Record<string, { label: string; tone: PillTone }> = {
 export type DriverDueRow = {
   id: string;
   title: string;
-  /** One-time fee, trip commission, or an Admin-configured late-arrival penalty. */
+  /** One-time fee, trip remittance, or an Admin-configured late-arrival penalty. */
   kind: 'onboarding_fee' | 'commission' | 'late_arrival_penalty';
-  /** The trip a commission row came from; null on the one-time fee. */
+  /** The trip remittance came from; null on the one-time fee. */
   bookingId: string | null;
   basePaise: number;
   gstPaise: number;
+  fareTaxPaise: number;
+  fareTaxRate: number;
+  tdsBasePaise: number;
+  tdsRate: number;
+  tdsPaise: number;
   /** The platform's cut this row was billed at; null on the one-time fee. */
   rate: number | null;
   /** The rate the bill was issued at, so the label cannot drift from the amount. */
@@ -144,6 +149,11 @@ export function useDriverDues(): DriverDues {
               bookingId: typeof data.bookingId === 'string' ? data.bookingId : null,
               basePaise: Number(data.basePaise ?? 0),
               gstPaise: Number(data.gstPaise ?? 0),
+              fareTaxPaise: Number(data.fareTaxPaise ?? 0),
+              fareTaxRate: Number(data.fareTaxRate ?? 0),
+              tdsBasePaise: Number(data.tdsBasePaise ?? 0),
+              tdsRate: Number(data.tdsRate ?? 0),
+              tdsPaise: Number(data.tdsPaise ?? 0),
               rate: typeof data.rate === 'number' ? data.rate : null,
               gstRate: Number(data.gstRate ?? 0),
               totalPaise: Number(data.totalPaise ?? 0),

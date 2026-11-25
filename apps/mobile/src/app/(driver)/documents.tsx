@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View } from 'react-native';
+import { Image, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, Card, Field, Screen, ScreenHeader, StateView, StatusPill, Text, useTheme } from '@drivx/ui';
@@ -15,6 +15,7 @@ import {
   useDriverDocuments,
   useUploadDriverDocument,
   type DriverDocumentView,
+  type PickedAsset,
 } from '../../features/driver/documents';
 
 /**
@@ -28,29 +29,41 @@ const CHECKLIST: {
   note: string;
   /** Photographs have no number to read off; the rest do. */
   asksNumber: boolean;
+  twoSided: boolean;
 }[] = [
   {
     type: 'driver_photograph',
     label: DOCUMENT_LABELS.driver_photograph,
     note: 'A clear front-facing photo. This is the face the customer is shown when you are assigned to them.',
     asksNumber: false,
+    twoSided: false,
   },
   {
     type: 'photo_id',
     label: DOCUMENT_LABELS.photo_id,
-    note: 'Front of the card, number readable. Only the last four digits are kept.',
+    note: 'Upload clear photos of the front and reverse. Only the last four digits are kept.',
     asksNumber: true,
+    twoSided: true,
   },
   {
     type: 'driving_licence',
     label: DOCUMENT_LABELS.driving_licence,
-    note: 'Commercial endorsement if issued after 2019.',
+    note: 'Upload clear photos of the front and reverse. Include the commercial endorsement if issued after 2019.',
     asksNumber: true,
+    twoSided: true,
+  },
+  {
+    type: 'pan_card',
+    label: DOCUMENT_LABELS.pan_card,
+    note: 'Upload clear photos of the front and reverse. Only the last four digits are kept.',
+    asksNumber: true,
+    twoSided: true,
   },
 ];
 
 const STATUS_COPY: Record<DriverDocumentView['status'], { label: string; tone: 'neutral' | 'info' | 'success' | 'warning' | 'danger' }> = {
   not_uploaded: { label: 'not uploaded', tone: 'neutral' },
+  incomplete: { label: 'needs both sides', tone: 'warning' },
   pending_review: { label: 'with the office', tone: 'warning' },
   approved: { label: 'approved', tone: 'success' },
   rejected: { label: 'rejected', tone: 'danger' },
@@ -130,7 +143,7 @@ function DuesCard({ documentsReady, missingDocuments, profile }: {
         </Text>
         <Text variant="caption" tone="muted">
           Nothing is raised on your account yet. The onboarding fee appears here the moment your first
-          document is filed, and a commission row appears for each trip you complete.
+          document is filed, and a trip remittance row appears for each trip you complete.
         </Text>
       </Card>
     );
@@ -163,19 +176,19 @@ function DuesCard({ documentsReady, missingDocuments, profile }: {
       <Text variant="caption" tone="muted">
         {dues.outstandingPaise > 0
           ? documentsReady
-            ? 'Upload all three documents, then pay the one-time onboarding fee through Cashfree.'
-            : `Upload your photo, photo ID and driving licence first. The one-time ${formatINR(onboardingDue?.totalPaise ?? 52_500)} Cashfree payment unlocks after all three uploads are saved.`
+            ? 'Upload all four required documents, then pay the one-time onboarding fee through Cashfree.'
+            : `Upload your photo, Aadhaar, driving licence and PAN card first. The one-time ${formatINR(onboardingDue?.totalPaise ?? 52_500)} Cashfree payment unlocks after they are saved.`
           : profile?.verificationStatus === 'pending_review' && profile.applicationSubmittedAtMs !== null
             ? 'Your application is with Admin for verification. You can start receiving bookings after approval.'
             : profile?.verificationStatus === 'approved'
               ? 'Your driver profile is approved.'
               : documentsReady
                 ? 'Payment is confirmed. Tap Submit now to send your documents to Admin for verification.'
-                : 'Your onboarding fee is paid. Upload all three documents, then submit them for Admin verification.'}
+                : 'Your onboarding fee is paid. Upload all four required documents, then submit them for Admin verification.'}
       </Text>
       {dues.rows.some((row) => row.id === 'onboarding_fee' && row.status !== 'paid') ? (
         <Button
-          label={paying ? 'Opening Cashfree…' : documentsReady && onboardingDue ? `Pay ${formatINR(onboardingDue.totalPaise)}` : 'Upload all 3 documents first'}
+          label={paying ? 'Opening Cashfree…' : documentsReady && onboardingDue ? `Pay ${formatINR(onboardingDue.totalPaise)}` : 'Upload all 4 documents first'}
           onPress={() => void payOnboarding()}
           disabled={paying || !documentsReady}
           accessibilityLabel={onboardingDue ? `Pay the one-time onboarding fee of ${formatINR(onboardingDue.totalPaise)} with Cashfree` : 'Pay onboarding fee with Cashfree'}
@@ -190,7 +203,7 @@ function DuesCard({ documentsReady, missingDocuments, profile }: {
             </Text>
           ) : null}
           <Button
-            label={submitting ? 'Submitting…' : documentsReady ? 'Submit now' : 'Upload all 3 documents first'}
+            label={submitting ? 'Submitting…' : documentsReady ? 'Submit now' : 'Upload all 4 documents first'}
             onPress={() => void submitNow()}
             disabled={submitting || !documentsReady}
           />
@@ -229,7 +242,7 @@ function DueRow({ row }: { row: DriverDueRow }) {
 
       <Text variant="caption" tone="muted">
         {row.kind === 'commission'
-          ? `Trip commission${
+          ? `Trip remittance${
               row.rate === null ? '' : ` · ${Math.round(row.rate * 100)}% of the fare`
             }${row.bookingId ? ` · booking ${row.bookingId}` : ''}`
           : 'Charged once, when you first file your papers'}
@@ -237,16 +250,15 @@ function DueRow({ row }: { row: DriverDueRow }) {
 
       <View style={{ gap: theme.spacing.xs }}>
         <FeeLine
-          label={
-            row.kind === 'commission'
-              ? row.rate === null
-                ? 'Commission'
-                : `Commission (${Math.round(row.rate * 100)}%)`
-              : 'Onboarding fee'
-          }
+          label={row.kind === 'commission' ? `Commission (${Math.round((row.rate ?? 0) * 100)}%)` : 'Onboarding fee'}
           value={formatINR(row.basePaise)}
         />
-        <FeeLine label={`tax (${Math.round(row.gstRate * 100)}%)`} value={formatINR(row.gstPaise)} />
+        <FeeLine label={`${row.kind === 'commission' ? 'GST on commission' : 'GST'} (${Math.round(row.gstRate * 100)}%)`} value={formatINR(row.gstPaise)} />
+        {row.kind === 'commission' ? <>
+          <FeeLine label={`Customer fare GST (${Math.round(row.fareTaxRate * 100)}%) to remit`} value={formatINR(row.fareTaxPaise)} />
+          <FeeLine label={`TDS base (${Math.round(row.tdsRate * 100)}%)`} value={formatINR(row.tdsBasePaise)} />
+          <FeeLine label={`TDS (${Math.round(row.tdsRate * 100)}%)`} value={formatINR(row.tdsPaise)} />
+        </> : null}
         <FeeLine label="Total" value={formatINR(row.totalPaise)} strong />
       </View>
 
@@ -281,6 +293,7 @@ export default function DriverDocuments() {
   const upload = useUploadDriverDocument();
   const [openType, setOpenType] = useState<DocumentType | null>(null);
   const [numbers, setNumbers] = useState<Partial<Record<DocumentType, string>>>({});
+  const [pickedSides, setPickedSides] = useState<Partial<Record<DocumentType, { front?: PickedAsset; back?: PickedAsset }>>>({});
   const [error, setError] = useState<string | null>(null);
 
   const rows = new Map((documents.data ?? []).map((row) => [row.type, row]));
@@ -295,7 +308,7 @@ export default function DriverDocuments() {
     })
     .map((item) => item.label);
 
-  async function pick(item: (typeof CHECKLIST)[number], from: 'library' | 'camera') {
+  async function pick(item: (typeof CHECKLIST)[number], side: 'front' | 'back', from: 'library' | 'camera') {
     setError(null);
     const permission =
       from === 'camera'
@@ -318,14 +331,22 @@ export default function DriverDocuments() {
 
     const [asset] = picked.assets;
     if (!asset) return;
+    const pickedAsset: PickedAsset = {
+      uri: asset.uri,
+      fileName: asset.fileName ?? `${item.type}-${side}`,
+      mimeType: asset.mimeType ?? 'image/jpeg',
+    };
+    if (item.twoSided) {
+      setPickedSides((current) => ({
+        ...current,
+        [item.type]: { ...current[item.type], [side]: pickedAsset },
+      }));
+      return;
+    }
     try {
       await upload.mutateAsync({
         type: item.type,
-        asset: {
-          uri: asset.uri,
-          fileName: asset.fileName ?? item.type,
-          mimeType: asset.mimeType ?? 'image/jpeg',
-        },
+        frontAsset: pickedAsset,
         number: item.asksNumber ? (numbers[item.type] ?? null) : null,
       });
       setOpenType(null);
@@ -334,11 +355,32 @@ export default function DriverDocuments() {
     }
   }
 
-  async function viewUpload(type: DocumentType) {
+  async function uploadBothSides(item: (typeof CHECKLIST)[number]) {
+    const sides = pickedSides[item.type];
+    if (!sides?.front || !sides.back) {
+      setError('Choose both the front and back photos before uploading.');
+      return;
+    }
+    setError(null);
+    try {
+      await upload.mutateAsync({
+        type: item.type,
+        frontAsset: sides.front,
+        backAsset: sides.back,
+        number: item.asksNumber ? (numbers[item.type] ?? null) : null,
+      });
+      setPickedSides((current) => ({ ...current, [item.type]: undefined }));
+      setOpenType(null);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'The upload did not go through. Try again.');
+    }
+  }
+
+  async function viewUpload(type: DocumentType, side: 'front' | 'back' = 'front') {
     if (!user?.uid) return;
     setError(null);
     try {
-      const url = await ownDocumentUrl(user.uid, type);
+      const url = await ownDocumentUrl(user.uid, type, side);
       // The web build can open the object directly; a phone hands the URL to
       // whatever can render it. Either way it is the driver's own file.
       const { Linking, Platform } = await import('react-native');
@@ -383,7 +425,7 @@ export default function DriverDocuments() {
         <Card tone="flat" style={{ gap: theme.spacing.xs }}>
           <Text variant="bodyStrong" tone="default">Before you submit</Text>
           <Text variant="caption" tone="muted">
-          Upload all three documents, then pay the one-time fee shown above (₹500 + 5% GST = ₹525 by default). After payment is confirmed, tap Submit now to send your application to Admin. Bookings start only after approval.
+          Upload your profile photo, Aadhaar, driving licence and PAN card. Upload front and reverse photos for each card, then pay the one-time fee shown above. After payment is confirmed, tap Submit now to send your application to Admin. Bookings start only after approval.
           </Text>
         </Card>
 
@@ -402,6 +444,7 @@ export default function DriverDocuments() {
           const status = row?.status ?? 'not_uploaded';
           const pill = STATUS_COPY[status];
           const isOpen = openType === item.type;
+          const selected = pickedSides[item.type];
           const approved = status === 'approved';
 
           return (
@@ -430,13 +473,21 @@ export default function DriverDocuments() {
               ) : null}
 
               {approved ? (
-                <Button
-                  label="Approved — contact the office to replace it"
-                  appearance="secondary"
-                  size="sm"
-                  onPress={() => void viewUpload(item.type)}
-                  iconLeft={<Ionicons name="checkmark-circle-outline" size={16} color={theme.colors.textBrand} />}
-                />
+                <View style={{ gap: theme.spacing.sm }}>
+                  <Text variant="caption" tone="muted">Approved — contact the office if this document needs replacing.</Text>
+                  <View style={{ flexDirection: 'row', gap: theme.spacing.sm, flexWrap: 'wrap' }}>
+                    <Button
+                      label={item.twoSided ? 'View front' : 'View photo'}
+                      appearance="secondary"
+                      size="sm"
+                      onPress={() => void viewUpload(item.type, 'front')}
+                      iconLeft={<Ionicons name="checkmark-circle-outline" size={16} color={theme.colors.textBrand} />}
+                    />
+                    {item.twoSided && row?.hasBackFile ? (
+                      <Button label="View back" appearance="secondary" size="sm" onPress={() => void viewUpload(item.type, 'back')} />
+                    ) : null}
+                  </View>
+                </View>
               ) : (
                 <>
                   {isOpen && item.asksNumber ? (
@@ -450,38 +501,55 @@ export default function DriverDocuments() {
                     />
                   ) : null}
 
+                  {item.twoSided && row?.hasFrontFile ? (
+                    <View style={{ flexDirection: 'row', gap: theme.spacing.sm, flexWrap: 'wrap' }}>
+                      <Button label="View front" appearance="secondary" size="sm" onPress={() => void viewUpload(item.type, 'front')} />
+                      {row.hasBackFile ? <Button label="View back" appearance="secondary" size="sm" onPress={() => void viewUpload(item.type, 'back')} /> : null}
+                    </View>
+                  ) : null}
+                  {!item.twoSided && row?.hasFrontFile ? (
+                    <Button label="View photo" appearance="secondary" size="sm" onPress={() => void viewUpload(item.type)} />
+                  ) : null}
                   <View style={{ flexDirection: 'row', gap: theme.spacing.sm, flexWrap: 'wrap' }}>
-                    {row?.hasFile ? (
-                      <Button
-                        label="View"
-                        appearance="secondary"
-                        size="sm"
-                        onPress={() => void viewUpload(item.type)}
-                      />
-                    ) : null}
                     <Button
                       label={isOpen ? 'Cancel' : status === 'rejected' ? 'Upload again' : 'Upload'}
                       appearance={isOpen ? 'secondary' : 'primary'}
                       size="sm"
                       onPress={() => setOpenType(isOpen ? null : item.type)}
                     />
-                    {isOpen ? (
-                      <>
-                        <Button
-                          label="From gallery"
-                          size="sm"
-                          loading={upload.isPending}
-                          onPress={() => void pick(item, 'library')}
-                        />
-                        <Button
-                          label="Take a photo"
-                          appearance="secondary"
-                          size="sm"
-                          onPress={() => void pick(item, 'camera')}
-                        />
-                      </>
-                    ) : null}
                   </View>
+                  {isOpen && item.twoSided ? (
+                    <View style={{ gap: theme.spacing.sm }}>
+                      {(['front', 'back'] as const).map((side) => {
+                        const selection = selected?.[side];
+                        const saved = side === 'front' ? row?.hasFrontFile : row?.hasBackFile;
+                        return (
+                          <View key={side} style={{ gap: theme.spacing.xs }}>
+                            <Text variant="caption" tone="default">
+                              {side === 'front' ? 'Front side' : 'Back / reverse side'} · {selection ? 'photo selected' : saved ? 'photo saved' : 'required'}
+                            </Text>
+                            {selection ? <Image source={{ uri: selection.uri }} style={{ width: 104, height: 72, borderRadius: 8 }} resizeMode="cover" /> : null}
+                            <View style={{ flexDirection: 'row', gap: theme.spacing.sm, flexWrap: 'wrap' }}>
+                              <Button label={`${side === 'front' ? 'Front' : 'Back'} · gallery`} size="sm" loading={upload.isPending} onPress={() => void pick(item, side, 'library')} />
+                              <Button label={`${side === 'front' ? 'Front' : 'Back'} · camera`} appearance="secondary" size="sm" loading={upload.isPending} onPress={() => void pick(item, side, 'camera')} />
+                            </View>
+                          </View>
+                        );
+                      })}
+                      <Button
+                        label={upload.isPending ? 'Uploading both photos…' : 'Upload both photos'}
+                        onPress={() => void uploadBothSides(item)}
+                        loading={upload.isPending}
+                        disabled={!selected?.front || !selected?.back}
+                      />
+                    </View>
+                  ) : null}
+                  {isOpen && !item.twoSided ? (
+                    <View style={{ flexDirection: 'row', gap: theme.spacing.sm, flexWrap: 'wrap' }}>
+                      <Button label="From gallery" size="sm" loading={upload.isPending} onPress={() => void pick(item, 'front', 'library')} />
+                      <Button label="Take a photo" appearance="secondary" size="sm" loading={upload.isPending} onPress={() => void pick(item, 'front', 'camera')} />
+                    </View>
+                  ) : null}
                 </>
               )}
             </Card>

@@ -4,10 +4,12 @@ import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { z } from 'zod';
 import {
   BOOKING_REFERENCE_PREFIX,
+  COLLECTIONS,
   cancelBookingInputSchema,
   commissionSnapshotFor,
   couponPreviewInputSchema,
   createBookingInputSchema,
+  emailSchema,
   fareQuoteInputSchema,
   holdsRole,
   isActiveTrip,
@@ -422,6 +424,14 @@ async function deduplicatedResult(
 export const createBooking = onCall(CALLABLE_OPTIONS, async (request) => {
   const caller = requireCustomer(request);
   const input = parseInput(createBookingInputSchema, request.data);
+  const customerProfile = await db().doc(`${COLLECTIONS.customerProfiles}/${caller.uid}`).get();
+  const customerFullName = String(customerProfile.data()?.fullName ?? '').trim();
+  if (customerFullName.length < 2) {
+    throw failedPrecondition('Add your full name to your customer profile before booking a trip.');
+  }
+  if (!emailSchema.safeParse(customerProfile.data()?.email).success) {
+    throw failedPrecondition('Add a valid email address to your customer profile before booking a trip.');
+  }
   await assertPickupServiceable(input.pickup.city);
 
   const nowMs = Date.now();
@@ -464,7 +474,7 @@ export const createBooking = onCall(CALLABLE_OPTIONS, async (request) => {
     nowMs,
   });
   const commissionTerms = await configuredCommissionTerms();
-  const commission = commissionSnapshotFor(breakdown, commissionTerms.rate, commissionTerms.gstRate);
+  const commission = commissionSnapshotFor(breakdown, commissionTerms.rate, commissionTerms.gstRate, commissionTerms.tdsRate);
 
   // Reward selections are requests only. The wallet, miles and coupon are
   // checked and consumed atomically with the booking below.
@@ -538,6 +548,7 @@ export const createBooking = onCall(CALLABLE_OPTIONS, async (request) => {
         id: bookingId,
         reference,
         customerUid: caller.uid,
+        customerTaxDetails: input.customerTaxDetails ?? null,
         assignedDriverUid: null,
         // The customer's copy of the driver lands beside the uid, written by the
         // server when a driver is assigned. Nothing before that has a face to show.
