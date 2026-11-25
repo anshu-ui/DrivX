@@ -38,12 +38,15 @@ const { initializeApp, deleteApp } = await import('firebase-admin/app');
 const app = initializeApp({ projectId, storageBucket: `${projectId}.appspot.com` });
 const {
   sendTripCompletionInvoices,
+  getTripInvoiceDownloadUrlForCaller,
   getTripInvoiceArchiveForCaller,
 } = await import('../functions/lib/lib/tripInvoices.js');
 const { getFirestore } = await import('firebase-admin/firestore');
 const { getStorage } = await import('firebase-admin/storage');
 const db = getFirestore(app);
 const bucket = getStorage(app).bucket();
+const storageFilePrototype = Object.getPrototypeOf(bucket.file('trip-invoices/audit-placeholder'));
+storageFilePrototype.getSignedUrl = async function () { return [`https://storage.example.test/${this.name}`, {}]; };
 const bookingId = `invoice-audit-${randomUUID()}`;
 const customerUid = `invoice-customer-${randomUUID()}`;
 const driverUid = `invoice-driver-${randomUUID()}`;
@@ -91,6 +94,7 @@ const booking = {
 
 try {
   await Promise.all([
+    db.doc(`bookings/${bookingId}`).set({ customerUid, assignedDriverUid: driverUid, status: 'completed' }),
     db.doc(`customerProfiles/${customerUid}`).set({ fullName: 'Invoice Customer', email: customerEmail }),
     db.doc(`users/${customerUid}`).set({ displayName: 'Invoice Customer', email: customerEmail }),
     db.doc(`driverProfiles/${driverUid}`).set({ fullName: 'Invoice Driver', email: driverEmail }),
@@ -114,6 +118,18 @@ try {
   assert.equal(invoice.emailStatus, 'sent');
   assert.equal(resendRequests.length, 2, 'one customer and one driver email are sent');
   assert.notEqual(resendRequests[0].to[0], resendRequests[1].to[0]);
+  const customerEmailMessage = resendRequests.find((message) => message.tags?.some((tag) => tag.value === 'trip-invoice-customer'));
+  const driverEmailMessage = resendRequests.find((message) => message.tags?.some((tag) => tag.value === 'trip-invoice-driver'));
+  assert.equal(customerEmailMessage?.to[0], customerEmail, 'customer invoice email goes to the customer');
+  assert.match(customerEmailMessage?.html ?? '', /CUSTOMER TRIP INVOICE/);
+  assert.equal(driverEmailMessage?.to[0], driverEmail, 'driver settlement email goes to the driver');
+  assert.match(driverEmailMessage?.html ?? '', /DRIVER SETTLEMENT/);
+
+  const customerDownload = await getTripInvoiceDownloadUrlForCaller({ uid: customerUid, claims: { admin: false, ops: false } }, { bookingId, side: 'customer' });
+  const driverDownload = await getTripInvoiceDownloadUrlForCaller({ uid: driverUid, claims: { admin: false, ops: false } }, { bookingId, side: 'driver' });
+  assert.match(customerDownload.url, /trip-invoices/);
+  assert.match(driverDownload.url, /trip-invoices/);
+  await assert.rejects(() => getTripInvoiceDownloadUrlForCaller({ uid: 'other-user', claims: { admin: false, ops: false } }, { bookingId, side: 'customer' }), /only download your own/);
 
   for (const side of ['customer', 'driver']) {
     const stored = await bucket.file(invoice[side].storagePath).download();
@@ -122,6 +138,7 @@ try {
     const body = pdf.toString('latin1');
     assert.ok(body.includes(side === 'customer' ? 'CUSTOMER TRIP INVOICE' : 'DRIVER SETTLEMENT INVOICE'));
     assert.ok(body.includes('DRX-AUDIT1'), `${side} PDF contains the booking reference`);
+    assert.ok(body.includes(bookingId), `${side} PDF contains the booking ID`);
     assert.ok(body.includes('07ABCDE1234F1Z5'), `${side} PDF contains the configured issuer GSTIN`);
     assert.ok(body.includes('Connaught Place') && body.includes('India Gate'), `${side} PDF contains the route`);
     if (side === 'customer') assert.ok(body.includes('07AABCU9603R1ZM'), 'customer PDF includes buyer GSTIN');
@@ -148,6 +165,7 @@ try {
     .filter((value) => typeof value === 'string');
   await Promise.all(paths.map((storagePath) => bucket.file(storagePath).delete({ ignoreNotFound: true }).catch(() => {})));
   await Promise.all([
+    db.doc(`bookings/${bookingId}`).delete().catch(() => {}),
     invoice.ref.delete().catch(() => {}),
     db.doc(`customerProfiles/${customerUid}`).delete().catch(() => {}),
     db.doc(`users/${customerUid}`).delete().catch(() => {}),

@@ -36,12 +36,12 @@ function financialYear(atMs: number): string {
 }
 
 function cleanAscii(value: string): string {
-  return value.replace(/₹/g, 'INR ').replace(/[–—]/g, '-').replace(/[“”]/g, '"').replace(/[’]/g, "'")
+  return value.replace(/₹/g, 'INR ').replace(/[·•]/g, ' | ').replace(/[–—]/g, '-').replace(/[“”]/g, '"').replace(/[’]/g, "'")
     .replace(/[\r\n\t]/g, ' ').replace(/[^\x20-\x7E]/g, '?');
 }
 
 function pdfString(value: string): string {
-  return cleanAscii(value).replace(/[\\()]/g, '\\$&').slice(0, 150);
+  return cleanAscii(value).replace(/[\\()]/g, '\\$&');
 }
 
 function wrapText(value: string, maxCharacters: number): string[] {
@@ -66,76 +66,206 @@ function wrapText(value: string, maxCharacters: number): string[] {
   return lines.length ? lines : [''];
 }
 
-function textCommand(text: string, x: number, y: number, size: number, bold: boolean, color: string): string {
-  return `${color} rg BT /${bold ? 'F2' : 'F1'} ${size} Tf ${x} ${y} Td (${pdfString(text)}) Tj ET`;
-}
+type InvoiceRow = { label: string; value: string };
+type InvoiceSection = { title: string; rows: InvoiceRow[] };
 
-/** Brand-styled, concise one-page PDF shared by both immutable trip records. */
-function invoicePdf(title: string, invoiceNumber: string, invoiceDate: string, issuer: InvoiceIssuer, lines: string[]): Buffer {
-  const navy = '0.059 0.09 0.165'; // #0F172A
-  const blue = '0.118 0.251 0.686'; // #1E40AF
-  const muted = '0.392 0.455 0.545'; // #64748B
-  const border = '0.886 0.91 0.937'; // #E2E8F0
-  const pale = '0.945 0.961 0.976'; // #F1F5F9
-  const content = [
-    `${navy} rg 0 744 595 98 re f`,
-    `${blue} rg 0 739 595 5 re f`,
-    textCommand('DrivX', 48, 803, 22, true, '1 1 1'),
-    textCommand(title, 48, 778, 10, true, '0.87 0.90 0.96'),
-    textCommand('INVOICE', 390, 810, 8, true, '0.78 0.83 0.92'),
-    textCommand(invoiceNumber, 390, 794, 9, true, '1 1 1'),
-    textCommand(invoiceDate, 390, 778, 8, false, '0.87 0.90 0.96'),
-  ];
-  let issuerY = 716;
-  content.push(textCommand('ISSUED BY', 48, issuerY, 7.5, true, blue));
-  issuerY -= 16;
-  const issuerName = issuer.businessName || 'DrivX';
-  for (const line of wrapText(issuerName, 48).slice(0, 2)) {
-    content.push(textCommand(line, 48, issuerY, 11, true, navy));
-    issuerY -= 13;
-  }
-  const legalRows = [
-    ...(issuer.gstin ? [`GSTIN  ${issuer.gstin}`] : []),
-    ...(issuer.address ? wrapText(issuer.address, 74).slice(0, 2) : []),
-    ...(!issuer.businessName || !issuer.gstin ? ['Legal business name and GSTIN pending Admin setup'] : []),
-  ];
-  for (const line of legalRows) {
-    content.push(textCommand(line, 48, issuerY, 7.5, false, muted));
-    issuerY -= 11;
-  }
-  const dividerY = issuerY - 6;
-  content.push(`${border} RG 0.7 w 48 ${dividerY} m 547 ${dividerY} l S`);
-  let y = dividerY - 17;
+function invoiceSections(lines: string[]): Map<string, InvoiceRow[]> {
+  const sections = new Map<string, InvoiceRow[]>();
+  let current = 'Booking';
   for (const line of lines) {
     if (line.startsWith('## ')) {
-      y -= 3;
-      content.push(textCommand(line.slice(3).toUpperCase(), 48, y, 8, true, blue));
-      content.push(`${border} RG 0.5 w 48 ${y - 5} m 547 ${y - 5} l S`);
-      y -= 16;
+      current = line.slice(3);
+      sections.set(current, []);
       continue;
     }
-    const [label, ...valueParts] = line.split('\t');
-    const value = valueParts.join(' ');
+    const [label, ...parts] = line.split('\t');
+    const value = parts.join(' ').trim();
     if (!value) continue;
-    const valueLines = wrapText(value, 53);
-    const rowHeight = Math.max(15, valueLines.length * 11 + 4);
-    const isCustomerTotal = label === 'Customer total';
-    const isDriverTotal = label === 'Total driver remittance to DrivX';
-    const isNet = label === 'Driver net from customer total';
-    if (isCustomerTotal || isDriverTotal || isNet) {
-      const ground = isNet ? pale : navy;
-      content.push(`${ground} rg 42 ${y - rowHeight + 3} 511 ${rowHeight + 5} re f`);
-    }
-    const labelColor = isCustomerTotal || isDriverTotal ? '1 1 1' : isNet ? navy : muted;
-    const valueColor = isCustomerTotal || isDriverTotal ? '1 1 1' : navy;
-    const labelLines = wrapText(label ?? '', 40);
-    labelLines.forEach((part, index) => content.push(textCommand(part, 50, y - (index * 11), 8, isCustomerTotal || isDriverTotal || isNet, labelColor)));
-    valueLines.forEach((part, index) => content.push(textCommand(part, 300, y - (index * 11), 8.3, isCustomerTotal || isDriverTotal || isNet, valueColor)));
-    y -= rowHeight;
-    if (y < 62) throw new Error('Trip invoice details exceed the one-page layout.');
+    const rows = sections.get(current) ?? [];
+    rows.push({ label: label?.trim() ?? '', value });
+    sections.set(current, rows);
   }
-  content.push(`${border} RG 0.7 w 48 45 m 547 45 l S`);
-  content.push(textCommand(`DrivX  |  ${CUSTOMER_CARE_CONTACTS.email}`, 48, 30, 7, false, muted));
+  return sections;
+}
+
+/** One-page trip invoice styled to match the DrivX booking confirmation PDFs. */
+function invoicePdf(title: string, invoiceNumber: string, invoiceDate: string, issuer: InvoiceIssuer, lines: string[]): Buffer {
+  const pageHeight = 842;
+  const colors: Record<string, string> = {
+    cream: '0.965 0.953 0.929', white: '1 1 1', ink: '0.09 0.10 0.13',
+    navy: '0.10 0.16 0.36', blue: '0.15 0.36 0.91', muted: '0.40 0.44 0.51',
+    border: '0.87 0.86 0.83', green: '0.04 0.48 0.29', greenPale: '0.91 0.97 0.93',
+    bluePale: '0.92 0.95 1', soft: '0.97 0.96 0.94',
+  };
+  const content: string[] = [];
+  const fillRect = (x: number, top: number, width: number, height: number, color: string): void => {
+    content.push(`${colors[color] ?? color} rg ${x} ${pageHeight - top - height} ${width} ${height} re f`);
+  };
+  const roundRect = (x: number, top: number, width: number, height: number, radius: number, fill: string, stroke?: string): void => {
+    const y = pageHeight - top - height;
+    const r = Math.min(radius, width / 2, height / 2);
+    const k = 0.55228475;
+    const path = [
+      `${x + r} ${y} m`, `${x + width - r} ${y} l`,
+      `${x + width - r + r * k} ${y} ${x + width} ${y + r - r * k} ${x + width} ${y + r} c`,
+      `${x + width} ${y + height - r} l`,
+      `${x + width} ${y + height - r + r * k} ${x + width - r + r * k} ${y + height} ${x + width - r} ${y + height} c`,
+      `${x + r} ${y + height} l`, `${x + r - r * k} ${y + height} ${x} ${y + height - r + r * k} ${x} ${y + height - r} c`,
+      `${x} ${y + r} l`, `${x} ${y + r - r * k} ${x + r - r * k} ${y} ${x + r} ${y} c h`,
+    ].join(' ');
+    content.push(`${colors[fill] ?? fill} rg${stroke ? ` ${colors[stroke] ?? stroke} RG 0.8 w` : ''} ${path} ${stroke ? 'B' : 'f'}`);
+  };
+  const drawText = (text: string, x: number, top: number, size = 8, bold = false, color = 'ink'): void => {
+    content.push(`${colors[color] ?? color} rg BT /${bold ? 'F2' : 'F1'} ${size} Tf ${x} ${pageHeight - top} Td (${pdfString(text)}) Tj ET`);
+  };
+  const wrap = (text: string, width: number, size: number): string[] => wrapText(text, Math.max(12, Math.floor(width / (size * 0.52))));
+  const drawWrapped = (text: string, x: number, top: number, width: number, size: number, color = 'ink', lineHeight = size + 3): number => {
+    const rows = wrap(text, width, size);
+    rows.forEach((row, index) => drawText(row, x, top + index * lineHeight, size, false, color));
+    return rows.length * lineHeight;
+  };
+  const pill = (text: string, x: number, top: number, width: number, fill: string, foreground: string): void => {
+    roundRect(x, top, width, 20, 10, fill);
+    drawText(text, x + 10, top + 13, 7, true, foreground);
+  };
+
+  const sections = invoiceSections(lines);
+  const booking = sections.get('Booking') ?? [];
+  const trip = sections.get('Trip details') ?? [];
+  const customerGst = sections.get('Customer GST details') ?? [];
+  const fare = sections.get('Fare breakdown') ?? [];
+  const settlement = sections.get('Driver settlement') ?? [];
+  const bookingValue = (label: string): string => booking.find((row) => row.label === label)?.value ?? '';
+  const tripValue = (label: string): string => trip.find((row) => row.label === label)?.value ?? 'Not recorded';
+  const gstValue = (label: string): string => customerGst.find((row) => row.label === label)?.value ?? '';
+  const driverInvoice = title.includes('DRIVER');
+  const customerName = bookingValue('Customer');
+  const driverName = bookingValue('Driver');
+  const businessName = gstValue('Business name');
+  const customerGstin = gstValue('Customer GSTIN');
+  const reference = bookingValue('Booking reference');
+  const bookingId = bookingValue('Booking ID');
+
+  fillRect(0, 0, 595, 842, 'cream');
+  roundRect(40, 28, 34, 34, 10, 'blue');
+  drawText('D', 50, 52, 21, true, 'white');
+  drawText('DrivX', 84, 52, 19, true, 'navy');
+  drawText(driverInvoice ? 'DRIVER SETTLEMENT INVOICE' : 'CUSTOMER TRIP INVOICE', driverInvoice ? 363 : 383, 48, 7, true, 'muted');
+  drawText(driverInvoice ? 'Driver settlement' : 'Trip invoice', 40, 101, 23, true, 'ink');
+  drawText(driverInvoice ? 'Fare and platform settlement for your completed journey.' : 'Final fare and trip record for your completed journey.', 40, 120, 8, false, 'muted');
+  pill('COMPLETED', 465, 79, 90, 'greenPale', 'green');
+
+  roundRect(40, 137, 515, 58, 12, 'white', 'border');
+  drawText('BOOKING REFERENCE', 56, 157, 6.5, true, 'muted');
+  drawText(reference || bookingId, 56, 180, 14, true, 'navy');
+  drawText(`Booking ID: ${bookingId}`, 56, 190, 6.2, false, 'muted');
+  drawText('INVOICE NUMBER', 350, 157, 6.5, true, 'muted');
+  drawText(invoiceNumber, 350, 172, 8.5, true, 'ink');
+  drawText(invoiceDate, 350, 185, 6.5, false, 'muted');
+
+  const billToRows = driverInvoice
+    ? [driverName || 'Driver', ...(customerName ? [`Customer: ${customerName}`] : [])]
+    : [businessName || customerName || 'Customer', ...(businessName && customerName ? [`Contact: ${customerName}`] : []), ...(customerGstin ? [`GSTIN: ${customerGstin}`] : [])];
+  const issuerRows = [
+    issuer.businessName || 'DrivX',
+    ...(issuer.gstin ? [`GSTIN: ${issuer.gstin}`] : ['GSTIN pending Admin setup']),
+    ...(issuer.address ? wrap(issuer.address, 226, 7.2) : []),
+  ];
+  const billToLineCount = billToRows.reduce((total, row) => total + wrap(row, 220, 7.2).length, 0);
+  const issuerLineCount = issuerRows.reduce((total, row) => total + wrap(row, 220, 7.2).length, 0);
+  const partyLineCount = Math.max(billToLineCount, issuerLineCount, 1);
+  const partyTop = 207;
+  const partyHeight = 38 + partyLineCount * 11;
+  roundRect(40, partyTop, 250, partyHeight, 12, 'white', 'border');
+  roundRect(304, partyTop, 251, partyHeight, 12, 'white', 'border');
+  drawText(driverInvoice ? 'SETTLEMENT FOR' : 'BILL TO', 55, partyTop + 20, 6.5, true, 'muted');
+  drawText('ISSUED BY', 319, partyTop + 20, 6.5, true, 'muted');
+  let partyY = partyTop + 37;
+  for (const row of billToRows) {
+    const rowLines = wrap(row, 220, 7.2);
+    rowLines.forEach((part, index) => drawText(part, 55, partyY + index * 10, 7.2, row === billToRows[0], row === billToRows[0] ? 'navy' : 'ink'));
+    partyY += rowLines.length * 10;
+  }
+  partyY = partyTop + 37;
+  issuerRows.forEach((row, index) => {
+    const rowLines = wrap(row, 220, 7.2);
+    rowLines.forEach((part, lineIndex) => drawText(part, 319, partyY + lineIndex * 10, 7.2, index === 0, index === 0 ? 'navy' : 'ink'));
+    partyY += rowLines.length * 10;
+  });
+
+  const pickup = tripValue('Pickup');
+  const dropoff = tripValue('Drop-off');
+  const pickupLines = wrap(pickup, 456, 8.2);
+  const dropoffLines = wrap(dropoff, 456, 8.2);
+  const metaPairs = ([
+    ['PICKUP TIME', tripValue('Pickup time')],
+    ['TRIP STARTED', tripValue('Trip started')],
+    ['COMPLETED', tripValue('Trip completed')],
+    ['DISTANCE', tripValue('Distance')],
+    ['DURATION', tripValue('Duration')],
+    [driverInvoice ? 'CUSTOMER' : 'YOUR DRIVER', driverInvoice ? customerName : driverName],
+    ['SERVICE', tripValue('Service')],
+    ['VEHICLE', tripValue('Vehicle')],
+  ] as Array<[string, string]>).filter(([, value]) => value !== 'Not recorded' && Boolean(value));
+  const journeyTop = partyTop + partyHeight + 12;
+  const metadataRows = Math.ceil(metaPairs.length / 2);
+  const journeyHeight = 118 + (pickupLines.length + dropoffLines.length) * 11 + Math.max(0, metadataRows - 1) * 21;
+  roundRect(40, journeyTop, 515, journeyHeight, 12, 'white', 'border');
+  drawText('JOURNEY', 56, journeyTop + 21, 6.5, true, 'muted');
+  let routeY = journeyTop + 42;
+  drawText('PICKUP', 76, routeY, 6.2, true, 'muted');
+  routeY += 13;
+  routeY += drawWrapped(pickup, 76, routeY, 455, 8.2, 'ink', 11);
+  routeY += 6;
+  drawText('DROP-OFF', 76, routeY, 6.2, true, 'muted');
+  routeY += 13;
+  routeY += drawWrapped(dropoff, 76, routeY, 455, 8.2, 'ink', 11);
+  routeY += 7;
+  content.push(`${colors.border} RG 0.6 w 56 ${pageHeight - routeY} m 539 ${pageHeight - routeY} l S`);
+  routeY += 15;
+  metaPairs.forEach(([label, value], index) => {
+    const column = index % 2;
+    const row = Math.floor(index / 2);
+    const x = 56 + column * 254;
+    const y = routeY + row * 20;
+    drawText(label, x, y, 5.8, true, 'muted');
+    drawWrapped(value, x, y + 9, 230, 6.6, 'ink', 8);
+  });
+
+  const financialSections: InvoiceSection[] = driverInvoice
+    ? [
+        { title: 'TRIP FARE', rows: fare },
+        { title: 'DRIVER SETTLEMENT', rows: settlement },
+      ]
+    : [{ title: 'FARE BREAKDOWN', rows: fare }];
+  const financialTop = journeyTop + journeyHeight + 12;
+  const footerTop = 789;
+  const rowsCount = financialSections.reduce((sum, section) => sum + section.rows.length, 0);
+  const available = footerTop - financialTop - 20;
+  const sectionSpace = 23 * financialSections.length + 18;
+  const rowStep = Math.min(13, (available - sectionSpace) / Math.max(1, rowsCount));
+  if (rowStep < 8.4) throw new Error('Trip invoice details exceed the one-page layout.');
+  const financialHeight = sectionSpace + rowsCount * rowStep;
+  roundRect(40, financialTop, 515, financialHeight, 12, 'white', 'border');
+  let financeY = financialTop + 22;
+  for (const section of financialSections) {
+    drawText(section.title, 55, financeY, 6.5, true, 'muted');
+    financeY += 13;
+    for (const row of section.rows) {
+      const total = ['Customer total', 'Total driver remittance to DrivX'].includes(row.label);
+      const net = row.label === 'Driver net from customer total';
+      if (total || net) roundRect(50, financeY - 8, 495, Math.max(13, rowStep), 5, total ? 'blue' : 'bluePale');
+      const foreground = total ? 'white' : net ? 'navy' : 'ink';
+      drawText(row.label, 59, financeY + 1, Math.min(7.6, rowStep - 3), total || net, foreground);
+      drawText(row.value, 427, financeY + 1, Math.min(7.6, rowStep - 3), total || net, foreground);
+      financeY += rowStep;
+    }
+    financeY += 6;
+  }
+  content.push(`${colors.border} RG 0.6 w 40 ${pageHeight - footerTop} m 555 ${pageHeight - footerTop} l S`);
+  drawText(`DrivX Support  |  ${CUSTOMER_CARE_CONTACTS.email}  |  ${CUSTOMER_CARE_CONTACTS.phones.map((phone) => phone.label).join('  |  ')}`, 40, 807, 6.5, false, 'muted');
+  drawText(driverInvoice ? 'Keep this settlement statement for your trip records.' : 'Keep this invoice for your trip records.', 40, 822, 6, false, 'muted');
+
   const stream = Buffer.from(content.join('\n'), 'binary');
   const objects = [
     '<< /Type /Catalog /Pages 2 0 R >>',
@@ -192,8 +322,17 @@ function fareRows(fare: Data): string[] {
 }
 
 function invoiceEmailHtml(input: { recipient: string; title: string; invoiceNumber: string; reference: string; total: string; issuerConfigured: boolean }): string {
-  const pending = input.issuerConfigured ? '' : '<p style="font-size:12px;color:#64748b">Company legal name and GSTIN are pending Admin setup.</p>';
-  return `<!doctype html><html><body style="margin:0;background:#F8FAFC;font-family:Arial,sans-serif;color:#334155;padding:24px"><div style="max-width:620px;margin:auto;background:#fff;border:1px solid #E2E8F0;border-radius:16px;overflow:hidden"><div style="background:#0F172A;border-bottom:4px solid #1E40AF;padding:22px 24px;color:#fff"><div style="font-size:22px;font-weight:bold">DrivX</div><div style="margin-top:5px;font-size:12px;color:#CBD5E1">${escapeHtml(input.title)}</div></div><div style="padding:24px"><h1 style="margin:0 0 12px;font-size:20px;color:#0F172A">Your trip invoice is ready</h1><p>Hi ${escapeHtml(input.recipient)}, your completed trip PDF is attached.</p><div style="background:#F1F5F9;border-radius:10px;padding:16px;line-height:1.8"><b>Invoice</b> ${escapeHtml(input.invoiceNumber)}<br><b>Booking</b> ${escapeHtml(input.reference)}<br><b>Total</b> ${escapeHtml(input.total)}</div>${pending}<p style="margin:20px 0 0;font-size:12px;color:#64748b">DrivX support · ${escapeHtml(CUSTOMER_CARE_CONTACTS.email)}</p></div></div></body></html>`;
+  const isDriver = input.title.toLowerCase().includes('driver');
+  const isReceipt = !isDriver && input.title.toLowerCase().includes('receipt');
+  const documentName = isDriver ? 'Driver settlement statement' : isReceipt ? 'Customer trip receipt' : 'Customer trip invoice';
+  const eyebrow = isDriver ? 'DRIVER SETTLEMENT' : isReceipt ? 'CUSTOMER TRIP RECEIPT' : 'CUSTOMER TRIP INVOICE';
+  const heading = isDriver ? 'Your trip settlement is ready.' : isReceipt ? 'Your DrivX trip receipt is ready.' : 'Your DrivX trip is complete.';
+  const description = isDriver
+    ? 'Your trip fare and platform settlement statement are attached as a PDF.'
+    : isReceipt ? 'Your final fare and completed trip receipt are attached as a PDF.' : 'Your final fare and completed trip invoice are attached as a PDF.';
+  const amountLabel = isDriver ? 'Platform remittance' : 'Trip total';
+  const pending = input.issuerConfigured ? '' : '<p style="margin:16px 0 0;color:#64748b;font-size:12px;line-height:1.5">Registered business name and GSTIN are not configured yet. This PDF is a trip receipt; new tax invoices will include the issuer details after they are saved in DrivX Admin.</p>';
+  return `<!doctype html><html><body style="margin:0;background:#f6f3ee;font-family:Arial,Helvetica,sans-serif;color:#15171d;padding:28px 16px"><div style="max-width:620px;margin:0 auto"><div style="padding:10px 4px 22px"><table role="presentation" cellpadding="0" cellspacing="0" style="width:100%"><tr><td><span style="display:inline-block;width:38px;height:38px;line-height:38px;text-align:center;border-radius:11px;background:#2860ef;color:#fff;font-size:24px;font-weight:bold;vertical-align:middle">D</span><span style="margin-left:10px;color:#172a63;font-size:23px;font-weight:bold;vertical-align:middle">DrivX</span></td><td style="text-align:right;color:#657187;font-size:10px;letter-spacing:.04em">${eyebrow}</td></tr></table></div><div style="background:#fff;border:1px solid #dedbd5;border-radius:16px;padding:26px 24px"><h1 style="margin:0 0 10px;font-size:23px;line-height:1.25;color:#17191f">${heading}</h1><p style="margin:0 0 18px;color:#596273;font-size:14px;line-height:1.6">Hi ${escapeHtml(input.recipient)}, ${description}</p><div style="background:#f5f3ef;border-radius:12px;padding:18px 20px"><div style="margin-bottom:15px;color:#657187;font-size:10px;letter-spacing:.04em">BOOKING REFERENCE</div><div style="margin-bottom:18px;color:#172a63;font-size:19px;font-weight:bold">${escapeHtml(input.reference)}</div><table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-top:1px solid #dedbd5;padding-top:13px"><tr><td style="padding-top:13px;color:#596273;font-size:13px">${isReceipt ? 'Receipt number' : 'Invoice number'}</td><td style="padding-top:13px;text-align:right;color:#17191f;font-size:13px;font-weight:bold">${escapeHtml(input.invoiceNumber)}</td></tr><tr><td style="padding-top:10px;color:#596273;font-size:13px">${amountLabel}</td><td style="padding-top:10px;text-align:right;color:#17191f;font-size:15px;font-weight:bold">${escapeHtml(input.total)}</td></tr></table></div><div style="margin-top:18px;border:1px solid #dedbd5;border-radius:12px;padding:14px 16px"><span style="color:#2860ef;font-size:12px;font-weight:bold">PDF</span><span style="margin-left:12px;color:#17191f;font-size:13px">${documentName} · ${escapeHtml(input.invoiceNumber)}.pdf</span></div>${pending}<p style="margin:22px 0 0;color:#17191f;font-size:13px;font-weight:bold">Thanks for riding with DrivX.</p><p style="margin:7px 0 0;color:#657187;font-size:12px;line-height:1.5">Need help? ${escapeHtml(CUSTOMER_CARE_CONTACTS.email)}<br>${CUSTOMER_CARE_CONTACTS.phones.map((phone) => escapeHtml(phone.label)).join(' · ')}</p></div><p style="margin:16px 4px 0;color:#657187;font-size:10px;line-height:1.5">This email contains the ${documentName.toLowerCase()} for the completed trip shown above.</p></div></body></html>`;
 }
 
 async function reserveInvoiceNumbers(bookingId: string, invoiceData: Data, completedAtMs: number): Promise<Data> {
@@ -246,7 +385,10 @@ async function sendInvoiceEmail(input: {
   const apiKey = RESEND_API_KEY.value();
   const from = RESEND_FROM_EMAIL.value();
   if (!apiKey || !from) throw new Error('Resend is not configured for completed-trip invoices.');
-  const title = input.side === 'customer' ? 'Customer trip invoice' : 'Driver trip settlement statement';
+  const issuerConfigured = Boolean(input.issuer.businessName && input.issuer.gstin);
+  const title = input.side === 'customer'
+    ? issuerConfigured ? 'Customer trip invoice' : 'Customer trip receipt'
+    : 'Driver trip settlement statement';
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json', 'Idempotency-Key': `drivx-invoice-${input.side}-${deliveryId}` },
@@ -255,7 +397,7 @@ async function sendInvoiceEmail(input: {
       to: [input.recipientEmail],
       reply_to: CUSTOMER_CARE_CONTACTS.email,
       subject: `${title} · ${input.reference} · ${input.invoiceNumber}`,
-      html: invoiceEmailHtml({ recipient: input.recipientName, title, invoiceNumber: input.invoiceNumber, reference: input.reference, total: INR(input.totalPaise), issuerConfigured: Boolean(input.issuer.businessName && input.issuer.gstin) }),
+      html: invoiceEmailHtml({ recipient: input.recipientName, title, invoiceNumber: input.invoiceNumber, reference: input.reference, total: INR(input.totalPaise), issuerConfigured }),
       text: `Hi ${input.recipientName},\n\nYour ${title.toLowerCase()} is attached.\nInvoice: ${input.invoiceNumber}\nBooking: ${input.reference}\nTotal: ${INR(input.totalPaise)}\n\nDrivX Support: ${CUSTOMER_CARE_CONTACTS.email}`,
       attachments: [{ filename: `${input.invoiceNumber}.pdf`, content: input.pdf.toString('base64'), content_type: 'application/pdf' }],
       tags: [{ name: 'event', value: `trip-invoice-${input.side}` }, { name: 'booking', value: createHash('sha256').update(input.bookingId).digest('hex').slice(0, 32) }],

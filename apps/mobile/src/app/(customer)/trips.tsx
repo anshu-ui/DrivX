@@ -14,6 +14,7 @@ import {
   useTheme,
 } from '@drivx/ui';
 import { useActiveBooking, useMyBookings, type BookingView } from '../../features/customer/queries';
+import { openTripInvoice } from '../../features/tripInvoices';
 import { CancelTripAction } from '../../features/customer/CancelTripPanel';
 import { addressLine, dateTime, isLive, money, statusLabel, statusTone } from '../../features/customer/labels';
 
@@ -59,6 +60,31 @@ function SummaryTile({
   );
 }
 
+function CustomerInvoiceButton({ bookingId }: { bookingId: string }) {
+  const [invoiceBusy, setInvoiceBusy] = useState(false);
+  const [invoiceError, setInvoiceError] = useState<string | null>(null);
+
+  return (
+    <View style={{ gap: 4 }}>
+      <Button
+        label={invoiceBusy ? 'Preparing invoice…' : 'Download customer invoice PDF'}
+        appearance="secondary"
+        size="sm"
+        loading={invoiceBusy}
+        disabled={invoiceBusy}
+        onPress={async () => {
+          setInvoiceBusy(true);
+          setInvoiceError(null);
+          try { await openTripInvoice(bookingId, 'customer'); }
+          catch (error) { setInvoiceError(error instanceof Error ? error.message : 'Invoice PDF is not available yet.'); }
+          finally { setInvoiceBusy(false); }
+        }}
+      />
+      {invoiceError ? <Text variant="caption" tone="danger" accessibilityRole="alert">{invoiceError}</Text> : null}
+    </View>
+  );
+}
+
 function TripRow({ booking }: { booking: BookingView }) {
   const theme = useTheme();
   const fare = booking.finalFare?.totalPaise ?? booking.runningFare?.totalPaise ?? booking.estimate?.totalPaise;
@@ -68,13 +94,14 @@ function TripRow({ booking }: { booking: BookingView }) {
     .join(' ');
 
   return (
-    <Pressable
-      onPress={() => router.push(`/(customer)/trips/${booking.id}`)}
-      accessibilityRole="button"
-      accessibilityLabel={`Open trip ${booking.reference}`}
-      style={({ pressed }) => ({ opacity: pressed ? 0.76 : 1 })}
-    >
-      <Card tone="raised" style={{ gap: theme.spacing.md }}>
+    <View style={{ gap: theme.spacing.xs }}>
+      <Pressable
+        onPress={() => router.push(`/(customer)/trips/${booking.id}`)}
+        accessibilityRole="button"
+        accessibilityLabel={`Open trip ${booking.reference}`}
+        style={({ pressed }) => ({ opacity: pressed ? 0.76 : 1 })}
+      >
+        <Card tone="raised" style={{ gap: theme.spacing.md }}>
         <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: theme.spacing.sm }}>
           <View style={{ flex: 1, minWidth: 0, gap: theme.spacing.xxs }}>
             <Text variant="label" tone="brand" numberOfLines={1}>{booking.reference}</Text>
@@ -122,8 +149,10 @@ function TripRow({ booking }: { booking: BookingView }) {
           <Text variant="caption" tone="muted">{booking.finalFare ? 'Final fare' : booking.runningFare ? 'Fare so far' : 'Estimated fare'}</Text>
           <Text variant="heading" tone="brand">{money(fare)}</Text>
         </View>
-      </Card>
-    </Pressable>
+        </Card>
+      </Pressable>
+      {booking.status === 'completed' ? <CustomerInvoiceButton bookingId={booking.id} /> : null}
+    </View>
   );
 }
 

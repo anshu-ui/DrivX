@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { collection, doc, limit, onSnapshot, query, serverTimestamp, setDoc, updateDoc, writeBatch, type DocumentData } from 'firebase/firestore';
+import { collection, doc, getDocFromServer, limit, onSnapshot, query, serverTimestamp, setDoc, updateDoc, writeBatch, type DocumentData } from 'firebase/firestore';
 import { COLLECTIONS, COMMISSION_CONFIG_DOC, formatINR } from '@drivx/domain';
 import { firebaseClients } from '../../lib/firebase';
 import { ConsoleHeader, StaffGate, describe, useReviewerSession } from '../../lib/staff-session';
@@ -22,6 +22,8 @@ export default function PricingPage() {
   const [invoiceBusinessName, setInvoiceBusinessName] = useState('');
   const [invoiceGstin, setInvoiceGstin] = useState('');
   const [invoiceAddress, setInvoiceAddress] = useState('');
+  const [invoiceConfigLoaded, setInvoiceConfigLoaded] = useState(false);
+  const [invoiceMessage, setInvoiceMessage] = useState<string | null>(null);
   const [onboardingBase, setOnboardingBase] = useState('500');
   const [onboardingGst, setOnboardingGst] = useState('5');
   const [arrivalGrace, setArrivalGrace] = useState('10');
@@ -71,11 +73,15 @@ export default function PricingPage() {
       if (Array.isArray(cities)) setPickupCities(cities.filter((city): city is string => typeof city === 'string').join('\n'));
     }, (error) => setMessage(describe(error)));
     const offInvoice = onSnapshot(doc(db, COLLECTIONS.appConfig, 'invoice'), (snap) => {
+      setInvoiceConfigLoaded(true);
       if (!snap.exists()) return;
       setInvoiceBusinessName(String(snap.data().businessName ?? ''));
       setInvoiceGstin(String(snap.data().gstin ?? ''));
       setInvoiceAddress(String(snap.data().address ?? ''));
-    }, (error) => setMessage(describe(error)));
+    }, (error) => {
+      setInvoiceConfigLoaded(true);
+      setInvoiceMessage(`Could not load saved issuer details: ${describe(error)}`);
+    });
     return () => { offRules(); offServices(); offCommission(); offOnboarding(); offDriverPerformance(); offServiceArea(); offInvoice(); };
   }, [db, reviewer?.admin]);
 
@@ -188,15 +194,21 @@ export default function PricingPage() {
 
   async function saveInvoiceIssuer() {
     const businessName = invoiceBusinessName.trim();
-    const gstin = invoiceGstin.trim().toUpperCase();
+    const gstin = invoiceGstin.trim().replace(/\s+/g, '').toUpperCase();
     const address = invoiceAddress.trim();
-    if (businessName.length > 120 || address.length > 300) { setMessage('Business name must be under 120 characters and address under 300.'); return; }
-    if (gstin && !/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(gstin)) { setMessage('Enter a valid 15-character GSTIN, or leave it blank until it is issued.'); return; }
-    setBusy('invoiceIssuer'); setMessage(null);
+    if (!businessName) { setInvoiceMessage('Enter the legal business name before saving. GSTIN can be left blank until it is issued.'); return; }
+    if (businessName.length > 120 || address.length > 300) { setInvoiceMessage('Business name must be under 120 characters and address under 300.'); return; }
+    if (gstin && !/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(gstin)) { setInvoiceMessage('Enter a valid 15-character GSTIN, or leave it blank until it is issued.'); return; }
+    setBusy('invoiceIssuer'); setInvoiceMessage('Saving issuer details…');
     try {
-      await setDoc(doc(db, COLLECTIONS.appConfig, 'invoice'), { businessName, gstin, address, updatedAtMs: serverTimestamp() }, { merge: true });
-      setMessage('Invoice issuer details saved. New trip invoices will use these details; older trip records retain their original snapshot.');
-    } catch (error) { setMessage(describe(error)); }
+      const issuerRef = doc(db, COLLECTIONS.appConfig, 'invoice');
+      await setDoc(issuerRef, { businessName, gstin, address, updatedAtMs: serverTimestamp() }, { merge: true });
+      const saved = await getDocFromServer(issuerRef);
+      if (!saved.exists() || saved.data().businessName !== businessName || saved.data().gstin !== gstin || saved.data().address !== address) {
+        throw new Error('Firestore did not return the issuer details that were just saved. Please retry and check your admin access.');
+      }
+      setInvoiceMessage('Saved and confirmed in Firestore. New trip PDFs and completion emails will use these details; already-issued invoices keep their original PDF.');
+    } catch (error) { setInvoiceMessage(`Issuer details were not saved: ${describe(error)}`); }
     finally { setBusy(null); }
   }
 
@@ -269,13 +281,14 @@ export default function PricingPage() {
         </section>
         <section className="mt-5 rounded-card border border-line bg-surface p-5 shadow-card">
           <h2 className="text-lg font-semibold">Invoice issuer details</h2>
-          <p className="mt-1 text-sm text-ink-muted">Company name and GSTIN have not been provided yet. Until they are saved, PDFs are marked as trip receipts with issuer details pending.</p>
+          <p className="mt-1 text-sm text-ink-muted">{!invoiceConfigLoaded ? 'Loading saved issuer details…' : !invoiceBusinessName.trim() ? 'Add the registered legal business name. GSTIN can be left blank until issued; PDFs show the details that are saved here.' : !invoiceGstin.trim() ? 'Legal business name is saved. Add the GSTIN when it is issued; new PDFs will include the saved name and address meanwhile.' : 'Issuer name and GSTIN are saved. New trip PDFs and email attachments will show them.'}</p>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <label className="text-sm font-medium">Legal business name<input aria-label="Invoice issuer business name" maxLength={120} value={invoiceBusinessName} onChange={(event) => setInvoiceBusinessName(event.target.value)} className="mt-1 block w-full rounded-control border border-line bg-surface px-3 py-2" placeholder="Add when company is registered" /></label>
             <label className="text-sm font-medium">GSTIN<input aria-label="Invoice issuer GSTIN" maxLength={15} autoCapitalize="characters" value={invoiceGstin} onChange={(event) => setInvoiceGstin(event.target.value.toUpperCase())} className="mt-1 block w-full rounded-control border border-line bg-surface px-3 py-2 uppercase" placeholder="15-character GSTIN" /></label>
             <label className="text-sm font-medium sm:col-span-2">Registered address<textarea aria-label="Invoice issuer registered address" maxLength={300} rows={2} value={invoiceAddress} onChange={(event) => setInvoiceAddress(event.target.value)} className="mt-1 block w-full rounded-control border border-line bg-surface px-3 py-2" placeholder="Registered business address" /></label>
           </div>
           <button type="button" onClick={() => void saveInvoiceIssuer()} disabled={busy === 'invoiceIssuer'} className="mt-4 rounded-control bg-accent px-4 py-2.5 text-sm font-semibold text-ink-on-brand disabled:opacity-50">{busy === 'invoiceIssuer' ? 'Saving…' : 'Save issuer details'}</button>
+          {invoiceMessage ? <p role="status" aria-live="polite" className={`mt-3 rounded-control border p-3 text-sm ${invoiceMessage.startsWith('Issuer details were not saved:') || invoiceMessage.startsWith('Could not load') ? 'border-danger/30 bg-danger-soft text-danger' : 'border-line bg-surface-muted text-ink-muted'}`}>{invoiceMessage}</p> : null}
         </section>
         <section className="rounded-card border border-line bg-surface p-5 shadow-card">
           <h2 className="text-lg font-semibold">Driver trip settlement</h2><p className="mt-1 text-sm text-ink-muted">Commission GST and TDS are saved per trip. Customer fare GST is passed through from the trip fare.</p>
