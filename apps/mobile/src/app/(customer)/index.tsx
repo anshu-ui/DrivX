@@ -23,7 +23,6 @@ import {
   Screen,
   SectionCard,
   SelectBox,
-  SegmentedTabs,
   Sheet,
   StateView,
   StatusPill,
@@ -52,24 +51,18 @@ import { PlaceSearchPanel } from '../../features/customer/PlaceSearchPanel';
 import { newIdempotencyKey, useCreateBooking } from '../../features/customer/mutations';
 import { TripMapPanel } from '../../features/customer/TripMapPanel';
 import { PricingSheet } from '../../features/customer/PricingPanel';
+import { PickupTimeWheelModal } from '../../features/customer/PickupTimeWheelModal';
 import {
   clockLabel,
-  DEPARTURE_OPTIONS,
-  departureAt,
   nextScheduleSlot,
   MIN_LEAD_MS,
   pickupTimeNeedsMoreNotice,
-  latestBookingDateMs,
   scheduledEpochMs,
-  scheduleCalendarMonth,
-  slotIsTooSoon,
   tripIdentity,
-  upcomingDays,
   useBookingOptions,
   useEnabledServiceCatalogue,
   useFareQuote,
   useNowMs,
-  type DepartureKey,
   type ScheduleSlot,
   type TripDraft,
 } from '../../features/customer/booking';
@@ -77,9 +70,6 @@ import { dateTime, money } from '../../features/customer/labels';
 import { callFunction } from '@drivx/firebase-client';
 import { firebase } from '../../lib/firebase';
 
-/** The 12-hour clock the customer reads, and the quarter-hour starts offered. */
-const HOURS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
-const MINUTES = [0, 15, 30, 45];
 const CAR_OPTIONS: { id: CarType; title: string }[] = [
   { id: 'hatchback', title: 'Hatchback' },
   { id: 'sedan', title: 'Sedan' },
@@ -221,11 +211,10 @@ export default function CustomerHome() {
   const [pickupPicked, setPickupPicked] = useState<PickedEnd | null>(null);
   const [destinationPicked, setDestinationPicked] = useState<PickedEnd | null>(null);
   const [picking, setPicking] = useState<'pickup' | 'dropoff' | null>(null);
-  const [openBox, setOpenBox] = useState<'start' | 'duration' | null>(null);
-  const [departure, setDeparture] = useState<DepartureKey | 'slot'>('slot');
-  const [calendarMonthOffset, setCalendarMonthOffset] = useState(0);
+  const [openBox, setOpenBox] = useState<'duration' | null>(null);
+  const [pickupTimeOpen, setPickupTimeOpen] = useState(false);
   const [scheduleNotice, setScheduleNotice] = useState<string | null>(null);
-  /** The last hand-picked slot, kept so the panel reopens where the customer left it. */
+  /** The applied pickup slot, restored when the customer opens the wheel again. */
   const [initialSchedule] = useState(() => {
     const now = Date.now();
     const slot = nextScheduleSlot(now);
@@ -347,45 +336,27 @@ export default function CustomerHome() {
     pickup.location.lng === destination.location.lng;
   const attempted = booking.data;
 
-  // Chips are the UI; a scheduled departure has to be resolved once, at the
-  // moment it is chosen. Recomputing it on every render would move the quote key
-  // forever and the price would never settle. The screen's own ticking clock is
-  // the reference point rather than `Date.now()`, so the slot a chip names and
-  // the expiry the fare card counts down share one reading.
-  function chooseDeparture(key: DepartureKey) {
-    setDeparture(key);
-    setScheduledForMs(departureAt(key, nowMs));
-    setScheduleNotice(null);
-    setOpenBox(null);
-  }
-
   function chooseNextAvailablePickup() {
     const now = Date.now();
     const next = nextScheduleSlot(now);
     setSlot(next);
-    setDeparture('slot');
     setScheduledForMs(scheduledEpochMs(next, now));
     setScheduleNotice(null);
-    setOpenBox('start');
+    setOpenBox(null);
+    setPickupTimeOpen(true);
   }
 
-  // A hand-picked slot stays open until the customer closes it, because the
-  // panel is three choices — day, clock, minutes — not one.
   function chooseSlot(next: ScheduleSlot) {
     setSlot(next);
-    setDeparture('slot');
     setScheduledForMs(scheduledEpochMs(next, nowMs));
     setScheduleNotice(null);
   }
 
-  const days = upcomingDays(nowMs);
-  const calendarMonth = scheduleCalendarMonth(nowMs, calendarMonthOffset);
   const startTooSoon = pickupTimeNeedsMoreNotice(scheduledForMs, nowMs);
   const nextPickupAtMs = scheduledEpochMs(nextScheduleSlot(nowMs), nowMs);
-  const startLabel =
-    departure === 'slot'
-      ? `${days[slot.offsetDays]?.label ?? 'Today'} ${clockLabel(slot)}`
-      : DEPARTURE_OPTIONS.find((option) => option.key === departure)?.label ?? 'Choose pickup time';
+  const startLabel = scheduledForMs === null
+    ? 'Choose pickup time'
+    : `${new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short' }).format(new Date(scheduledForMs))} · ${clockLabel(slot)}`;
 
   const modeSegments: { key: string; serviceId: ServiceTypeId; direction: TripDirection; title: string; description: string; icon: 'arrow-forward-outline' | 'git-compare-outline' | 'map-outline' | 'calendar-outline' }[] = [
     { key: 'one_way', serviceId: 'chauffeur_own_car', direction: 'one_way', title: 'One Way', description: 'One-way city ride', icon: 'arrow-forward-outline' },
@@ -737,12 +708,15 @@ export default function CustomerHome() {
                       label="Pickup date & time"
                       value={startLabel}
                       icon={<Ionicons name="calendar-outline" size={16} color={theme.colors.textBrand} />}
-                      expanded={openBox === 'start'}
+                      expanded={pickupTimeOpen}
                       disabled={service?.allowsScheduling === false}
-                      onPress={() => setOpenBox(openBox === 'start' ? null : 'start')}
+                      onPress={() => {
+                        setOpenBox(null);
+                        setPickupTimeOpen(true);
+                      }}
                       trailing={
                         <Ionicons
-                          name={openBox === 'start' ? 'chevron-up' : 'chevron-down'}
+                          name={pickupTimeOpen ? 'chevron-up' : 'chevron-down'}
                           size={15}
                           color={theme.colors.textMuted}
                         />
@@ -777,126 +751,6 @@ export default function CustomerHome() {
                     />
                   </View>
                 </View>
-
-                {openBox === 'start' && service?.allowsScheduling !== false ? (
-                  <View style={{ gap: theme.spacing.md }}>
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
-                      {DEPARTURE_OPTIONS.map((option) => (
-                        <Chip
-                          key={option.key}
-                          title={option.label}
-                          selected={departure === option.key}
-                          onPress={() => chooseDeparture(option.key)}
-                        />
-                      ))}
-                    </View>
-
-                    <Divider size="sm" />
-
-                    <View style={{ gap: theme.spacing.sm }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <Text variant="label" tone="brand">Choose a date</Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
-                          <Pressable
-                            accessibilityRole="button"
-                            accessibilityLabel="Previous month"
-                            disabled={calendarMonthOffset === 0}
-                            onPress={() => setCalendarMonthOffset((month) => Math.max(0, month - 1))}
-                            style={{ padding: theme.spacing.xs, opacity: calendarMonthOffset === 0 ? 0.35 : 1 }}
-                          >
-                            <Ionicons name="chevron-back" size={18} color={theme.colors.textBrand} />
-                          </Pressable>
-                          <Text variant="label">{calendarMonth.label}</Text>
-                          <Pressable
-                            accessibilityRole="button"
-                            accessibilityLabel="Next month"
-                            disabled={calendarMonthOffset >= 6}
-                            onPress={() => setCalendarMonthOffset((month) => Math.min(6, month + 1))}
-                            style={{ padding: theme.spacing.xs, opacity: calendarMonthOffset >= 6 ? 0.35 : 1 }}
-                          >
-                            <Ionicons name="chevron-forward" size={18} color={theme.colors.textBrand} />
-                          </Pressable>
-                        </View>
-                      </View>
-                      <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-                        {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((weekday) => (
-                          <View key={weekday} style={{ width: '14.2857%', alignItems: 'center', paddingVertical: theme.spacing.xs }}>
-                            <Text variant="caption" tone="muted">{weekday}</Text>
-                          </View>
-                        ))}
-                        {Array.from({ length: calendarMonth.firstWeekday }, (_, index) => (
-                          <View key={`empty-${index}`} style={{ width: '14.2857%', height: 44 }} />
-                        ))}
-                        {calendarMonth.days.map((day) => {
-                          const selected = departure === 'slot' && slot.offsetDays === day.offsetDays;
-                          const candidatePickupMs = scheduledEpochMs({ ...slot, offsetDays: day.offsetDays }, nowMs);
-                          const disabled = day.offsetDays < 0 || candidatePickupMs > latestBookingDateMs(nowMs);
-                          return (
-                            <Pressable
-                              key={day.offsetDays}
-                              accessibilityRole="button"
-                              accessibilityLabel={`${calendarMonth.label} ${day.day}`}
-                              accessibilityState={{ selected, disabled }}
-                              disabled={disabled}
-                              onPress={() => chooseSlot({ ...slot, offsetDays: day.offsetDays })}
-                              style={{
-                                width: '14.2857%', height: 44, alignItems: 'center', justifyContent: 'center',
-                                borderRadius: 22, backgroundColor: selected ? theme.colors.primary : 'transparent',
-                                opacity: disabled ? 0.3 : 1,
-                              }}
-                            >
-                              <Text variant="label" style={{ color: selected ? theme.colors.onPrimary : theme.colors.text }}>{day.day}</Text>
-                            </Pressable>
-                          );
-                        })}
-                      </View>
-                      <Text variant="caption" tone="muted">Bookings are available up to 6 months ahead. Pickup needs at least 30 minutes’ notice.</Text>
-                    </View>
-
-                    <View style={{ gap: theme.spacing.sm }}>
-                      <SegmentedTabs
-                        options={[
-                          { id: 'am', title: 'AM' },
-                          { id: 'pm', title: 'PM' },
-                        ]}
-                        value={departure === 'slot' ? slot.meridiem : null}
-                        onChange={(meridiem) => chooseSlot({ ...slot, meridiem })}
-                        accessibilityLabel="Morning or afternoon"
-                      />
-                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.xs }}>
-                        {HOURS.map((hour) => (
-                          <Chip
-                            key={`hour-${hour}`}
-                            title={String(hour)}
-                            style={{ minWidth: 46 }}
-                            selected={departure === 'slot' && slot.hour12 === hour}
-                            disabled={slotIsTooSoon({ ...slot, hour12: hour }, nowMs)}
-                            onPress={() => chooseSlot({ ...slot, hour12: hour })}
-                          />
-                        ))}
-                      </View>
-                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.xs }}>
-                        {MINUTES.map((minute) => (
-                          <Chip
-                            key={`minute-${minute}`}
-                            title={String(minute).padStart(2, '0')}
-                            style={{ minWidth: 46 }}
-                            selected={departure === 'slot' && slot.minute === minute}
-                            disabled={slotIsTooSoon({ ...slot, minute }, nowMs)}
-                            onPress={() => chooseSlot({ ...slot, minute })}
-                          />
-                        ))}
-                      </View>
-                    </View>
-
-                    {startTooSoon ? (
-                      <Text variant="caption" tone="danger" accessibilityRole="alert">
-                        This pickup time is too soon. Choose a time at least{' '}
-                        {MIN_LEAD_MS / 60_000} minutes from now.
-                      </Text>
-                    ) : null}
-                  </View>
-                ) : null}
 
                 {openBox === 'duration' && tiers.length > 0 ? (
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
@@ -1327,6 +1181,18 @@ export default function CustomerHome() {
 
           </View>
       </Animated.View>
+
+      {pickupTimeOpen ? (
+        <PickupTimeWheelModal
+          initialEpochMs={scheduledForMs}
+          nowMs={nowMs}
+          onClose={() => setPickupTimeOpen(false)}
+          onConfirm={(next) => {
+            chooseSlot(next);
+            setPickupTimeOpen(false);
+          }}
+        />
+      ) : null}
 
       <PricingSheet
         service={service}
