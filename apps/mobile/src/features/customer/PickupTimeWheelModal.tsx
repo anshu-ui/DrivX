@@ -47,6 +47,7 @@ function WheelColumn({ label, items, selectedValue, height, width, onChange }: W
   const selectedIndex = Math.max(0, items.findIndex((item) => item.value === selectedValue));
   const padding = (height - ITEM_HEIGHT) / 2;
   const initialIndex = useRef(selectedIndex);
+  const lastNotifiedValue = useRef<WheelValue>(selectedValue);
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
@@ -55,10 +56,16 @@ function WheelColumn({ label, items, selectedValue, height, width, onChange }: W
     return () => cancelAnimationFrame(frame);
   }, []);
 
+  function notifyValue(value: WheelValue) {
+    if (Object.is(lastNotifiedValue.current, value)) return;
+    lastNotifiedValue.current = value;
+    onChange(value);
+  }
+
   function commitScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
     if (items.length === 0) return;
     const index = Math.max(0, Math.min(items.length - 1, Math.round(event.nativeEvent.contentOffset.y / ITEM_HEIGHT)));
-    onChange(items[index]!.value);
+    notifyValue(items[index]!.value);
   }
 
   return (
@@ -67,7 +74,6 @@ function WheelColumn({ label, items, selectedValue, height, width, onChange }: W
         pointerEvents="none"
         style={{
           position: 'absolute',
-          zIndex: 1,
           top: padding,
           left: 0,
           right: 0,
@@ -85,6 +91,7 @@ function WheelColumn({ label, items, selectedValue, height, width, onChange }: W
         snapToAlignment="start"
         scrollEventThrottle={16}
         contentContainerStyle={{ paddingVertical: padding }}
+        onScroll={commitScroll}
         onScrollEndDrag={commitScroll}
         onMomentumScrollEnd={commitScroll}
       >
@@ -97,7 +104,10 @@ function WheelColumn({ label, items, selectedValue, height, width, onChange }: W
               key={`${String(item.value)}-${index}`}
               accessibilityRole="button"
               accessibilityState={{ selected }}
-              onPress={() => scrollRef.current?.scrollTo({ y: index * ITEM_HEIGHT, animated: true })}
+              onPress={() => {
+                notifyValue(item.value);
+                scrollRef.current?.scrollTo({ y: index * ITEM_HEIGHT, animated: true });
+              }}
               style={{ height: ITEM_HEIGHT, alignItems: 'center', justifyContent: 'center', opacity }}
             >
               <Text
@@ -206,12 +216,6 @@ export function PickupTimeWheelModal({
     setDraft((current) => ({ ...current, meridiem: value as ScheduleSlot['meridiem'] }));
   }
 
-  const scheduleBadge = (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs, borderRadius: theme.radius.pill, backgroundColor: theme.colors.primarySoft, paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.xs }}>
-      <Ionicons name="checkmark" size={17} color={theme.colors.primary} />
-      <Text variant="label" tone="primary">Schedule</Text>
-    </View>
-  );
   const closeButton = (
     <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={onClose} hitSlop={10} style={{ padding: 2 }}>
       <Ionicons name="close-circle" size={27} color={theme.colors.textMuted} />
@@ -238,19 +242,9 @@ export function PickupTimeWheelModal({
             ...theme.elevation.overlay,
           }}
         >
-          <View style={{ flexDirection: compact ? 'column' : 'row', alignItems: compact ? 'stretch' : 'center', justifyContent: 'space-between', gap: theme.spacing.sm }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacing.xs }}>
-              <Text variant="subheading" tone="brand" style={{ flex: 1 }}>When do you need a driver?</Text>
-              {compact ? closeButton : null}
-            </View>
-            {compact ? (
-              <View style={{ alignSelf: 'flex-end' }}>{scheduleBadge}</View>
-            ) : (
-              <>
-                {scheduleBadge}
-                {closeButton}
-              </>
-            )}
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: theme.spacing.sm }}>
+            <Text variant="subheading" tone="brand" style={{ flex: 1 }}>When do you need a driver?</Text>
+            {closeButton}
           </View>
 
           <Divider size="sm" />
